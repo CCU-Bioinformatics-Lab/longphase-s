@@ -18,6 +18,9 @@ struct RefAlt{
     std::string Alt;
     bool is_reverse;
     bool is_modify;
+    bool is_phased_hetero;  //new
+    bool is_homozygous;  //new
+    bool is_unphased_hetero;  //new
 };
 
 class FastaParser{

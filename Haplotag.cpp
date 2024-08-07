@@ -12,7 +12,15 @@ static const char *CORRECT_USAGE_MESSAGE =
 "require arguments:\n"
 "      -s, --snp-file=NAME             input SNP vcf file.\n"
 "      -b, --bam-file=NAME             input bam file.\n"
-"      -r, --reference=NAME            reference fasta.\n"
+"      -r, --reference=NAME            reference fasta.\n\n"
+"required arguments for tumor mode:\n"
+"      --tumorMode                     enable tumor SNP mutation tagging. default: false\n"
+"      -s, --snp-file=NAME             input normal genome SNP VCF file.\n"
+"      -b, --bam-file=NAME             input normal genome BAM file.\n"
+"      --tumor-snp-file=NAME           input tumor genome SNP VCF file.\n"
+"      --tumor-bam-file=NAME           input tumor genome BAM file for tagging.\n"
+"      -r, --reference=NAME            reference FASTA.\n"
+"      --somaticCallingMPQ=Num         mapping quality threshold for calling somatic SNPs. default: 40\n\n"
 "optional arguments:\n"
 "      --tagSupplementary              tag supplementary alignment. default:false\n"
 "      --sv-file=NAME                  input phased SV vcf file.\n"
@@ -32,14 +40,17 @@ static const char *CORRECT_USAGE_MESSAGE =
 
 static const char* shortopts = "s:b:o:t:q:p:r:";
 
-enum { OPT_HELP = 1, TAG_SUP, SV_FILE, REGION, LOG, MOD_FILE, CRAM};
+enum { OPT_HELP = 1, TAG_SUP, SV_FILE, REGION, LOG, MOD_FILE, CRAM, TUM_SNP, TUM_BAM, SC_MPQ, TAG_TUM};
 
 static const struct option longopts[] = { 
     { "help",                 no_argument,        NULL, OPT_HELP },
     { "snp-file",             required_argument,  NULL, 's' },
     { "bam-file",             required_argument,  NULL, 'b' },
+    { "tumor-snp-file",       required_argument,  NULL, TUM_SNP },   //new
+    { "tumor-bam-file",       required_argument,  NULL, TUM_BAM },   //new
     { "reference",            required_argument,  NULL, 'r' },
     { "tagSupplementary",     no_argument,        NULL, TAG_SUP },
+    { "somaticMode",          no_argument,        NULL, TAG_TUM },  //new
     { "sv-file",              required_argument,  NULL, SV_FILE },
     { "mod-file",             required_argument,  NULL, MOD_FILE },
     { "out-prefix",           required_argument,  NULL, 'o' },
@@ -47,6 +58,7 @@ static const struct option longopts[] = {
     { "threads",              required_argument,  NULL, 't' },
     { "qualityThreshold",     required_argument,  NULL, 'q' },
     { "percentageThreshold",  required_argument,  NULL, 'p' },
+    { "somaticCallingMPQ",    required_argument,  NULL, SC_MPQ },   //new
     { "region",               required_argument,  NULL, REGION },
     { "log",                  no_argument,        NULL, LOG },
     { NULL, 0, NULL, 0 }
@@ -57,16 +69,20 @@ namespace opt
     static int numThreads = 1;
     static int qualityThreshold = 1;
     static double percentageThreshold = 0.6;
+    static int somaticCallingMpqThreshold = 40;  //new
     static std::string snpFile="";
     static std::string svFile="";
     static std::string modFile="";
     static std::string bamFile="";
+    static std::string tumorSnpFile="";  //new
+    static std::string tumorBamFile="";  //new
     static std::string fastaFile="";
     static std::string resultPrefix="result";
     static std::string region="";
     static std::string outputFormat="bam";
     static bool tagSupplementary = false;
     static bool writeReadLog = false;
+    static bool tumorMode = false;  //new
     static std::string command="longphase ";
 }
 
@@ -89,8 +105,12 @@ void HaplotagOptions(int argc, char** argv)
             case 'p': arg >> opt::percentageThreshold; break;
             case SV_FILE:  arg >> opt::svFile; break;
             case MOD_FILE: arg >> opt::modFile; break;     
+            case TUM_SNP: arg >> opt::tumorSnpFile; break;  //new
+            case TUM_BAM: arg >> opt::tumorBamFile; break;  //new
             case REGION:   arg >> opt::region; break;        
+            case TAG_TUM: opt::tumorMode = true; break;  //new
             case TAG_SUP:  opt::tagSupplementary = true; break;
+            case SC_MPQ: arg >> opt::somaticCallingMpqThreshold; break; //new
             case CRAM:     opt::outputFormat = "cram"; break;
             case LOG:      opt::writeReadLog = true; break;
             case OPT_HELP:
@@ -171,6 +191,37 @@ void HaplotagOptions(int argc, char** argv)
     else{
         std::cerr << SUBPROGRAM ": missing reference.\n";
         die = true;
+    }
+
+    //tag tumor mode  
+    if(opt::tumorMode == true){
+        // tumor vcf
+        if( opt::tumorSnpFile != "")
+        {
+            std::ifstream openFile( opt::tumorSnpFile.c_str() );
+            if( !openFile.is_open() )
+            {
+                std::cerr<< "File " << opt::tumorSnpFile << " not exist.\n\n";
+                die = true;
+            }
+        }else{
+            std::cerr << SUBPROGRAM ": missing tumor genome SNP file.\n";
+            die = true;
+        }
+
+        //tumor bam
+        if( opt::tumorBamFile != "")
+        {
+            std::ifstream openFile( opt::tumorBamFile.c_str() );
+            if( !openFile.is_open() )
+            {
+                std::cerr<< "File " << opt::tumorBamFile << " not exist.\n\n";
+                die = true;
+            }
+        }else{
+            std::cerr << SUBPROGRAM ": missing tumor bam file.\n";
+            die = true;
+        }
     }  
     
     if ( opt::numThreads < 1 ){
@@ -203,11 +254,15 @@ int HaplotagMain(int argc, char** argv, std::string in_version)
 
     ecParams.numThreads=opt::numThreads;
     ecParams.qualityThreshold=opt::qualityThreshold;
+    ecParams.somaticCallingMpqThreshold=opt::somaticCallingMpqThreshold;  //new
     ecParams.snpFile=opt::snpFile;
     ecParams.svFile=opt::svFile;
     ecParams.modFile=opt::modFile;
     ecParams.bamFile=opt::bamFile;
     ecParams.fastaFile=opt::fastaFile;
+    ecParams.tumorSnpFile=opt::tumorSnpFile;  //new
+    ecParams.tumorBamFile=opt::tumorBamFile;  //new
+    ecParams.tagTumorSnp=opt::tumorMode;    //new
     ecParams.resultPrefix=opt::resultPrefix;
     ecParams.tagSupplementary=opt::tagSupplementary;
     ecParams.percentageThreshold=opt::percentageThreshold;
