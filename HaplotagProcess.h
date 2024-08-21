@@ -145,6 +145,15 @@ struct PosBase{
              ,VAF(0.0), filteredMpqVAF(0.0), lowMpqReadRatio(0.0){}
 };
 
+struct ReadHpResult{
+    int HP1readCount;
+    int HP2readCount;
+    int HP3readCount;
+    int HP4readCount;
+    int unTagReadCount;
+    ReadHpResult(): HP1readCount(0), HP2readCount(0), HP3readCount(0), HP4readCount(0),unTagReadCount(0){}
+};
+
 struct HP3_Info{
     //Case ratio 
     int totalCleanHP3Read;
@@ -286,8 +295,11 @@ class HaplotagProcess
     std::map<int, RefAltSet> currentChrVariants;
     std::map<int, RefAltSet>::iterator firstVariantIter;
 
-    // chr, variant position
+    // chr, variant position (0-base), somatic SNP information
     std::map<std::string, std::map<int, HP3_Info>>  chrPosReadCase;  
+
+    // chr, variant position (0-base), reads HP 
+    std::map<std::string, std::map<int, ReadHpResult>> chrVarReadHpResult;
 
     // record the VCF files of the normal and tumor datasets (normal:0, tumor:1)
     VCF_Info vcfSet[2];
