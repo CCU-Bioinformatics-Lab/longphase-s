@@ -14,7 +14,7 @@ static const char *CORRECT_USAGE_MESSAGE =
 "      -b, --bam-file=NAME             input bam file.\n"
 "      -r, --reference=NAME            reference fasta.\n\n"
 "required arguments for tumor mode:\n"
-"      --tumorMode                     enable tumor SNP mutation tagging. default: false\n"
+"      --somaticMode                   enable somatic mutation tagging. default: false\n"
 "      -s, --snp-file=NAME             input normal genome SNP VCF file.\n"
 "      -b, --bam-file=NAME             input normal genome BAM file.\n"
 "      --tumor-snp-file=NAME           input tumor genome SNP VCF file.\n"
