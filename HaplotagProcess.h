@@ -75,6 +75,19 @@ enum Genome
     TUMOR = 1
 };
 
+enum HpLabel
+{
+    unTag = 0,
+    H1 = 1,
+    H2 = 2,
+    H3 = 3,
+    H4 = 4,
+    H1_1 = 5,
+    H1_2 = 6,
+    H2_1 = 7,
+    H2_2 = 8,
+};
+
 // record the variants from the normal and tumor VCF files (normal:0, tumor:1)
 struct RefAltSet{
     RefAlt Variant[2];
@@ -146,17 +159,32 @@ struct PosBase{
 };
 
 struct ReadHpResult{
-    int HP1readCount;
-    int HP2readCount;
-    int HP3readCount;
-    int HP4readCount;
-    int HP1_1readCount;
-    int HP1_2readCount;
-    int HP2_1readCount;
-    int HP2_2readCount;
-    int unTagReadCount;
-    ReadHpResult(): HP1readCount(0), HP2readCount(0), HP3readCount(0), HP4readCount(0)
-                  , HP1_1readCount(0), HP1_2readCount(0), HP2_1readCount(0), HP2_2readCount(0),unTagReadCount(0){}
+    int HP1read;
+    int HP2read;
+    int HP3read;
+    int HP4read;
+    int HP1_1read;
+    int HP1_2read;
+    int HP2_1read;
+    int HP2_2read;
+    int unTagRead;
+    bool existDeriveByH1andH2;
+    ReadHpResult(): HP1read(0), HP2read(0), HP3read(0), HP4read(0)
+                  , HP1_1read(0), HP1_2read(0), HP2_1read(0), HP2_2read(0),unTagRead(0), existDeriveByH1andH2(false){}
+};
+
+struct ReadVarHpCount{
+    int HP1;
+    int HP2;
+    int HP3;
+    int HP4;
+
+    // to modify the read ID to avoid supplementary read IDs overriding the primary read HP count.
+    int readIDcount;
+    std::string hpResult;
+    std::map<int, int> NorCountPS;
+    
+    ReadVarHpCount(): HP1(0), HP2(0), HP3(0), HP4(0), readIDcount(0), hpResult(""){}
 };
 
 struct HP3_Info{
@@ -184,26 +212,54 @@ struct HP3_Info{
     //Corresponding normal position has a very low VAF
     bool isNormalPosLowVAF;
 
+    std::string somaticReadDeriveByHP;
 
     HP3_Info(): totalCleanHP3Read(0), HP1withHP3Read(0), HP2withHP3Read(0), OnlyHP3Read(0), MessyHPRead(0), unTag(0)
              , CaseReadCount(0), HP1withHP3ReadRatio(0.0), HP2WithHP3ReadRatio(0.0), OnlyHP3ReadRatio(0.0), MessyHPReadRatio(0.0)
              , tumDelRatio(0.0), base(), GTtype("")
-             , isHighConSomaticSNP(false), isNormalPosLowVAF(false){}
+             , isHighConSomaticSNP(false), isNormalPosLowVAF(false), somaticReadDeriveByHP("0"){}
+};
+
+class BamFileRAII {
+public:
+    samFile* in;
+    bam_hdr_t* bamHdr;
+    hts_idx_t* idx;
+    bam1_t* aln;
+
+    BamFileRAII(const std::string& BamFile, const std::string& fastaFile, htsThreadPool &threadPool);
+    ~BamFileRAII();
+};
+
+class readHpDistriLog{
+    private :
+        // chr, variant position (0-base), reads HP 
+        std::map<std::string, std::map<int, ReadHpResult>> chrVarReadHpResult;
+    protected:
+
+    public:
+        readHpDistriLog();
+        ~readHpDistriLog();
+        //use for multi-thread SomaticVarCaller
+        void mergeLocalReadHp(const std::string &chr, std::map<int, ReadHpResult> &localReadHpResult);
+        void writeReadHpDistriLog(HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec);
+        void removeNotDeriveByH1andH2pos(const std::vector<std::string> &chrVec);
 };
 
 class BamBaseCounter{
     private:
         // chr, variant position (0-base), base count & depth
-        std::map<std::string, std::map<int, PosBase>> ChrVariantBase;
+        std::map<std::string, std::map<int, PosBase>> *ChrVariantBase;
 
-        void StatisticBaseInfo(const bam1_t &aln, std::string chrName, const HaplotagParameters &params, int genmoeType
+        void StatisticBaseInfo(const bam1_t &aln, const std::string &chrName, const HaplotagParameters &params, int genmoeType
                          , std::map<int, PosBase> &VariantBase, std::map<int, RefAltSet> &currentVariants ,std::map<int, RefAltSet>::iterator &firstVariantIter);
-        void CalculateBaseInfo(std::string chr, std::map<int, PosBase> &VariantBase, std::map<int, RefAltSet> &currentVariants);
+        void CalculateBaseInfo(const std::string &chr, std::map<int, PosBase> &VariantBase, std::map<int, RefAltSet> &currentVariants);
 
     public:
-        BamBaseCounter(std::string BamFile, const HaplotagParameters &params, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat, std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, int genmoeType);
+        BamBaseCounter();
         ~BamBaseCounter();
 
+        void CountingBamBase(const std::string &BamFile, const HaplotagParameters &params, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat, std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, int genmoeType);
 
         bool isHighRefAllelleFreq(std::string chr, int pos);
         std::string getMaxFreqBase(std::string chr, int pos);
@@ -232,8 +288,10 @@ class SomaticJudgeBase{
         , std::map<int, int> &NorCountPS, std::map<int, int> &tumCountPS, std::map<int,std::string> *variantsHP
         , std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos);
 
-        virtual void OnlyTumorSNPjudgeHP(RefAltSet &curVar, int &curPos, BamBaseCounter *NorBase, VCF_Info *vcfSet, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int,std::string> *variantsHP, std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos)=0;
-        std::string determineReadHP(std::map<int, int> &hpCount, int &pqValue,std::map<int, int> &norCountPS,  double percentageThreshold, int *totalHighSimilarity, int *totalCrossTwoBlock, int *totalWithOutVaraint);
+        virtual void OnlyTumorSNPjudgeHP(RefAltSet &curVar, int &curPos, BamBaseCounter *NorBase, VCF_Info *vcfSet,const std::string &chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int,std::string> *variantsHP, std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos)=0;
+        std::string determineReadHP(std::map<int, int> &hpCount, int &pqValue,std::map<int, int> &norCountPS, double &norHPsimilarity, double &tumHPsimilarity,  double percentageThreshold, int *totalHighSimilarity, int *totalCrossTwoBlock, int *totalWithOutVaraint);
+
+        void recordReadHp(int pos, std::string hpResult, std::map<int, ReadHpResult> &varReadHpResult);
     public:
 };
 
@@ -241,7 +299,13 @@ class SomaticVarCaller: public SomaticJudgeBase{
     private:
         // record the position that tagged as HP3
         // chr, variant position
-        std::map<std::string, std::map<int, HP3_Info>> SomaticChrPosInfo;
+        std::map<std::string, std::map<int, HP3_Info>> *SomaticChrPosInfo;
+        
+        // chr, variant position (0-base), reads HP 
+        std::map<std::string, std::map<int, ReadHpResult>> *chrVarReadHpResult;
+
+        readHpDistriLog *callerReadHpDistri;
+
 
         void InitialSomaticFilterParams(SomaticFilterParaemter &somaticParams);
 
@@ -249,22 +313,24 @@ class SomaticVarCaller: public SomaticJudgeBase{
                                   , float &messyReadRatioThreshold,int &readCountThreshold, float &VAF_upper_threshold, float &VAF_lower_threshold
                                   , float &tumDeletionRatioThreshold, float &tumLowMpqRatioThreshold);
     
-        void StatisticSomaticPosInfo(const bam_hdr_t &bamHdr,const bam1_t &aln, std::string chr, HaplotagParameters &params, BamBaseCounter *NorBase, VCF_Info *vcfSet
-                                   , std::map<int, HP3_Info> &posReadCase, std::map<int, RefAltSet> &currentChrVariants, std::map<int, RefAltSet>::iterator &firstVariantIter);
+        void StatisticSomaticPosInfo(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, HaplotagParameters &params, BamBaseCounter *NorBase, VCF_Info *vcfSet
+                                   , std::map<int, HP3_Info> &posReadCase, std::map<int, RefAltSet> &currentChrVariants, std::map<int, RefAltSet>::iterator &firstVariantIter
+                                   , std::map<std::string, ReadVarHpCount> &readTotalHPcount, std::map<int, std::map<std::string, std::string>> &somaticPosReadID);
         void ClassifyReadsByCase(std::vector<int> &readPosHP3, std::map<int, int> &countPS, std::map<int, int> &hpCount, const HaplotagParameters &params, std::map<int, HP3_Info> &somaticPosInfo);
 
-        void SomaticFeatureFilter(const SomaticFilterParaemter &somaticParams, std::map<int, RefAltSet> &currentChrVariants, std::string chr, std::map<int, HP3_Info> &somaticPosInfo);
+        void SomaticFeatureFilter(const SomaticFilterParaemter &somaticParams, std::map<int, RefAltSet> &currentChrVariants,const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo);
         void WriteSomaticVarCallingLog(const HaplotagParameters &params, const SomaticFilterParaemter &somaticParams, std::ofstream *tagHP3Log, const std::vector<std::string> &chrVec, BamBaseCounter &NorBase
                                      , std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
 
+        void releaseMemory();
+
     protected:
-        void OnlyTumorSNPjudgeHP(RefAltSet &curVar, int &curPos, BamBaseCounter *NorBase, VCF_Info *vcfSet, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int,std::string> *variantsHP, std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos);
+        void OnlyTumorSNPjudgeHP(RefAltSet &curVar, int &curPos, BamBaseCounter *NorBase, VCF_Info *vcfSet, const std::string &chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int,std::string> *variantsHP, std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos);
     public:
-        SomaticVarCaller(std::string BamFile, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat, std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, HaplotagParameters &params, VCF_Info *vcfSet, BamBaseCounter &NorBase);
+        SomaticVarCaller();
         virtual ~SomaticVarCaller();
 
-        bool isHighConfidneceSomaticSNP(std::string chr, int pos);
-        std::map<int, HP3_Info>* getSomaticPosInfo(std::string chr);
+        void VariantCalling(const std::string BamFile, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat,const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, HaplotagParameters &params, VCF_Info *vcfSet, BamBaseCounter &NorBase);
         std::map<std::string, std::map<int, HP3_Info>> getSomaticChrPosInfo();
 
 
@@ -284,17 +350,21 @@ class HaplotagProcess: public SomaticJudgeBase
         std::map<std::string, int> *chrLength;
 
         // chr, variant position (0-base), allele haplotype set
-        std::map<std::string, std::map<int, RefAltSet>> mergedChrVarinat;
+        std::map<std::string, std::map<int, RefAltSet>> *mergedChrVarinat;
 
         // variant position (0-base), allele haplotype set
         std::map<int, RefAltSet> currentChrVariants;
         std::map<int, RefAltSet>::iterator firstVariantIter;
 
         // chr, variant position (0-base), somatic SNP information
-        std::map<std::string, std::map<int, HP3_Info>>  chrPosReadCase;  
+        std::map<std::string, std::map<int, HP3_Info>> *chrPosReadCase;  
 
         // chr, variant position (0-base), reads HP 
-        std::map<std::string, std::map<int, ReadHpResult>> chrVarReadHpResult;
+        std::map<std::string, std::map<int, ReadHpResult>> *beforeCorrReadHpResult;
+        std::map<std::string, std::map<int, ReadHpResult>> *afterCorrReadHpResult;
+
+        readHpDistriLog *hpBeforeInheritance;
+        readHpDistriLog *hpAfterInheritance;
 
         // record the VCF files of the normal and tumor datasets (normal:0, tumor:1)
         VCF_Info vcfSet[2];
@@ -302,7 +372,7 @@ class HaplotagProcess: public SomaticJudgeBase
         void initFlag(bam1_t *aln, std::string flag);
         
         std::string judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, std::string chrName, double percentageThreshold, std::ofstream *tagResult, int &pqValue, int &psValue, const int tagGeneType, std::string &ref_string);
-        std::string SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, std::string chrName, double percentageThreshold, std::ofstream *tagResult, int &pqValue, int &psValue, const int tagGeneType, std::string &ref_string);
+        std::string SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln,const std::string &chrName, double percentageThreshold, std::ofstream *tagResult, int &pqValue, int &psValue, const int tagGeneType, std::string &ref_string);
         
         int totalAlignment;
         int totalSupplementary;
@@ -325,6 +395,7 @@ class HaplotagProcess: public SomaticJudgeBase
         int totalHP1_2;
         int totalHP2_1;
         int totalHP2_2;
+        int totalreadOnlyH3Snp;
         int totalHighSimilarity;
         int totalCrossTwoBlock;
         int totalEmptyVariant;
@@ -338,10 +409,11 @@ class HaplotagProcess: public SomaticJudgeBase
         bool parseSVFile;
         bool parseMODFile;
     protected:
-        void OnlyTumorSNPjudgeHP(RefAltSet &curVar, int &curPos, BamBaseCounter *NorBase, VCF_Info *vcfSet, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int,std::string> *variantsHP, std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos);
+        void OnlyTumorSNPjudgeHP(RefAltSet &curVar, int &curPos, BamBaseCounter *NorBase, VCF_Info *vcfSet, const std::string &chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int,std::string> *variantsHP, std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos);
     public:
-        HaplotagProcess(HaplotagParameters params);
-        ~HaplotagProcess();
+        HaplotagProcess();
+        void TaggingProcess(HaplotagParameters &params);
+        virtual ~HaplotagProcess();
 
 };
 

@@ -19,8 +19,8 @@ static const char *CORRECT_USAGE_MESSAGE =
 "      -b, --bam-file=NAME             input normal genome BAM file.\n"
 "      --tumor-snp-file=NAME           input tumor genome SNP VCF file.\n"
 "      --tumor-bam-file=NAME           input tumor genome BAM file for tagging.\n"
-"      -r, --reference=NAME            reference FASTA.\n"
-"      --somaticCallingMPQ=Num         mapping quality threshold for calling somatic SNPs. default: 40\n\n"
+"      -r, --reference=NAME            reference FASTA.\n\n"
+//"      --somaticCallingMPQ=Num         mapping quality threshold for calling somatic SNPs. default: 40\n\n"
 "optional arguments:\n"
 "      --tagSupplementary              tag supplementary alignment. default:false\n"
 "      --sv-file=NAME                  input phased SV vcf file.\n"
@@ -68,8 +68,8 @@ namespace opt
 {
     static int numThreads = 1;
     static int qualityThreshold = 1;
+    //static int somaticCallingMpqThreshold = 1;  //new
     static double percentageThreshold = 0.6;
-    static int somaticCallingMpqThreshold = 40;  //new
     static std::string snpFile="";
     static std::string svFile="";
     static std::string modFile="";
@@ -110,7 +110,7 @@ void HaplotagOptions(int argc, char** argv)
             case REGION:   arg >> opt::region; break;        
             case TAG_TUM: opt::tumorMode = true; break;  //new
             case TAG_SUP:  opt::tagSupplementary = true; break;
-            case SC_MPQ: arg >> opt::somaticCallingMpqThreshold; break; //new
+            case SC_MPQ: arg >> opt::qualityThreshold; break; //new
             case CRAM:     opt::outputFormat = "cram"; break;
             case LOG:      opt::writeReadLog = true; break;
             case OPT_HELP:
@@ -254,7 +254,7 @@ int HaplotagMain(int argc, char** argv, std::string in_version)
 
     ecParams.numThreads=opt::numThreads;
     ecParams.qualityThreshold=opt::qualityThreshold;
-    ecParams.somaticCallingMpqThreshold=opt::somaticCallingMpqThreshold;  //new
+    ecParams.somaticCallingMpqThreshold=opt::qualityThreshold;  //new
     ecParams.snpFile=opt::snpFile;
     ecParams.svFile=opt::svFile;
     ecParams.modFile=opt::modFile;
@@ -272,7 +272,8 @@ int HaplotagMain(int argc, char** argv, std::string in_version)
     ecParams.command=opt::command;
     ecParams.outputFormat=opt::outputFormat;
 
-    HaplotagProcess processor(ecParams);
+    HaplotagProcess processor;
+    processor.TaggingProcess(ecParams);
 
     return 0;
 }
