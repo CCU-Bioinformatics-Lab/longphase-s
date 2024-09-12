@@ -17,11 +17,11 @@ struct HaplotagParameters
     int somaticCallingMpqThreshold;  
     
     std::string snpFile;
-    std::string tumorSnpFile;   //new
+    std::string tumorSnpFile;   
     std::string svFile;
     std::string modFile;
     std::string bamFile;
-    std::string tumorBamFile;   //new
+    std::string tumorBamFile;  
     std::string fastaFile;
     std::string resultPrefix;
     std::string region;
@@ -31,7 +31,7 @@ struct HaplotagParameters
     
     bool tagSupplementary;
     bool writeReadLog;
-    bool tagTumorSnp;   //new
+    bool tagTumorSnp; 
 };
 
 struct SomaticFilterParaemter
@@ -61,7 +61,7 @@ struct SomaticFilterParaemter
     float Unphased_Hetero_tumDeletionRatio;
 
     //Homozygous SNPs filter threshold
-    float Homo_OnlyHP3ReadRatioThreshold;
+    float Homo_OnlyHP3ReadRatioThreshold; //not used
     float Homo_MessyReadRatioThreshold;
     int Homo_readCountThreshold;
     float Homo_VAF_upper_threshold ; //not used
@@ -306,7 +306,6 @@ class SomaticVarCaller: public SomaticJudgeBase{
 
         readHpDistriLog *callerReadHpDistri;
 
-
         void InitialSomaticFilterParams(SomaticFilterParaemter &somaticParams);
 
         void SetSomaticFilterParams(const SomaticFilterParaemter &somaticParams, std::string GTtype, float &OnlyHP3ReadRatioThreshold
@@ -319,7 +318,10 @@ class SomaticVarCaller: public SomaticJudgeBase{
         void ClassifyReadsByCase(std::vector<int> &readPosHP3, std::map<int, int> &countPS, std::map<int, int> &hpCount, const HaplotagParameters &params, std::map<int, HP3_Info> &somaticPosInfo);
 
         void SomaticFeatureFilter(const SomaticFilterParaemter &somaticParams, std::map<int, RefAltSet> &currentChrVariants,const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo);
-        void WriteSomaticVarCallingLog(const HaplotagParameters &params, const SomaticFilterParaemter &somaticParams, std::ofstream *tagHP3Log, const std::vector<std::string> &chrVec, BamBaseCounter &NorBase
+        void CalibrateReadHP(const std::string &chr, const SomaticFilterParaemter &somaticParams, std::map<int, HP3_Info> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, std::string>> &somaticPosReadHPCount);
+        void CalculateChrReadHP(const HaplotagParameters &params, const std::string &chr, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, std::string>> &somaticPosReadHPCount);
+        void StatisticSomaticPosReadHP(const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, std::map<std::string, std::string>> &somaticPosReadHPCount, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, ReadHpResult> &readHpDistributed);
+        void WriteSomaticVarCallingLog(const HaplotagParameters &params, const SomaticFilterParaemter &somaticParams, const std::vector<std::string> &chrVec, BamBaseCounter &NorBase
                                      , std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
 
         void releaseMemory();
