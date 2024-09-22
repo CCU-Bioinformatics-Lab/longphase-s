@@ -675,24 +675,24 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, RefAltSet>::iterator &cur
                              << curVar.Variant[Genome::TUMOR].Alt << "\n";
                     exit(EXIT_SUCCESS);
                 }else{
-                    OnlyTumorSNPjudgeHP(curVar, curPos, NorBase, vcfSet, chrName, base, hpCount, &tumCountPS, variantsHP, readPosHP3, SomaticPos);
+                    OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, vcfSet, hpCount, &tumCountPS, variantsHP, readPosHP3, NorBase, SomaticPos);
                 }
             }
         //the tumor SNP GT is unphased heterozygous
         }else if(curVar.Variant[Genome::TUMOR].is_unphased_hetero == true){
             if(curVar.Variant[Genome::TUMOR].Ref == base || curVar.Variant[Genome::TUMOR].Alt == base){
-                OnlyTumorSNPjudgeHP(curVar, curPos, NorBase, vcfSet, chrName, base, hpCount, nullptr, variantsHP, readPosHP3, SomaticPos);
+                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, vcfSet, hpCount, nullptr, variantsHP, readPosHP3, NorBase, SomaticPos);
             }           
         //the tumor SNP GT is homozygous
         }else if(curVar.Variant[Genome::TUMOR].is_homozygous == true){
             if(curVar.Variant[Genome::TUMOR].Ref == base || curVar.Variant[Genome::TUMOR].Alt == base){
-                OnlyTumorSNPjudgeHP(curVar, curPos, NorBase, vcfSet, chrName, base, hpCount, nullptr, variantsHP, readPosHP3, SomaticPos);
+                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, vcfSet, hpCount, nullptr, variantsHP, readPosHP3, NorBase, SomaticPos);
             }
         }
     }
 }
 
-void SomaticJudgeBase::OnlyTumorSNPjudgeHP(RefAltSet &curVar, int &curPos, BamBaseCounter *NorBase, VCF_Info vcfSet[2],const std::string &chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos){
+void SomaticJudgeBase::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, RefAltSet &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
 
 }
 
@@ -841,29 +841,30 @@ int SomaticJudgeBase::determineReadHP(std::map<int, int> &hpCount, int &pqValue,
 }
 
 void SomaticJudgeBase::recordReadHp(int pos, int hpResult, std::map<int, ReadHpResult> &varReadHpResult){
-    switch (hpResult) {
-        case ReadHP::unTag:
-            varReadHpResult[pos].unTagRead++; break;
-        case ReadHP::H1:
-            varReadHpResult[pos].HP1read++; break;
-        case ReadHP::H2:
-            varReadHpResult[pos].HP2read++; break;
-        case ReadHP::H3:
-            varReadHpResult[pos].HP3read++; break;
-        case ReadHP::H4:
-            varReadHpResult[pos].HP4read++; break;
-        case ReadHP::H1_1:
-            varReadHpResult[pos].HP1_1read++; break;
-        case ReadHP::H1_2:
-            varReadHpResult[pos].HP1_2read++; break;
-        case ReadHP::H2_1:
-            varReadHpResult[pos].HP2_1read++; break;
-        case ReadHP::H2_2:
-            varReadHpResult[pos].HP2_2read++; break;
-        default:
-            std::cerr << "Error: Unexpected read HP result " << hpResult << "\n";
-            exit(1);
-    }
+    varReadHpResult[pos].hpResultCounter[hpResult]++;
+    // switch (hpResult) {
+    //     case ReadHP::unTag:
+    //         varReadHpResult[pos].unTagRead++; break;
+    //     case ReadHP::H1:
+    //         varReadHpResult[pos].HP1read++; break;
+    //     case ReadHP::H2:
+    //         varReadHpResult[pos].HP2read++; break;
+    //     case ReadHP::H3:
+    //         varReadHpResult[pos].HP3read++; break;
+    //     case ReadHP::H4:
+    //         varReadHpResult[pos].HP4read++; break;
+    //     case ReadHP::H1_1:
+    //         varReadHpResult[pos].HP1_1read++; break;
+    //     case ReadHP::H1_2:
+    //         varReadHpResult[pos].HP1_2read++; break;
+    //     case ReadHP::H2_1:
+    //         varReadHpResult[pos].HP2_1read++; break;
+    //     case ReadHP::H2_2:
+    //         varReadHpResult[pos].HP2_2read++; break;
+    //     default:
+    //         std::cerr << "Error: Unexpected read HP result " << hpResult << "\n";
+    //         exit(1);
+    // }
 }
 
 readHpDistriLog::readHpDistriLog(){
@@ -929,16 +930,16 @@ void readHpDistriLog::writeReadHpDistriLog(HaplotagParameters &params, std::stri
         std::map<int, ReadHpResult>::iterator curVarReadHpIter = chrVarReadHpResult[chr].begin();
         while(curVarReadHpIter != chrVarReadHpResult[chr].end()){
             int pos = (*curVarReadHpIter).first + 1;
-            int HP1readCount = (*curVarReadHpIter).second.HP1read;
-            int HP1_1readCount = (*curVarReadHpIter).second.HP1_1read;
-            int HP1_2readCount = (*curVarReadHpIter).second.HP1_2read;
+            int HP1readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H1];
+            int HP1_1readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H1_1];
+            int HP1_2readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H1_2];
 
-            int HP2readCount = (*curVarReadHpIter).second.HP2read;
-            int HP2_1readCount = (*curVarReadHpIter).second.HP2_1read;
-            int HP2_2readCount = (*curVarReadHpIter).second.HP2_2read;
+            int HP2readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H2];
+            int HP2_1readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H2_1];
+            int HP2_2readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H2_2];
 
-            int HP3readCount = (*curVarReadHpIter).second.HP3read;
-            int HP4readCount = (*curVarReadHpIter).second.HP4read;
+            int HP3readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H3];
+            int HP4readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H4];
 
             int totaltagRead = HP1readCount + HP2readCount + HP3readCount + HP4readCount + HP1_1readCount + HP1_2readCount + HP2_1readCount + HP2_2readCount;
 
@@ -965,7 +966,7 @@ void readHpDistriLog::writeReadHpDistriLog(HaplotagParameters &params, std::stri
                                 << HP2_2readCount << "\t\t"
                                 << HP3readCount << "\t"
                                 << HP4readCount << "\t"
-                                << (*curVarReadHpIter).second.unTagRead << "\t"
+                                << (*curVarReadHpIter).second.hpResultCounter[ReadHP::unTag] << "\t"
                                 << HP1readRatio << "\t"
                                 << HP1_1readRatio << "\t"
                                 << HP1_2readRatio << "\t\t"
@@ -1480,7 +1481,7 @@ void SomaticVarCaller::StatisticSomaticPosInfo(const  bam_hdr_t &bamHdr,const ba
     }
 }
 
-void SomaticVarCaller::OnlyTumorSNPjudgeHP(RefAltSet & curVar, int & curPos, BamBaseCounter *NorBase, VCF_Info * vcfSet, const std::string &chrName, std::string base, std::map<int,int>& hpCount, std::map<int,int>* tumCountPS, std::map<int, int>* variantsHP, std::vector<int>* readPosHP3, std::map<int,HP3_Info>* SomaticPos){
+void SomaticVarCaller::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, RefAltSet &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
     //the tumor SNP GT is phased heterozygous
     //all bases of the same type at the current position in normal.bam
 
@@ -1863,14 +1864,20 @@ void SomaticVarCaller::StatisticSomaticPosReadHP(const std::string &chr, std::ma
                     }
                 }
 
-                if( readHpDistributed[pos].HP3read == 0 && 
-                    readHpDistributed[pos].HP4read == 0 && 
-                    readHpDistributed[pos].HP1_1read == 0 &&
-                    readHpDistributed[pos].HP1_2read == 0 &&
-                    readHpDistributed[pos].HP2_1read == 0 &&  
-                    readHpDistributed[pos].HP2_2read == 0){
+                if( readHpDistributed[pos].hpResultCounter[ReadHP::H3] == 0 && 
+                    readHpDistributed[pos].hpResultCounter[ReadHP::H4] == 0 && 
+                    readHpDistributed[pos].hpResultCounter[ReadHP::H1_1] == 0 &&
+                    readHpDistributed[pos].hpResultCounter[ReadHP::H1_2] == 0 &&
+                    readHpDistributed[pos].hpResultCounter[ReadHP::H2_1] == 0 &&  
+                    readHpDistributed[pos].hpResultCounter[ReadHP::H2_2] == 0){
                     std::cerr << "ERROR (statistic all read HP) => hadn't exist somatic HP read in : chr: "<< chr << " pos: " << pos+1 <<std::endl;
-                    std::cerr << "HP1-1: "<< readHpDistributed[pos].HP1_1read << " HP1-2: "<< readHpDistributed[pos].HP1_2read << " HP2-1: "<< readHpDistributed[pos].HP2_1read << " HP2-2: "<< readHpDistributed[pos].HP2_2read << " HP3: "<< readHpDistributed[pos].HP3read << " HP4: "<< readHpDistributed[pos].HP4read<< std::endl;
+                    std::cerr << "HP1-1: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H1_1] 
+                              << " HP1-2: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H1_2] 
+                              << " HP2-1: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H2_1] 
+                              << " HP2-2: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H2_2] 
+                              << " HP3: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H3] 
+                              << " HP4: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H4]
+                              << std::endl;
                     exit(1); 
                 }
 
@@ -2681,51 +2688,13 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const int geneType){
 
                 if (haplotype != ReadHP::unTag){
 
-                    std::string haplotype_str = "";
-                    
-                    switch (haplotype) {
-                        case ReadHP::H1:
-                            totalHP1++;
-                            haplotype_str = "1";
-                            break;
-                        case ReadHP::H2:
-                            totalHP2++;
-                            haplotype_str = "2";
-                            break;
-                        case ReadHP::H3:
-                            totalHP3++;
-                            haplotype_str = "3";
-                            break;
-                        case ReadHP::H4:
-                            totalHP4++;
-                            haplotype_str = "4";
-                            break;
-                        case ReadHP::H1_1:
-                            totalHP1_1++;
-                            haplotype_str = "1-1";
-                            break;
-                        case ReadHP::H1_2:
-                            totalHP1_2++;
-                            haplotype_str = "1-2";
-                            break;
-                        case ReadHP::H2_1:
-                            totalHP2_1++;
-                            haplotype_str = "2-1";
-                            break;
-                        case ReadHP::H2_2:
-                            totalHP2_2++;
-                            haplotype_str = "2-2";
-                            break;
-                        default:
-                            std::cerr<<"ERROR: haplotype not found \n";
-                            std::cerr<< "readID: " << bam_get_qname(aln) << " haplotype: " << haplotype << "\n";
-                            exit(1);
-                            break;
-                    }
-
+                    totalHpCount[haplotype]++;
                     totalTagCount++;
 
                     if(tagTumorMode){
+                        std::string haplotype_str = "";
+                        haplotype_str = convertHpResultToString(haplotype);
+
                         bam_aux_append(aln, "HP", 'Z', (haplotype_str.size() + 1), (const uint8_t*) haplotype_str.c_str());
                         if(psValue != -1) bam_aux_append(aln, "PS", 'i', sizeof(psValue), (uint8_t*) &psValue);
                         bam_aux_append(aln, "PQ", 'i', sizeof(pqValue), (uint8_t*) &pqValue);
@@ -3319,28 +3288,7 @@ int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
     std::string hpResultStr = ".";
     std::string psResultStr = ".";
 
-    switch(hpResult){
-        case ReadHP::unTag:
-            hpResultStr = "."; break;
-        case ReadHP::H1:
-            hpResultStr = "1"; break;
-        case ReadHP::H2:
-            hpResultStr = "2"; break;
-        case ReadHP::H3:
-            hpResultStr = "3"; break;
-        case ReadHP::H4:
-            hpResultStr = "4"; break;
-        case ReadHP::H1_1:
-            hpResultStr = "1-1"; break;
-        case ReadHP::H2_1:
-            hpResultStr = "2-1"; break;
-        case ReadHP::H1_2:
-            hpResultStr = "1-2"; break;
-        case ReadHP::H2_2:
-            hpResultStr = "2-2"; break;
-        default:
-            hpResultStr = "."; break;
-    }
+    hpResultStr = convertHpResultToString(hpResult);
 
     //determine the PS value of the read
     if( hpResult != ReadHP::unTag ){
@@ -3393,9 +3341,7 @@ int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
             (*tagResult)<< " " << v.first << "," << v.second ;
         }
 
-        (*tagResult)<< " ";
-
-        (*tagResult)<< "TumPS:";
+        (*tagResult)<< " TumPS:";
         for(auto v : tumCountPS){
             (*tagResult)<< " " << v.first << "," << v.second ;
         }
@@ -3407,7 +3353,33 @@ int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
     return hpResult;
 }
 
-void HaplotagProcess::OnlyTumorSNPjudgeHP(RefAltSet &curVar, int &curPos, BamBaseCounter *NorBase, VCF_Info *vcfSet,const std::string &chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos){
+std::string HaplotagProcess::convertHpResultToString(int hpResult){
+    switch(hpResult){
+        case ReadHP::unTag:
+            return ".";
+        case ReadHP::H1:
+            return "1";
+        case ReadHP::H2:
+            return "2";
+        case ReadHP::H3:
+            return "3";
+        case ReadHP::H4:
+            return "4";
+        case ReadHP::H1_1:
+            return "1-1";
+        case ReadHP::H2_1:
+            return "2-1";
+        case ReadHP::H1_2:
+            return "1-2";
+        case ReadHP::H2_2:
+            return "2-2";
+        default:
+            std::cerr << "ERROR (convertHpResultToString) => Unsupported HP result: " << hpResult << std::endl;
+            exit(1);
+    }
+}
+
+void HaplotagProcess::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, RefAltSet &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
 
     if(SomaticPos == nullptr){
         std::cerr << "ERROR (SomaticTaggingJudgeHP) => SomaticPos pointer cannot be nullptr"<< std::endl;
@@ -3460,20 +3432,11 @@ totalAlignment(0),totalSupplementary(0),totalSecondary(0),totalUnmapped(0),total
     hpBeforeInheritance = new readHpDistriLog();
     hpAfterInheritance = new readHpDistriLog();
 
-
     //verification variable
     totalLowerQuality = 0;
     totalOtherCase = 0;
-    totalHP1 = 0;
-    totalHP2 = 0;
-    totalHP3 = 0;
-    totalHP4 = 0;
-    totalHP1_1 = 0;
-    totalHP1_2 = 0;
-    totalHP2_1 = 0;
-    totalHP2_2 = 0;
-    totalreadOnlyH3Snp = 0;
     totalunTag_HP0 = 0;
+    totalreadOnlyH3Snp = 0;
     totalHighSimilarity = 0;
     totalCrossTwoBlock = 0;
     totalEmptyVariant = 0;
@@ -3489,20 +3452,20 @@ HaplotagProcess::~HaplotagProcess(){
     std::cerr<< "total secondary:       " << totalSecondary     << "\n";
     std::cerr<< "total unmapped:        " << totalUnmapped      << "\n";
     std::cerr<< "total tag alignment:   " << totalTagCount     << "\n";
-    std::cerr<< "    L----total HP1   : " << totalHP1     << "\n";   //new
-    std::cerr<< "    L----total HP1-1 : " << totalHP1_1   << "\n";   //new
-    std::cerr<< "    L----total HP1-2 : " << totalHP1_2   << "\n";   //new
-    std::cerr<< "    L----total HP2   : " << totalHP2     << "\n";   //new
-    std::cerr<< "    L----total HP2-1 : " << totalHP2_1   << "\n";   //new
-    std::cerr<< "    L----total HP2-2 : " << totalHP2_2   << "\n";   //new
-    std::cerr<< "    L----total HP3   : " << totalHP3     << "\n";   //new
+    std::cerr<< "    L----total HP1   : " << totalHpCount[ReadHP::H1]     << "\n";   //new
+    std::cerr<< "    L----total HP1-1 : " << totalHpCount[ReadHP::H1_1]   << "\n";   //new
+    std::cerr<< "    L----total HP1-2 : " << totalHpCount[ReadHP::H1_2]   << "\n";   //new
+    std::cerr<< "    L----total HP2   : " << totalHpCount[ReadHP::H2]     << "\n";   //new
+    std::cerr<< "    L----total HP2-1 : " << totalHpCount[ReadHP::H2_1]   << "\n";   //new
+    std::cerr<< "    L----total HP2-2 : " << totalHpCount[ReadHP::H2_2]   << "\n";   //new
+    std::cerr<< "    L----total HP3   : " << totalHpCount[ReadHP::H3]     << "\n";   //new
     std::cerr<< "         L----total read only H3 Snp : " << totalreadOnlyH3Snp << "\n";   //new
-    std::cerr<< "    L----total HP4   : " << totalHP4     << "\n";   //new
+    std::cerr<< "    L----total HP4   : " << totalHpCount[ReadHP::H4]     << "\n";   //new
     std::cerr<< "total untagged:        " << totalUnTagCount   << "\n";
     std::cerr<< "    L----total lower mapping quality:    " << totalLowerQuality   << "\n";   //new
     std::cerr<< "    L----total EmptyVariant:             " << totalEmptyVariant   << "\n";   //new
     std::cerr<< "    L----total start > last variant pos: " << totalOtherCase   << "\n";   //new
-    std::cerr<< "    L----total untag:                    " << totalunTag_HP0   << "\n";   //new
+    std::cerr<< "    L----total judge to untag:           " << totalunTag_HP0   << "\n";   //new
     std::cerr<< "         L----total HighSimilarity:      " << totalHighSimilarity   << "\n";   //new
     std::cerr<< "         L----total CrossTwoBlock:       " << totalCrossTwoBlock   << "\n";   //new
     std::cerr<< "         L----total WithOut Variant:     " << totalWithOutVaraint   << "\n";   //new
