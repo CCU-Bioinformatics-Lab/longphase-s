@@ -2171,16 +2171,30 @@ std::map<std::string, std::map<int, HP3_Info>> SomaticVarCaller::getSomaticChrPo
     return (*SomaticChrPosInfo);
 }
 
+VcfParser::VcfParser(bool tagTumorMode){
+    this->tagTumorMode = tagTumorMode;
+    reset();
+}
 
-void HaplotagProcess::variantParser(std::string variantFile, VCF_Info &Info){
+VcfParser::~VcfParser(){
+
+}
+
+void VcfParser::reset(){
+    parseSnpFile = false;
+    parseSVFile = false;
+    parseMODFile = false;
+}
+
+void VcfParser::variantParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
 
     if( variantFile.find("gz") != std::string::npos ){
         // .vcf.gz 
-        compressParser(variantFile, Info);
+        compressParser(variantFile, Info, mergedChrVarinat);
     }
     else if( variantFile.find("vcf") != std::string::npos ){
         // .vcf
-        unCompressParser(variantFile, Info);
+        unCompressParser(variantFile, Info, mergedChrVarinat);
     }
     else{
         std::cerr<<"file: "<< variantFile << "\nnot vcf file. please check filename extension\n";
@@ -2189,7 +2203,7 @@ void HaplotagProcess::variantParser(std::string variantFile, VCF_Info &Info){
     return;
 }
 
-void HaplotagProcess::compressParser(std::string &variantFile, VCF_Info &Info){
+void VcfParser::compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
     gzFile file = gzopen(variantFile.c_str(), "rb");
     if(variantFile=="")
         return;
@@ -2233,7 +2247,7 @@ void HaplotagProcess::compressParser(std::string &variantFile, VCF_Info &Info){
             for (char* eol; (cur<end) && (eol = std::find(cur, end, '\n')) < end; cur = eol + 1)
             {
                 std::string input = std::string(cur, eol);
-                parserProcess(input, Info);
+                parserProcess(input, Info, mergedChrVarinat);
             }
             // any trailing data in [eol, end) now is a partial line
             offset = std::copy(cur, end, buffer);
@@ -2243,7 +2257,7 @@ void HaplotagProcess::compressParser(std::string &variantFile, VCF_Info &Info){
     }    
 }
 
-void HaplotagProcess::unCompressParser(std::string &variantFile, VCF_Info &Info){
+void VcfParser::unCompressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
     std::ifstream originVcf(variantFile);
     if(variantFile=="")
         return;
@@ -2255,12 +2269,25 @@ void HaplotagProcess::unCompressParser(std::string &variantFile, VCF_Info &Info)
         std::string input;
         while(! originVcf.eof() ){
             std::getline(originVcf, input);
-            parserProcess(input, Info);
+            parserProcess(input, Info, mergedChrVarinat);
         }
     }
 }
 
-void HaplotagProcess::parserProcess(std::string &input, VCF_Info &Info){
+void VcfParser::setParseSnpFile(bool parseSnpFile){
+    this->parseSnpFile = parseSnpFile;
+}
+
+void VcfParser::setParseSVFile(bool parseSVFile){
+    this->parseSVFile = parseSVFile;
+} 
+
+void VcfParser::setParseMODFile(bool parseMODFile){
+    this->parseMODFile = parseMODFile;
+}
+
+void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
+    bool integerPS = false;
     if( input.substr(0, 2) == "##" && parseSnpFile){
         if( input.find("contig=")!= std::string::npos ){
             int id_start  = input.find("ID=")+3;
@@ -2297,7 +2324,7 @@ void HaplotagProcess::parserProcess(std::string &input, VCF_Info &Info){
 
         if( fields.size() == 0 )
             return;
-            
+
         // trans to 0-base
         int pos = std::stoi( fields[1] ) - 1;
         std::string chr = fields[0];
@@ -2364,11 +2391,11 @@ void HaplotagProcess::parserProcess(std::string &input, VCF_Info &Info){
                 Info.chrVariant[chr][pos]=tmp;
 
                 if(Info.gene_type == Genome::NORMAL){
-                    (*mergedChrVarinat)[chr][pos].Variant[Genome::NORMAL] = tmp;
-                    (*mergedChrVarinat)[chr][pos].isExistNormal = true;    
+                    mergedChrVarinat[chr][pos].Variant[Genome::NORMAL] = tmp;
+                    mergedChrVarinat[chr][pos].isExistNormal = true;    
                 }else if(Info.gene_type == Genome::TUMOR){
-                    (*mergedChrVarinat)[chr][pos].Variant[Genome::TUMOR] = tmp;
-                    (*mergedChrVarinat)[chr][pos].isExistTumor = true; 
+                    mergedChrVarinat[chr][pos].Variant[Genome::TUMOR] = tmp;
+                    mergedChrVarinat[chr][pos].isExistTumor = true; 
                 }
                 
                 if(integerPS){
@@ -2472,11 +2499,11 @@ void HaplotagProcess::parserProcess(std::string &input, VCF_Info &Info){
                     Info.chrVariant[chr][pos] = tmp;
 
                     if(Info.gene_type == Genome::NORMAL){
-                        (*mergedChrVarinat)[chr][pos].Variant[Genome::NORMAL] = tmp;
-                        (*mergedChrVarinat)[chr][pos].isExistNormal = true;    
+                        mergedChrVarinat[chr][pos].Variant[Genome::NORMAL] = tmp;
+                        mergedChrVarinat[chr][pos].isExistNormal = true;    
                     }else if(Info.gene_type == Genome::TUMOR){
-                        (*mergedChrVarinat)[chr][pos].Variant[Genome::TUMOR] = tmp;
-                        (*mergedChrVarinat)[chr][pos].isExistTumor = true; 
+                        mergedChrVarinat[chr][pos].Variant[Genome::TUMOR] = tmp;
+                        mergedChrVarinat[chr][pos].isExistTumor = true; 
                     }
                 }
             //unphased heterozygous
@@ -2493,15 +2520,52 @@ void HaplotagProcess::parserProcess(std::string &input, VCF_Info &Info){
                     Info.chrVariant[chr][pos] = tmp;
 
                     if(Info.gene_type == Genome::NORMAL){
-                        (*mergedChrVarinat)[chr][pos].Variant[Genome::NORMAL] = tmp;
-                        (*mergedChrVarinat)[chr][pos].isExistNormal = true;    
+                        mergedChrVarinat[chr][pos].Variant[Genome::NORMAL] = tmp;
+                        mergedChrVarinat[chr][pos].isExistNormal = true;    
                     }else if(Info.gene_type == Genome::TUMOR){
-                        (*mergedChrVarinat)[chr][pos].Variant[Genome::TUMOR] = tmp;
-                        (*mergedChrVarinat)[chr][pos].isExistTumor = true; 
+                        mergedChrVarinat[chr][pos].Variant[Genome::TUMOR] = tmp;
+                        mergedChrVarinat[chr][pos].isExistTumor = true; 
                     }
                 }
             }
         }
+    }
+}
+
+void SeqcHighConVcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
+    if( input.substr(0, 2) == "##" && parseSnpFile){
+        if( input.find("contig=")!= std::string::npos ){
+            int id_start  = input.find("ID=")+3;
+            int id_end    = input.find(",length=");
+            int len_start = id_end+8;
+            int len_end   = input.find(">");
+            
+            std::string chr = input.substr(id_start,id_end-id_start);
+            int chrLen = std::stoi( input.substr(len_start,len_end-len_start) );
+
+            Info.chrVec.push_back(chr);
+            Info.chrLength[chr]=chrLen;                
+        }
+    }
+    else if ( input.substr(0, 1) == "#" ){
+        
+    }
+    else{
+        std::istringstream iss(input);
+        std::vector<std::string> fields((std::istream_iterator<std::string>(iss)),std::istream_iterator<std::string>());
+
+        if( fields.size() == 0 )
+            return;
+            
+        // trans to 0-base
+        int pos = std::stoi( fields[1] ) - 1;
+        std::string chr = fields[0];
+
+        RefAlt tmp;
+        tmp.Ref = fields[3]; 
+        tmp.Alt = fields[4];
+        mergedChrVarinat[chr][pos].Variant[Genome::SEQC_HIGH_CON] = tmp;
+        mergedChrVarinat[chr][pos].isExistSeqcHighCon = true;
     }
 }
 
@@ -3410,13 +3474,9 @@ void HaplotagProcess::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPo
 
 
 HaplotagProcess::HaplotagProcess():
-totalAlignment(0),totalSupplementary(0),totalSecondary(0),totalUnmapped(0),totalTagCount(0),totalUnTagCount(0),processBegin(time(NULL)),integerPS(false)
+totalAlignment(0),totalSupplementary(0),totalSecondary(0),totalUnmapped(0),totalTagCount(0),totalUnTagCount(0),processBegin(time(NULL))
 {
     //initialize variable
-    parseSVFile = false;
-    parseSnpFile = false;
-    parseMODFile = false;
-
     chrVec = nullptr;
     chrLength = nullptr;
 
@@ -3517,16 +3577,23 @@ void HaplotagProcess::TaggingProcess(HaplotagParameters &params)
         tagGeneType = Genome::NORMAL;
     }
 
+    VcfParser vcfParser(tagTumorMode);
 
     if(tagTumorMode){
         //load tumor snp vcf
         if(params.tumorSnpFile != ""){
             std::time_t begin = time(NULL);
             std::cerr<< "parsing tumor SNP VCF ... ";
-            parseSnpFile = true;
-            variantParser(params.tumorSnpFile, vcfSet[Genome::TUMOR]);
-            parseSnpFile = false;
+            vcfParser.setParseSnpFile(true);
+            vcfParser.variantParser(params.tumorSnpFile, vcfSet[Genome::TUMOR], *mergedChrVarinat);
+            vcfParser.reset();
             std::cerr<< difftime(time(NULL), begin) << "s\n";
+
+            int tumor_snp_count = 0;
+            for(auto& chrIter : vcfSet[Genome::TUMOR].chrVec){
+                tumor_snp_count += (*mergedChrVarinat)[chrIter].size();
+            }
+            std::cerr << "Tumor SNP count: " << tumor_snp_count << std::endl;
         }
     }
 
@@ -3539,18 +3606,18 @@ void HaplotagProcess::TaggingProcess(HaplotagParameters &params)
         std::cerr<< "parsing SNP VCF ... ";        
     }
 
-    parseSnpFile = true;
-    variantParser(params.snpFile, vcfSet[Genome::NORMAL]);
-    parseSnpFile = false;
+    vcfParser.setParseSnpFile(true);
+    vcfParser.variantParser(params.snpFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
+    vcfParser.reset();
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 
     // load SV vcf file
     if(params.svFile!=""){
         begin = time(NULL);
         std::cerr<< "parsing SV VCF ... ";
-        parseSVFile = true;
-        variantParser(params.svFile, vcfSet[tagGeneType]);
-        parseSVFile = false;
+        vcfParser.setParseSVFile(true);
+        vcfParser.variantParser(params.svFile, vcfSet[tagGeneType], *mergedChrVarinat);
+        vcfParser.reset();
         std::cerr<< difftime(time(NULL), begin) << "s\n";    
     }
     
@@ -3558,9 +3625,9 @@ void HaplotagProcess::TaggingProcess(HaplotagParameters &params)
     if(params.modFile!=""){
         begin = time(NULL);
         std::cerr<< "parsing MOD VCF ... ";
-        parseMODFile = true;
-        variantParser(params.modFile, vcfSet[tagGeneType]);
-        parseMODFile = false;
+        vcfParser.setParseMODFile(true);
+        vcfParser.variantParser(params.modFile, vcfSet[tagGeneType], *mergedChrVarinat);
+        vcfParser.reset();
         std::cerr<< difftime(time(NULL), begin) << "s\n";    
     }
 
@@ -3569,16 +3636,24 @@ void HaplotagProcess::TaggingProcess(HaplotagParameters &params)
         chrVec = &(vcfSet[Genome::NORMAL].chrVec);
         chrLength = &(vcfSet[Genome::NORMAL].chrLength); 
     }else{
-        //check normal & tumor chr & length
-        if(vcfSet[Genome::NORMAL].chrVec.size() != vcfSet[Genome::TUMOR].chrVec.size()){
-            std::cerr << "tumor & normal VCFs chromosome count are not the same" << std::endl;
-            return ;
-        }
 
-        if(vcfSet[Genome::NORMAL].chrLength.size() != vcfSet[Genome::TUMOR].chrLength.size()){
-            std::cerr << "tumor & normal VCFs  chrLength count not same" << std::endl;
-            return ;
+        //check normal & tumor chr & length
+        for(auto& chrIter : vcfSet[Genome::TUMOR].chrLength){
+            if(vcfSet[Genome::NORMAL].chrLength.find(chrIter.first) != vcfSet[Genome::NORMAL].chrLength.end()){
+                if(chrIter.second != vcfSet[Genome::NORMAL].chrLength[chrIter.first]){
+                    std::cerr << "tumor & normal VCFs chromosome length are not the same" << std::endl;
+                    std::cerr << "chr: " << chrIter.first << " length: " << chrIter.second << std::endl;
+                    return ;
+                }
+            }else{
+                std::cerr << "tumor & normal VCFs chromosome count are not the same" << std::endl;
+                return ;
+            }
         }
+        // if(vcfSet[Genome::NORMAL].chrVec.size() != vcfSet[Genome::TUMOR].chrVec.size()){
+        //     std::cerr << "tumor & normal VCFs chromosome count are not the same" << std::endl;
+        //     return ;
+        // }
 
         chrVec = &(vcfSet[Genome::TUMOR].chrVec);
         chrLength = &(vcfSet[Genome::TUMOR].chrLength); 
@@ -3620,7 +3695,7 @@ void HaplotagProcess::TaggingProcess(HaplotagParameters &params)
 
         NorBase = nullptr;
         SomaticVar = nullptr;
-        //exit(1);
+        //return;
     }
 
     // tag read

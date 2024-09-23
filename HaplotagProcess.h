@@ -72,7 +72,8 @@ struct SomaticFilterParaemter
 enum Genome
 {
     NORMAL = 0,
-    TUMOR = 1
+    TUMOR = 1,
+    SEQC_HIGH_CON = 2
 };
 
 enum SnpHP
@@ -99,10 +100,11 @@ enum ReadHP
 
 // record the variants from the normal and tumor VCF files (normal:0, tumor:1)
 struct RefAltSet{
-    RefAlt Variant[2];
+    RefAlt Variant[3];
     bool isExistNormal;
     bool isExistTumor;
-    RefAltSet(): isExistNormal(false), isExistTumor(false){}
+    bool isExistSeqcHighCon;
+    RefAltSet(): isExistNormal(false), isExistTumor(false), isExistSeqcHighCon(false){}
 };
 
 //record vcf information
@@ -114,18 +116,20 @@ struct VCF_Info
     // chr, variant position (0-base), allele haplotype
     std::map<std::string, std::map<int, RefAlt>> chrVariant;
 
-    // chr, variant position (0-base), phased set
     std::map<std::string, int > psIndex;
+    // chr, variant position (0-base), phased set
     std::map<std::string, std::map<int, int>> chrVariantPS;
     
     std::map<std::string, std::map<int, std::string>> chrVariantHP1;
     std::map<std::string, std::map<int, std::string>> chrVariantHP2;
     
-    // The number of SVs occurring on different haplotypes in a read
-    std::map<std::string, std::map<int, int> > readSVHapCount;
+    // // The number of SVs occurring on different haplotypes in a read
+    std::map<std::string, std::map<int, int>> readSVHapCount;
+
 
     int gene_type;
 };
+
 
 //record each type of base in specific position
 struct PosBase{
@@ -338,15 +342,39 @@ class SomaticVarCaller: public SomaticJudgeBase{
 
 };
 
+class VcfParser{
+    private:
+        bool parseSnpFile;
+        bool parseSVFile;
+        bool parseMODFile;
+        bool tagTumorMode;
+        void compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
+        void unCompressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
+        virtual void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
+        
+    public:
+        VcfParser(bool tagTumorMode);
+        ~VcfParser();
+        void setParseSnpFile(bool parseSnpFile);
+        void setParseSVFile(bool parseSVFile);
+        void setParseMODFile(bool parseMODFile);
+        void reset();
+        void variantParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
+};
+
+class SeqcHighConVcfParser: public VcfParser{
+    private:
+        bool parseSnpFile;
+        bool parseSVFile;
+        bool parseMODFile;
+        bool tagTumorMode;
+        void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
+    public:
+};
+
 class HaplotagProcess: public SomaticJudgeBase
 {
     private:
-        void variantParser(std::string variantFile, VCF_Info &Info);
-        void compressParser(std::string &variantFile, VCF_Info &Info);
-        void unCompressParser(std::string &variantFile, VCF_Info &Info);
-        void parserProcess(std::string &input, VCF_Info &Info);
-        
-        
         std::vector<std::string> *chrVec;
         std::map<std::string, int> *chrLength;
 
@@ -403,10 +431,6 @@ class HaplotagProcess: public SomaticJudgeBase
         //---------------------------------------------------------------
         
         std::time_t processBegin;
-        bool integerPS;
-        bool parseSnpFile;
-        bool parseSVFile;
-        bool parseMODFile;
     protected:
         void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, RefAltSet &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos);
     public:
