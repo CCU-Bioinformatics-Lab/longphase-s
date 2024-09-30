@@ -40,7 +40,7 @@ static const char *CORRECT_USAGE_MESSAGE =
 
 static const char* shortopts = "s:b:o:t:q:p:r:";
 
-enum { OPT_HELP = 1, TAG_SUP, SV_FILE, REGION, LOG, MOD_FILE, CRAM, TUM_SNP, TUM_BAM, SC_MPQ, TAG_TUM};
+enum { OPT_HELP = 1, TAG_SUP, SV_FILE, REGION, LOG, MOD_FILE, CRAM, TUM_SNP, TUM_BAM, SC_MPQ, TAG_TUM, HIGH_CON};
 
 static const struct option longopts[] = { 
     { "help",                 no_argument,        NULL, OPT_HELP },
@@ -61,6 +61,7 @@ static const struct option longopts[] = {
     { "somaticCallingMPQ",    required_argument,  NULL, SC_MPQ },   //new
     { "region",               required_argument,  NULL, REGION },
     { "log",                  no_argument,        NULL, LOG },
+    { "highCon-snp",          required_argument,  NULL, HIGH_CON},
     { NULL, 0, NULL, 0 }
 };
 
@@ -84,6 +85,7 @@ namespace opt
     static bool writeReadLog = false;
     static bool tumorMode = false;  //new
     static std::string command="longphase ";
+    static std::string highConSnp="";
 }
 
 void HaplotagOptions(int argc, char** argv)
@@ -111,6 +113,7 @@ void HaplotagOptions(int argc, char** argv)
             case TAG_TUM: opt::tumorMode = true; break;  //new
             case TAG_SUP:  opt::tagSupplementary = true; break;
             case SC_MPQ: arg >> opt::qualityThreshold; break; //new
+            case HIGH_CON: arg >> opt::highConSnp; break;
             case CRAM:     opt::outputFormat = "cram"; break;
             case LOG:      opt::writeReadLog = true; break;
             case OPT_HELP:
@@ -222,6 +225,16 @@ void HaplotagOptions(int argc, char** argv)
             std::cerr << SUBPROGRAM ": missing tumor bam file.\n";
             die = true;
         }
+
+        //benchmarking
+        if( opt::highConSnp != ""){
+            std::ifstream openFile( opt::highConSnp.c_str() );
+            if( !openFile.is_open() )
+            {
+                std::cerr<< "File " << opt::highConSnp << " not exist.\n\n";
+                die = true;
+            }
+        }
     }  
     
     if ( opt::numThreads < 1 ){
@@ -271,6 +284,7 @@ int HaplotagMain(int argc, char** argv, std::string in_version)
     ecParams.version=in_version;
     ecParams.command=opt::command;
     ecParams.outputFormat=opt::outputFormat;
+    ecParams.seqcHighCon=opt::highConSnp;
 
     HaplotagProcess processor;
     processor.TaggingProcess(ecParams);
