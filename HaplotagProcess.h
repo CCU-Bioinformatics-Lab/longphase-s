@@ -393,6 +393,7 @@ class VcfParser{
         bool parseSVFile;
         bool parseMODFile;
         bool tagTumorMode;
+        bool integerPS;
         void compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
         void unCompressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
         virtual void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
@@ -420,17 +421,11 @@ struct RefAltDelCount{
 class highConBenchmark: public VcfParser{
     private:
         bool openTestingFunc;
-        VCF_Info Info;
-
-        std::map<std::string, std::map<int, RefAltSet>> mergedChrVarinat;
-        // variant position (0-base), allele haplotype set
-        std::map<int, RefAltSet> currentChrVariants;
-        std::map<int, RefAltSet>::iterator firstVariantIter;
-        std::map<int, RefAltSet>::iterator currentVariantIter;
 
         // store data
         std::map<std::string, std::map<int, RefAltDelCount>> posAltRefDelCount;
-        std::vector<somaticReadLog> wholeReadVec;
+        std::vector<std::pair<int, int>> highConSomaticPos;
+        std::vector<somaticReadLog> readsCrossingHighConSnpVec;
         std::vector<somaticReadLog> taggedSomaticReadVec;
         void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
     public:
@@ -438,15 +433,19 @@ class highConBenchmark: public VcfParser{
         highConBenchmark();
         ~highConBenchmark();
         void setTestingFunc(bool openTestingFunc);
-        void loadHighConSomatic(std::string &input);
-        void initializeVariantsIter(const std::string &chr);
-        void alignFirstVaraintsInCurRead(const std::string &chr, int &ref_pos);
-        void recordRefAltAlleleCount(const std::string &chr, int &ref_pos, int &query_pos, int &length,const bam1_t &aln);
-        void recordDelReadCount(const std::string &chr, int &ref_pos, int length);
-        void recordSomaticRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP);
-        void writeHighConRefAltDelLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix);
-        void writeSomaticReadLog(HaplotagParameters &params, std::string logPosfix, std::map<int, int> &totalHpCount);
-        void displaySomaticVarCount();
+        void loadHighConSomatic(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
+        
+        void recordDelReadCount(const std::string &chr, std::map<int, RefAltSet>::iterator &currentVariantIter);
+        void recordRefAltAlleleCount(const std::string &chr, std::string &base, std::map<int, RefAltSet>::iterator &currentVariantIter);
+        void recordCrossingHighConSnpRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, RefAltSet> &currentChrVariants);
+        void recordTaggedSomaticRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, RefAltSet> &currentChrVariants);
+        
+        void writePosAlleleCountLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
+        void writeTaggedSomaticReadLog(HaplotagParameters &params, std::string logPosfix);
+        void writeCrossHighConSnpReadLog(HaplotagParameters &params, std::string logPosfix);
+        void writeReadLog(HaplotagParameters &params, std::string logPosfix, std::vector<somaticReadLog> &somaticReadVec);
+        
+        void displaySomaticVarCount(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
 };
 
 class HaplotagProcess: public SomaticJudgeBase

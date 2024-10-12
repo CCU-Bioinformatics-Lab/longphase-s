@@ -9,16 +9,18 @@
 static const char *CORRECT_USAGE_MESSAGE =
 "Usage: "  " " SUBPROGRAM " [OPTION] ... READSFILE\n"
 "      --help                          display this help and exit.\n\n"
-"require arguments:\n"
+"required arguments:\n"
+"   [General mode]\n"
 "      -s, --snp-file=NAME             input SNP vcf file.\n"
 "      -b, --bam-file=NAME             input bam file.\n"
 "      -r, --reference=NAME            reference fasta.\n\n"
-"required arguments for tumor mode:\n"
-"      --somaticMode                   enable somatic mutation tagging. default: false\n"
-"      -s, --snp-file=NAME             input normal genome SNP VCF file.\n"
-"      -b, --bam-file=NAME             input normal genome BAM file.\n"
-"      --tumor-snp-file=NAME           input tumor genome SNP VCF file.\n"
-"      --tumor-bam-file=NAME           input tumor genome BAM file for tagging.\n"
+//"required arguments for somatic mode (tumor/normal pair data):\n"
+"   [Somatic mode] (tumor/normal pair data):\n"
+"      --somaticMode                   enable somatic mutation tagging. default: false (disabled)\n"
+"      -s, --snp-file=NAME             input normal sample SNP VCF file.\n"
+"      -b, --bam-file=NAME             input normal sample BAM file (used as a reference for comparison).\n"
+"      --tumor-snp-file=NAME           input tumor sample SNP VCF file.\n"
+"      --tumor-bam-file=NAME           input tumor sample BAM file for mutation tagging.\n"
 "      -r, --reference=NAME            reference FASTA.\n\n"
 //"      --somaticCallingMPQ=Num         mapping quality threshold for calling somatic SNPs. default: 40\n\n"
 "optional arguments:\n"
@@ -196,7 +198,7 @@ void HaplotagOptions(int argc, char** argv)
         die = true;
     }
 
-    //tag tumor mode  
+    //somatic mode  
     if(opt::tumorMode == true){
         // tumor vcf
         if( opt::tumorSnpFile != "")
