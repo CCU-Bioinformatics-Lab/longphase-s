@@ -176,12 +176,15 @@ struct PosBase{
     float VAF;
     float filteredMpqVAF;
     float lowMpqReadRatio;
+
+    //snp position, read hp count
+    std::map<int, int> ReadHpCount;
     
     PosBase(): A_count(0), C_count(0), G_count(0), T_count(0), unknow(0), depth(0), delCount(0)
              , max_count(0), second_max_count(INT_MAX), max_base(" "), second_max_base(" ")
              , max_ratio(0), second_max_ratio(0), isHighRefAllelleFreq(false)
              , MPQ_A_count(0), MPQ_C_count(0), MPQ_G_count(0), MPQ_T_count(0), MPQ_unknow(0), filteredMpqDepth(0) 
-             ,VAF(0.0), filteredMpqVAF(0.0), lowMpqReadRatio(0.0){}
+             ,VAF(0.0), filteredMpqVAF(0.0), lowMpqReadRatio(0.0), ReadHpCount(std::map<int, int>()){}
 };
 
 struct ReadHpResult{
@@ -316,21 +319,40 @@ class readHpDistriLog{
         void removeNotDeriveByH1andH2pos(const std::vector<std::string> &chrVec);
 };
 
-class BamBaseCounter{
+class germlineJudgeBase{
+    private:
+
+    protected:
+        void germlineJudgeSnpHap(const std::string& chrName, VCF_Info* vcfSet, RefAlt& norVar, const std::string& base, int& ref_pos, int& length, int& i, int& aln_core_n_cigar
+        ,uint32_t* cigar, std::map<int, RefAltSet>::iterator& currentVariantIter, int& hp1Count, int& hp2Count, std::map<int, int>& variantsHP, std::map<int, int>& countPS);
+
+        void germlineJudgeDeletionHap(const std::string& chrName, const std::string& ref_string, int& ref_pos, int& length, int& query_pos, std::map<int, RefAltSet>::iterator &currentVariantIter, VCF_Info* vcfSet, const bam1_t* aln, int& hp1Count, int& hp2Count, std::map<int, int>& variantsHP, std::map<int, int>& countPS);
+        void germlineJudgeSVHap(const bam1_t &aln, VCF_Info* vcfSet, int& hp1Count, int& hp2Count, const int& tagGeneType);
+        int germlineDetermineReadHap(int& hp1Count, int& hp2Count, double& min, double& max, double& percentageThreshold, int& pqValue, int& psValue, std::map<int, int>& countPS, int* totalHighSimilarity, int* totalWithOutVaraint);
+        void germlineGetRefLastVarPos(std::vector<int>& last_pos, const std::vector<std::string>& chrVec, VCF_Info* vcfSet, int geneType);
+        void writeGermlineTagLog(std::ofstream& tagResult, const bam1_t& aln, const bam_hdr_t& bamHdr, int& hpResult, double& max, double& min, int& hp1Count, int& hp2Count, int& pqValue, const std::map<int, int>& variantsHP, const std::map<int, int>& countPS);
+    public:
+};
+
+
+class BamBaseCounter : public germlineJudgeBase{
     private:
         // chr, variant position (0-base), base count & depth
         std::map<std::string, std::map<int, PosBase>> *ChrVariantBase;
         bool applyFilter;
 
-        void StatisticBaseInfo(const bam1_t &aln, const std::string &chrName, const HaplotagParameters &params, int genmoeType
-                         , std::map<int, PosBase> &VariantBase, std::map<int, RefAltSet> &currentVariants ,std::map<int, RefAltSet>::iterator &firstVariantIter);
+        // Test if the logic of judgeHaplotype is consistent (only single chromosome)
+        std::ofstream *tagResult;
+
+        void StatisticBaseInfo(const bam1_t &aln, const bam_hdr_t &bamHdr, const std::string &chrName, const HaplotagParameters &params, int genmoeType
+                         , std::map<int, PosBase> &VariantBase, std::map<int, RefAltSet> &currentVariants ,std::map<int, RefAltSet>::iterator &firstVariantIter, VCF_Info *vcfSet, const std::string &ref_string);
         void CalculateBaseInfo(const std::string &chr, std::map<int, PosBase> &VariantBase, std::map<int, RefAltSet> &currentVariants);
 
     public:
         BamBaseCounter(bool enableFilter);
         ~BamBaseCounter();
 
-        void CountingBamBase(const std::string &BamFile, const HaplotagParameters &params, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat, std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, int genmoeType);
+        void CountingBamBase(const std::string &BamFile, const HaplotagParameters &params, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat, std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, VCF_Info *vcfSet, int genmoeType);
 
         bool isHighRefAllelleFreq(std::string chr, int pos);
         std::string getMaxFreqBase(std::string chr, int pos);
@@ -339,6 +361,7 @@ class BamBaseCounter{
         float getVAF(std::string chr, int pos);
         float getFilterdMpqVAF(std::string chr, int pos);
         float getLowMpqReadRatio(std::string chr, int pos);
+        int getReadHpCountInNorBam(std::string chr, int pos, int Haplotype);
 
         int getBaseAcount(std::string chr, int pos);
         int getBaseCcount(std::string chr, int pos);
@@ -367,17 +390,6 @@ class SomaticJudgeBase{
         void recordReadHp(int &pos, int &hpResult, int &BaseHP, std::map<int, ReadHpResult> &varReadHpResult);
         void recordDeriveHp(int &pos, int &deriveHP, float deriveHPsimilarity, std::map<int, ReadHpResult> &varReadHpResult);
     public:
-};
-
-class germlineJudgeBase{
-    private:
-
-    protected:
-        void germlineJudgeSnpHP(const std::string& chrName, int curPos, VCF_Info *vcfSet, RefAlt &norVar, const std::string& base, int refAlleleLen, int altAlleleLen, int ref_pos, int length, int i, int aln_core_n_cigar
-        ,uint32_t* cigar, std::map<int, RefAltSet>::iterator currentVariantIter, int& hp1Count, int& hp2Count, std::map<int, int>& variantsHP, std::map<int, int>& countPS);
-
-    public:
-
 };
 
 class SomaticVarCaller: public SomaticJudgeBase{

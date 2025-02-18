@@ -12,7 +12,15 @@ BamBaseCounter::~BamBaseCounter(){
 };
 
 
-void BamBaseCounter::CountingBamBase(const std::string &BamFile, const HaplotagParameters &params, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat, std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, int genmoeType){
+void BamBaseCounter::CountingBamBase(
+    const std::string &BamFile, 
+    const HaplotagParameters &params, 
+    std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat, 
+    std::vector<std::string> &chrVec, 
+    std::map<std::string, int> &chrLength, 
+    VCF_Info *vcfSet, 
+    int genmoeType
+){
     std::cerr<< "collecting data for the normal sample... ";
     std::time_t begin = time(NULL);
 
@@ -29,6 +37,12 @@ void BamBaseCounter::CountingBamBase(const std::string &BamFile, const HaplotagP
     for(auto chr : chrVec){
         (*ChrVariantBase)[chr] = std::map<int, PosBase>();
     }
+    
+    std::vector<int> last_pos;
+    // get the last variant position of the reference
+    germlineGetRefLastVarPos(last_pos, chrVec, vcfSet, genmoeType);
+    // reference fasta parser
+    FastaParser fastaParser(params.fastaFile, chrVec, last_pos, params.numThreads);
 
     // init data structure and get core n
     htsThreadPool threadPool = {NULL, 0};
@@ -37,6 +51,31 @@ void BamBaseCounter::CountingBamBase(const std::string &BamFile, const HaplotagP
         fprintf(stderr, "Error creating thread pool\n");
         exit(1);
     }
+
+    // if(params.writeReadLog){
+    //     tagResult=new std::ofstream(params.resultPrefix + "_NorBam_tag.log");
+    //     (*tagResult) << "##snpFile:"                 << params.snpFile                    << "\n";
+    //     (*tagResult) << "##svFile:"                  << params.svFile                     << "\n";
+    //     (*tagResult) << "##bamFile:"                 << params.bamFile                    << "\n";
+    //     (*tagResult) << "##resultPrefix:"            << params.resultPrefix               << "\n";
+    //     (*tagResult) << "##numThreads:"              << params.numThreads                 << "\n";
+    //     (*tagResult) << "##region:"                  << params.region                     << "\n";
+    //     (*tagResult) << "##qualityThreshold:"        << params.qualityThreshold           << "\n";
+    //     (*tagResult) << "##percentageThreshold:"     << params.percentageThreshold        << "\n";
+    //     (*tagResult) << "##tagSupplementary:"        << params.tagSupplementary           << "\n";
+    //     (*tagResult) << "#ReadID\t"
+    //                  << "CHROM\t"
+    //                  << "ReadStart\t"
+    //                  << "Confidnet(%)\t";
+    //     (*tagResult) << "Haplotype\t"
+    //                  << "PhaseSet\t"
+    //                  << "TotalAllele\t"
+    //                  << "HP1Allele\t"
+    //                  << "HP2Allele\t";
+    //     (*tagResult) << "phasingQuality(PQ)\t"
+    //                  << "(Variant,HP)\t"
+    //                  << "(PhaseSet,Variantcount)\n";
+    // }
 
     // loop all chromosome
     #pragma omp parallel for schedule(dynamic) num_threads(params.numThreads) 
@@ -56,6 +95,8 @@ void BamBaseCounter::CountingBamBase(const std::string &BamFile, const HaplotagP
             variantBase = &((*ChrVariantBase)[chr]);
             currentVariants = mergedChrVarinat[chr];
         }
+        // fetch chromosome string
+        std::string ref_string = fastaParser.chrString.at(chr);
 
         //inintial iterator
         std::map<int, RefAltSet>::iterator firstVariantIter = currentVariants.begin();
@@ -69,10 +110,10 @@ void BamBaseCounter::CountingBamBase(const std::string &BamFile, const HaplotagP
             
             int flag = bam.aln->core.flag;
 
-            //if ( aln->core.qual < params.qualityThreshold ){
+            // if ( bam.aln->core.qual < params.qualityThreshold ){
             //    // mapping quality is lower than threshold
             //    continue;
-            //}
+            // }
 
             if( (flag & 0x4) != 0 ){
                 // read unmapped
@@ -93,27 +134,44 @@ void BamBaseCounter::CountingBamBase(const std::string &BamFile, const HaplotagP
                 //skip
             }
             else if(int(bam.aln->core.pos) <= (*last).first){
-                StatisticBaseInfo(*bam.aln, chr, params, genmoeType, *variantBase, currentVariants, firstVariantIter);
+                StatisticBaseInfo(*bam.aln, *bam.bamHdr, chr, params, genmoeType, *variantBase, currentVariants, firstVariantIter, vcfSet, ref_string);
             }
         }
-        //std::cerr<<"calculate Base Information ...\n";
+        // std::cerr<<"calculate Base Information ...\n";
         CalculateBaseInfo(chr, *variantBase, currentVariants);
         
         variantBase = nullptr;
         hts_itr_destroy(iter);
     }
+    // if(tagResult != nullptr){
+    //     (*tagResult).close();
+    // }
     hts_tpool_destroy(threadPool.pool);
     std::cerr<< difftime(time(NULL), begin) << "s\n";
     return;
 }
 
-void BamBaseCounter::StatisticBaseInfo(const bam1_t &aln, const std::string &chrName, const HaplotagParameters &params, int genmoeType, std::map<int, PosBase> &variantBase, std::map<int, RefAltSet> &currentVariants ,std::map<int, RefAltSet>::iterator &firstVariantIter){
+void BamBaseCounter::StatisticBaseInfo(
+    const bam1_t &aln, 
+    const bam_hdr_t &bamHdr,
+    const std::string &chrName, 
+    const HaplotagParameters &params, 
+    int genmoeType, 
+    std::map<int, PosBase> &variantBase, 
+    std::map<int, RefAltSet> &currentVariants,
+    std::map<int, RefAltSet>::iterator &firstVariantIter, 
+    VCF_Info *vcfSet, 
+    const std::string &ref_string
+){
+
     int hp1Count = 0;
     int hp2Count = 0;
     //record variants on this read
     std::map<int, int> variantsHP;
 
     std::map<int,int> countPS;
+
+    std::vector<int> tumVarPosVec;
 
     // Skip variants that are to the left of this read
     while( firstVariantIter != currentVariants.end() && (*(firstVariantIter)).first < aln.core.pos ){
@@ -159,6 +217,7 @@ void BamBaseCounter::StatisticBaseInfo(const bam1_t &aln, const std::string &chr
                     uint8_t *q = bam_get_seq(&aln);
                     char base_chr = seq_nt16_str[bam_seqi(q,query_pos + offset)];
                     std::string base(1, base_chr);
+                    // printf("into match cigar\n");
 
                     //statistically analyze SNP information exclusive to the tumor
                     if((*currentVariantIter).second.isExistTumor){
@@ -171,6 +230,8 @@ void BamBaseCounter::StatisticBaseInfo(const bam1_t &aln, const std::string &chr
                         
                         // the variant is SNP
                         if(tumRefLength == 1 && tumAltLength == 1){
+                            //record tumor SNP position
+                            tumVarPosVec.push_back(curPos);
                             // mapping quality is higher than threshold
                             if ( aln.core.qual >= params.somaticCallingMpqThreshold ){
                                 if(base == "A"){
@@ -209,7 +270,16 @@ void BamBaseCounter::StatisticBaseInfo(const bam1_t &aln, const std::string &chr
 
                             }
                         }
-                    }               
+
+                    }       
+
+                    if ( aln.core.qual >= params.somaticCallingMpqThreshold && (*currentVariantIter).second.isExistNormal){
+                        // only judge the heterozygous SNP
+                        if((*currentVariantIter).second.Variant[Genome::NORMAL].is_phased_hetero){
+                            auto norVar = (*currentVariantIter).second.Variant[Genome::NORMAL];
+                            germlineJudgeSnpHap(chrName, vcfSet, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, hp1Count, hp2Count, variantsHP, countPS);
+                        }
+                    }
                 }
                 currentVariantIter++;
             }
@@ -222,11 +292,15 @@ void BamBaseCounter::StatisticBaseInfo(const bam1_t &aln, const std::string &chr
         }
         // 2: deletion from the reference
         else if( cigar_op == 2 ){
+            bool alreadyJudgeDel = false;
             while( currentVariantIter != currentVariants.end() && (*currentVariantIter).first < ref_pos + length){
                 //statistically analyze SNP information exclusive to the tumor
                 if((*currentVariantIter).second.isExistTumor){
 
                     int curPos = (*currentVariantIter).first;
+                    
+                    //record tumor SNP position
+                    tumVarPosVec.push_back(curPos);
 
                     //detect ref bsae length(temp :tumor SNP)
                     int tumRefLength = (*currentVariantIter).second.Variant[Genome::TUMOR].Ref.length();
@@ -235,10 +309,21 @@ void BamBaseCounter::StatisticBaseInfo(const bam1_t &aln, const std::string &chr
                     // the variant is SNP
                     if(tumRefLength == 1 && tumAltLength == 1){
                         variantBase[curPos].delCount++;
+                        variantBase[curPos].depth++;
                     }
                     // the variant is deletion
                     else if(tumRefLength > 1 && tumAltLength == 1){
 
+                    }
+                }
+
+                // only execute at the first phased normal snp
+                if ( aln.core.qual >= params.somaticCallingMpqThreshold && (*currentVariantIter).second.isExistNormal && !alreadyJudgeDel){
+                    if((*currentVariantIter).second.Variant[Genome::NORMAL].is_phased_hetero){
+                        // longphase v1.73 only execute once
+                        alreadyJudgeDel = true;
+                        auto norVar = (*currentVariantIter).second.Variant[Genome::NORMAL];
+                        germlineJudgeDeletionHap(chrName, ref_string, ref_pos, length, query_pos, currentVariantIter, vcfSet, &aln, hp1Count, hp2Count, variantsHP, countPS);
                     }
                 }
                 
@@ -266,6 +351,32 @@ void BamBaseCounter::StatisticBaseInfo(const bam1_t &aln, const std::string &chr
             exit(1);
         }
     }
+
+    // printf("end cigar operation\n");
+
+    // get the number of SVs occurring on different haplotypes in a read
+    if( aln.core.qual >= params.somaticCallingMpqThreshold ){
+        germlineJudgeSVHap(aln, vcfSet, hp1Count, hp2Count, genmoeType);
+    }
+
+    double min = 0.0;
+    double max = 0.0;
+    int hpResult = ReadHP::unTag;
+    int pqValue = 0;
+    int psValue = 0;
+    double percentageThreshold = params.percentageThreshold;
+    // determine the haplotype of the read
+    hpResult = germlineDetermineReadHap(hp1Count, hp2Count, min, max, percentageThreshold, pqValue, psValue, countPS, nullptr, nullptr);
+
+    //record read hp to tumor SNP position
+    for(auto pos : tumVarPosVec){
+        variantBase[pos].ReadHpCount[hpResult]++;
+    }
+
+    //write tag log file for testing the logic of the judge haplotype
+    // if(params.writeReadLog && aln.core.qual >= params.somaticCallingMpqThreshold){
+        // writeGermlineTagLog(*tagResult, aln, bamHdr, hpResult, max, min, hp1Count, hp2Count, pqValue, variantsHP, countPS);
+    // }
 }
 
 void BamBaseCounter::CalculateBaseInfo(const std::string &chr, std::map<int, PosBase> &VariantBase, std::map<int, RefAltSet> &currentVariants){
@@ -462,6 +573,14 @@ float BamBaseCounter::getFilterdMpqVAF(std::string chr, int pos){
     return (*ChrVariantBase)[chr][pos].filteredMpqVAF;
 }
 
+int BamBaseCounter::getReadHpCountInNorBam(std::string chr, int pos, int Haplotype){
+    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
+        std::cerr << "ERROR (getReadHpCountInNorBam) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
+        exit(1);
+    }
+    return (*ChrVariantBase)[chr][pos].ReadHpCount[Haplotype];
+}
+
 int BamBaseCounter::getBaseAcount(std::string chr, int pos){
     if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
         std::cerr << "ERROR (getBaseAcount) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
@@ -540,6 +659,24 @@ void BamBaseCounter::displayPosInfo(std::string chr, int pos){
     }
 }
 
+void germlineJudgeBase::germlineGetRefLastVarPos(
+    std::vector<int>& last_pos, 
+    const std::vector<std::string>& chrVec, 
+    VCF_Info* vcfSet, 
+    int geneType
+){
+    for( auto chr : chrVec ){
+        auto lastVariantIter = vcfSet[geneType].chrVariantPS[chr].rbegin();
+        if( lastVariantIter != vcfSet[geneType].chrVariantPS[chr].rend() ){
+            last_pos.push_back(lastVariantIter->second);
+        }
+        else{
+            last_pos.push_back(0);
+        }
+    }
+}
+
+
 void germlineJudgeBase::germlineJudgeSnpHap(
     const std::string& chrName,
     VCF_Info* vcfSet,
@@ -565,12 +702,15 @@ void germlineJudgeBase::germlineJudgeSnpHap(
         // Detected that the base of the read is either REF or ALT. 
         if( (base == norVar.Ref) || (base == norVar.Alt) ){
 
+
             std::map<int, int>::iterator posPSiter = vcfSet[Genome::NORMAL].chrVariantPS[chrName].find((*currentVariantIter).first);
 
             if( posPSiter == vcfSet[Genome::NORMAL].chrVariantPS[chrName].end() ){
-                std::cerr<< curPos << "\t"
-                            << norVar.Ref << "\t"
-                            << norVar.Alt << "\n";
+                std::cerr << "ERROR (germlineJudgeSnpHap) => can't find the position:" 
+                          << " chr: " << chrName << "\t"
+                          << " pos: " << curPos << "\t"
+                          << " ref: " << norVar.Ref << "\t"
+                          << " alt: " << norVar.Alt << "\n";
                 exit(EXIT_SUCCESS);
             }
             else{
@@ -621,7 +761,7 @@ void germlineJudgeBase::germlineJudgeSnpHap(
     } 
     // currentVariant is deletion
     else if( refAlleleLen != 1 && altAlleleLen == 1 && i+1 < aln_core_n_cigar) {
-        
+
         int hp1Length = vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos].length();
         int hp2Length = vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos].length();
         
@@ -790,42 +930,40 @@ int germlineJudgeBase::germlineDetermineReadHap(
     return hpResult;
 }
 
-void germlineJudgeBase::writeGermlineTagLog(std::ofstream* tagResult, const bam1_t& aln, const bam_hdr_t& bamHdr, int& hpResult, double& max, double& min, int& hp1Count, int& hp2Count, int& pqValue, const std::map<int, int>& variantsHP, const std::map<int, int>& countPS){
-    if (tagResult != nullptr) {
-        // write tag log file
-        std::string hpResultStr = ((hpResult == ReadHP::unTag) ? "." : std::to_string(hpResult));
-        std::string psResultStr = ".";
+void germlineJudgeBase::writeGermlineTagLog(std::ofstream& tagResult, const bam1_t& aln, const bam_hdr_t& bamHdr, int& hpResult, double& max, double& min, int& hp1Count, int& hp2Count, int& pqValue, const std::map<int, int>& variantsHP, const std::map<int, int>& countPS){
+    // write tag log file
+    std::string hpResultStr = ((hpResult == ReadHP::unTag) ? "." : std::to_string(hpResult));
+    std::string psResultStr = ".";
 
-        if (hpResultStr != ".") {
-            auto psIter = countPS.begin();
-            psResultStr = std::to_string(psIter->first);
-        }
-
-        (*tagResult) << bam_get_qname(&aln) << "\t"
-                     << bamHdr.target_name[aln.core.tid] << "\t"
-                     << aln.core.pos << "\t"
-                     << max / (max + min) << "\t"
-                     << hpResultStr << "\t"
-                     << psResultStr << "\t"
-                     << hp1Count + hp2Count << "\t"
-                     << hp1Count << "\t"
-                     << hp2Count << "\t"
-                     << pqValue << "\t";
-
-        // print position and HP
-        for (const auto& v : variantsHP) {
-            (*tagResult) << " " << v.first << "," << v.second;
-        }
-
-        (*tagResult) << "\t";
-
-        // belong PS, number of variant
-        for (const auto& v : countPS) {
-            (*tagResult) << " " << v.first << "," << v.second;
-        }
-
-        (*tagResult) << "\n";
+    if (hpResultStr != ".") {
+        auto psIter = countPS.begin();
+        psResultStr = std::to_string(psIter->first);
     }
+
+    (tagResult) << bam_get_qname(&aln) << "\t"
+                << bamHdr.target_name[aln.core.tid] << "\t"
+                << aln.core.pos << "\t"
+                << max / (max + min) << "\t"
+                << "H" << hpResultStr << "\t"
+                << psResultStr << "\t"
+                << hp1Count + hp2Count << "\t"
+                << hp1Count << "\t"
+                << hp2Count << "\t"
+                << pqValue << "\t";
+
+    // print position and HP
+    for (const auto& v : variantsHP) {
+        (tagResult) << " " << v.first << "," << v.second;
+    }
+
+    (tagResult) << "\t";
+
+    // belong PS, number of variant
+    for (const auto& v : countPS) {
+        (tagResult) << " " << v.first << "," << v.second;
+    }
+
+    (tagResult) << "\n";
 }
 
 void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, RefAltSet>::iterator &currentVariantIter, VCF_Info *vcfSet, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
@@ -1959,6 +2097,7 @@ void SomaticVarCaller::StatisticSomaticPosInfo(const  bam_hdr_t &bamHdr,const ba
 
                     if(tumRefLength == 1 && tumAltLength == 1){
                         somaticPosInfo[curPos].base.delCount++;
+                        somaticPosInfo[curPos].base.depth++;
                     }
                     // the indel SNP start position isn't at the end of the deletion
                     else if(tumRefLength > 1 && tumAltLength == 1){
@@ -2920,6 +3059,14 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                  << "GermlineReadHpConsistencyRatio\t"
                  << "SomaticReadHpConsistencyRatio\t"
                  << "BaseGermlineReadHpConsistencyRatio\t"
+                 << "PercentageOfGermlineHp\t"
+                 << "H1readCountInNorBam\t"
+                 << "H2readCountInNorBam\t"
+                 << "GermlineReadHpCountInNorBam\t"
+                 << "GermlineReadHpConsistencyRatioInNorBam\t"
+                 << "PercentageOfGermlineHpInNorBam\t"
+                 << "GermlineReadHpConsistencyRatioDifference\t"
+                 << "PercentageOfGermlineHpDifference\t"
                  << "SomaticRead_H1-1\t"
                  << "SomaticRead_H2-1\t"
                  << "SomaticRead_H3\t"
@@ -3090,7 +3237,7 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
 
             // the ratio of the germlineHP based on depth
             float percentageOfGermlineHp = 0.0;
-            if(tumDepth > 0 && norDepth > 0){
+            if(tumDepth > 0 && germlineReadHpCount > 0){
                 percentageOfGermlineHp = (float)germlineReadHpCount / (float)tumDepth;            
             }
 
@@ -3116,14 +3263,6 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                 baseOnGermlineReadHpConsistencyRatio = 1.0;
             }
 
-            // if((*somaticVarIter).first + 1 == 132883723){
-            //     printf("H1readCount: %d H2readCount: %d\n", H1readCount, H2readCount);
-            //     printf("H1-1: %d H2-1: %d  H3: %d\n", H1_1readCount, H2_1readCount, H3readCount);
-            //     printf("baseOnH1: %d baseOnH2: %d\n", BaseOnH1ReadCount, BaseOnH2ReadCount);
-            //     printf("baseOnGermlineReadHpConsistencyRatio: %f\n", baseOnGermlineReadHpConsistencyRatio);
-            //     exit(1);
-            // }
-
             float somaticReadHpConsistencyRatio = 0.0;
             if(H1_1readCount > 0 && H2_1readCount > 0){     
                 somaticReadHpConsistencyRatio = (H1_1readCount > H2_1readCount) ? ((float)H1_1readCount / (float)(H1_1readCount + H2_1readCount)) : ((float)H2_1readCount / (float)(H1_1readCount + H2_1readCount));
@@ -3134,6 +3273,34 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                 somaticReadHpConsistencyRatio = 1.0;
             }
 
+            //read hp count in the normal bam
+            int H1readCountInNorBam = NorBase.getReadHpCountInNorBam(chr, (*somaticVarIter).first, ReadHP::H1);
+            int H2readCountInNorBam = NorBase.getReadHpCountInNorBam(chr, (*somaticVarIter).first, ReadHP::H2);
+            int germlineReadHpCountInNorBam = H1readCountInNorBam + H2readCountInNorBam;
+
+            float germlineReadHpConsistencyRatioInNorBam = 0.0;
+            if(H1readCountInNorBam > 0 && H2readCountInNorBam > 0){
+                germlineReadHpConsistencyRatioInNorBam = (H1readCountInNorBam > H2readCountInNorBam) ? ((float)H1readCountInNorBam / (float)germlineReadHpCountInNorBam) : ((float)H2readCountInNorBam / (float)germlineReadHpCountInNorBam);
+            }else if(H1readCountInNorBam == 0 && H2readCountInNorBam == 0){
+                germlineReadHpConsistencyRatioInNorBam = 0.0;
+            }
+            else{
+                germlineReadHpConsistencyRatioInNorBam = 1.0;
+            }
+
+            float percentageOfGermlineHpInNorBam = 0.0;
+            if(norDepth > 0 && germlineReadHpCountInNorBam > 0){
+                percentageOfGermlineHpInNorBam = (float)germlineReadHpCountInNorBam / (float)norDepth;
+            }
+
+            //difference of the germline consistency ratio in tumor and normal bam
+            float germlineReadHpConsistencyRatioDifference = 0.0;
+            germlineReadHpConsistencyRatioDifference = abs(germlineReadHpConsistencyRatio - germlineReadHpConsistencyRatioInNorBam);
+            
+            //difference of the percentage of germline HP in tumor and normal bam
+            float percentageOfGermlineHpDifference = 0.0;
+            percentageOfGermlineHpDifference = abs(percentageOfGermlineHp - percentageOfGermlineHpInNorBam);
+
             // If the filter is not applied, the altCount will not equal the sum of somaticRead 
             //(somaticRead H1_1 to H3 does not include SNPs present in both tumor and normal positions)
             // if(somaticReadH1_1 + somaticReadH2_1 + somaticReadH3 + somaticReadUnTag != tumMpqAltCount){
@@ -3142,6 +3309,7 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
             //     exit(1);
             // }
 
+            // z-score of the interval snp filter 
             double zScore = -1.0;
             if((*somaticVarIter).second.inDenseTumorInterval){
                 if((*somaticVarIter).second.zScore < 0.0){
@@ -3201,15 +3369,23 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                         << germlineReadHpConsistencyRatio << "\t" //41
                         << somaticReadHpConsistencyRatio << "\t" //42
                         << baseOnGermlineReadHpConsistencyRatio << "\t" //43
-                        << somaticVarReadH1_1 << "\t" //44
-                        << somaticVarReadH2_1 << "\t" //45
-                        << somaticVarReadH3 << "\t" //46
-                        << untaggedReadCount << "\t" //47
-                        << (*somaticVarIter).second.MeanAltCountPerVarRead << "\t" //48
-                        << zScore << "\t" //49
-                        << (*somaticVarIter).second.intervalSnpCount << "\t" //50
-                        << mergedChrVarinat[chr][(*somaticVarIter).first].isExistNormal << "\t" //51
-                        << GTtype <<"\n";  //52
+                        << percentageOfGermlineHp << "\t" //44
+                        << H1readCountInNorBam << "\t" //45
+                        << H2readCountInNorBam << "\t" //46
+                        << germlineReadHpCountInNorBam << "\t" //47
+                        << germlineReadHpConsistencyRatioInNorBam << "\t" //48
+                        << percentageOfGermlineHpInNorBam << "\t" //49
+                        << germlineReadHpConsistencyRatioDifference << "\t" //50
+                        << percentageOfGermlineHpDifference << "\t" //51
+                        << somaticVarReadH1_1 << "\t" //52
+                        << somaticVarReadH2_1 << "\t" //53
+                        << somaticVarReadH3 << "\t" //54
+                        << untaggedReadCount << "\t" //55
+                        << (*somaticVarIter).second.MeanAltCountPerVarRead << "\t" //56
+                        << zScore << "\t" //57
+                        << (*somaticVarIter).second.intervalSnpCount << "\t" //58
+                        << mergedChrVarinat[chr][(*somaticVarIter).first].isExistNormal << "\t" //59
+                        << GTtype <<"\n";  //60
                         
             somaticVarIter++;          
         }
@@ -4104,18 +4280,9 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const int geneType){
     // output writer
     int result = sam_hdr_write(out, bamHdr);
 
-    // record reference last variant pos
     std::vector<int> last_pos;
-    for( auto chr : *chrVec ){
-        auto lastVariantIter = vcfSet[geneType].chrVariantPS[chr].rbegin();
-        if( lastVariantIter != vcfSet[geneType].chrVariantPS[chr].rend() ){
-            last_pos.push_back(lastVariantIter->second);
-        }
-        else{
-            last_pos.push_back(0);
-        }
-    }
-
+    // record reference last variant pos
+    germlineGetRefLastVarPos(last_pos, *chrVec, vcfSet, geneType);
     // reference fasta parser
     FastaParser fastaParser(params.fastaFile, *chrVec, last_pos, params.numThreads);
 
@@ -4201,7 +4368,7 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const int geneType){
         while ((result = sam_itr_multi_next(in, iter, aln)) >= 0) {
             totalAlignment++;
             int flag = aln->core.flag;
-
+            
             if ( aln->core.qual < params.qualityThreshold ){
                 // mapping quality is lower than threshold
                 totalUnTagCount++;
@@ -4230,7 +4397,6 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const int geneType){
                 totalEmptyVariant++;
             }
             else if(int(aln->core.pos) <= (*last).first){
-                
                 if( (flag & 0x800) != 0 ){
                     totalSupplementary++;
                 }
@@ -4428,9 +4594,11 @@ int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, s
 
     // determine the haplotype of the read
     hpResult = germlineDetermineReadHap(hp1Count, hp2Count, min, max, percentageThreshold, pqValue, psValue, countPS, &totalHighSimilarity, &totalWithOutVaraint);
-    
+     
     //write tag log file
-    writeGermlineTagLog(tagResult, aln, bamHdr, hpResult, max, min, hp1Count, hp2Count, pqValue, variantsHP, countPS);
+    if(tagResult != nullptr){
+        writeGermlineTagLog(*tagResult, aln, bamHdr, hpResult, max, min, hp1Count, hp2Count, pqValue, variantsHP, countPS);
+    }
 
     return hpResult;
 }
@@ -5060,7 +5228,7 @@ void HaplotagProcess::TaggingProcess(HaplotagParameters &params)
 
         //Count each base numbers at tumor SNP position in the Normal.bam
         BamBaseCounter *NorBase = new BamBaseCounter(params.enableFilter);
-        NorBase->CountingBamBase(params.bamFile, params, (*mergedChrVarinat), *chrVec, *chrLength, Genome::TUMOR);
+        NorBase->CountingBamBase(params.bamFile, params, (*mergedChrVarinat), *chrVec, *chrLength, vcfSet, Genome::NORMAL);
 
         //record the HP3 confidence of each read
         SomaticVarCaller *SomaticVar = new SomaticVarCaller();
