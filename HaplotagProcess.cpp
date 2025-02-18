@@ -2,8 +2,9 @@
 
 
 
-BamBaseCounter::BamBaseCounter(){
+BamBaseCounter::BamBaseCounter(bool enableFilter){
     ChrVariantBase = new std::map<std::string, std::map<int, PosBase>>();
+    applyFilter = enableFilter;
 };
 
 BamBaseCounter::~BamBaseCounter(){
@@ -107,7 +108,13 @@ void BamBaseCounter::CountingBamBase(const std::string &BamFile, const HaplotagP
 }
 
 void BamBaseCounter::StatisticBaseInfo(const bam1_t &aln, const std::string &chrName, const HaplotagParameters &params, int genmoeType, std::map<int, PosBase> &variantBase, std::map<int, RefAltSet> &currentVariants ,std::map<int, RefAltSet>::iterator &firstVariantIter){
-    
+    int hp1Count = 0;
+    int hp2Count = 0;
+    //record variants on this read
+    std::map<int, int> variantsHP;
+
+    std::map<int,int> countPS;
+
     // Skip variants that are to the left of this read
     while( firstVariantIter != currentVariants.end() && (*(firstVariantIter)).first < aln.core.pos ){
         firstVariantIter++;
@@ -154,7 +161,7 @@ void BamBaseCounter::StatisticBaseInfo(const bam1_t &aln, const std::string &chr
                     std::string base(1, base_chr);
 
                     //statistically analyze SNP information exclusive to the tumor
-                    if((*currentVariantIter).second.isExistTumor && !((*currentVariantIter).second.isExistNormal)){
+                    if((*currentVariantIter).second.isExistTumor){
                         int curPos = (*currentVariantIter).first;
                         //std::cout << "curPos :" << curPos << "is tumor "<<(*currentVariantIter).second.isExistTumor  << " isNormal: "<< (*currentVariantIter).second.isExistNormal<< std::endl;
 
@@ -164,21 +171,6 @@ void BamBaseCounter::StatisticBaseInfo(const bam1_t &aln, const std::string &chr
                         
                         // the variant is SNP
                         if(tumRefLength == 1 && tumAltLength == 1){
-
-                            if(base == "A"){
-                                variantBase[curPos].A_count++;
-                                //std::cout << "base A read ID :" << bam_get_qname(aln) << std::endl;
-                            }else if(base == "C"){
-                                variantBase[curPos].C_count++;
-                            }else if(base == "G"){
-                                variantBase[curPos].G_count++;
-                            }else if(base == "T"){
-                                variantBase[curPos].T_count++;
-                            }else{
-                                variantBase[curPos].unknow++;
-                            }
-                            variantBase[curPos].depth++;  
-
                             // mapping quality is higher than threshold
                             if ( aln.core.qual >= params.somaticCallingMpqThreshold ){
                                 if(base == "A"){
@@ -194,6 +186,20 @@ void BamBaseCounter::StatisticBaseInfo(const bam1_t &aln, const std::string &chr
                                 }
                                 variantBase[curPos].filteredMpqDepth++;
                             }
+                            if(base == "A"){
+                                variantBase[curPos].A_count++;
+                                //std::cout << "base A read ID :" << bam_get_qname(aln) << std::endl;
+                            }else if(base == "C"){
+                                variantBase[curPos].C_count++;
+                            }else if(base == "G"){
+                                variantBase[curPos].G_count++;
+                            }else if(base == "T"){
+                                variantBase[curPos].T_count++;
+                            }else{
+                                variantBase[curPos].unknow++;
+                            }
+                            variantBase[curPos].depth++;  
+
                         }
 
                         // the indel(del) SNP position is the start position, and the deletion occurs at the next position
@@ -218,7 +224,7 @@ void BamBaseCounter::StatisticBaseInfo(const bam1_t &aln, const std::string &chr
         else if( cigar_op == 2 ){
             while( currentVariantIter != currentVariants.end() && (*currentVariantIter).first < ref_pos + length){
                 //statistically analyze SNP information exclusive to the tumor
-                if((*currentVariantIter).second.isExistTumor && !((*currentVariantIter).second.isExistNormal)){
+                if((*currentVariantIter).second.isExistTumor){
 
                     int curPos = (*currentVariantIter).first;
 
@@ -390,9 +396,12 @@ void BamBaseCounter::CalculateBaseInfo(const std::string &chr, std::map<int, Pos
         }
         
         float refAllele_threshold = 0.90; //(VAF <= 0.1)      
-        if(baseInfo->max_ratio >= refAllele_threshold && depth > 1 && baseInfo->lowMpqReadRatio <= 0.1){
+        if( !applyFilter ||
+            //(baseInfo->max_ratio >= refAllele_threshold && depth > 1 && baseInfo->lowMpqReadRatio <= 0.1) ){
+            // (baseInfo->VAF <= 0.1 && depth > 1 && baseInfo->lowMpqReadRatio <= 0.1) ){
+            (baseInfo->VAF <= 0.1 && depth > 1) ){
             baseInfo->isHighRefAllelleFreq = true;
-        } 
+        }
         
         currentPosIter++;
     } 
@@ -531,6 +540,294 @@ void BamBaseCounter::displayPosInfo(std::string chr, int pos){
     }
 }
 
+void germlineJudgeBase::germlineJudgeSnpHap(
+    const std::string& chrName,
+    VCF_Info* vcfSet,
+    RefAlt& norVar,
+    const std::string& base,
+    int& ref_pos,
+    int& length,
+    int& i,
+    int& aln_core_n_cigar,
+    uint32_t* cigar,
+    std::map<int, RefAltSet>::iterator &currentVariantIter,
+    int& hp1Count,
+    int& hp2Count,
+    std::map<int, int>& variantsHP,
+    std::map<int, int>& countPS
+){
+    int curPos = (*currentVariantIter).first;
+    int refAlleleLen = norVar.Ref.length();
+    int altAlleleLen = norVar.Alt.length();
+
+    // currentVariant is SNP
+    if( refAlleleLen == 1 && altAlleleLen == 1 ){
+        // Detected that the base of the read is either REF or ALT. 
+        if( (base == norVar.Ref) || (base == norVar.Alt) ){
+
+            std::map<int, int>::iterator posPSiter = vcfSet[Genome::NORMAL].chrVariantPS[chrName].find((*currentVariantIter).first);
+
+            if( posPSiter == vcfSet[Genome::NORMAL].chrVariantPS[chrName].end() ){
+                std::cerr<< curPos << "\t"
+                            << norVar.Ref << "\t"
+                            << norVar.Alt << "\n";
+                exit(EXIT_SUCCESS);
+            }
+            else{
+                if( base == vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos]){
+                    hp1Count++;
+                    variantsHP[curPos]=0;
+                }
+                if( base == vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos]){
+                    hp2Count++;
+                    variantsHP[curPos]=1;
+                }
+                countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
+            }
+            
+        }
+    }
+    // currentVariant is insertion
+    else if( refAlleleLen == 1 && altAlleleLen != 1 && i+1 < aln_core_n_cigar){
+        
+        int hp1Length = vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos].length();
+        int hp2Length = vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos].length();
+        
+        if ( ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 1 ) {
+            // hp1 occur insertion
+            if( hp1Length != 1 && hp2Length == 1 ){
+                hp1Count++;
+                variantsHP[curPos]=0;
+            }
+            // hp2 occur insertion
+            else if( hp1Length == 1 && hp2Length != 1 ){
+                hp2Count++;
+                variantsHP[curPos]=1;
+            }
+        }
+        else {
+            // hp1 occur insertion
+            if( hp1Length != 1 && hp2Length == 1 ){
+                hp2Count++;
+                variantsHP[curPos]=1;
+            }
+            // hp2 occur insertion
+            else if( hp1Length == 1 && hp2Length != 1 ){
+                hp1Count++;
+                variantsHP[curPos]=0;
+            }
+        }
+        countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
+    } 
+    // currentVariant is deletion
+    else if( refAlleleLen != 1 && altAlleleLen == 1 && i+1 < aln_core_n_cigar) {
+        
+        int hp1Length = vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos].length();
+        int hp2Length = vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos].length();
+        
+        if ( ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2 ) {
+            // hp1 occur deletion
+            if( hp1Length != 1 && hp2Length == 1 ){
+                hp1Count++;
+                variantsHP[curPos]=0;
+            }
+            // hp2 occur deletion
+            else if( hp1Length == 1 && hp2Length != 1 ){
+                hp2Count++;
+                variantsHP[curPos]=1;
+            }
+        }
+        else {
+            // hp2 occur deletion
+            if( hp1Length != 1 && hp2Length == 1 ){
+                hp2Count++;
+                variantsHP[curPos]=1;
+            }
+            // hp1 occur deletion
+            else if( hp1Length == 1 && hp2Length != 1 ){
+                hp1Count++;
+                variantsHP[curPos]=0;
+            }
+        }
+        countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
+    } 
+}
+
+
+void germlineJudgeBase::germlineJudgeDeletionHap(
+    const std::string& chrName,
+    const std::string& ref_string,
+    int& ref_pos,
+    int& length,
+    int& query_pos,
+    std::map<int, RefAltSet>::iterator &currentVariantIter,
+    VCF_Info* vcfSet,
+    const bam1_t* aln,
+    int& hp1Count,
+    int& hp2Count,
+    std::map<int, int>& variantsHP,
+    std::map<int, int>& countPS
+) {
+    if (ref_string != "") {
+        int del_len = length;
+        if (ref_pos + del_len + 1 == (*currentVariantIter).first) {
+            //if (homopolymerLength((*currentVariantIter).first, ref_string) >= 3) {
+                // special case
+            //}
+        } else if ((*currentVariantIter).first >= ref_pos && (*currentVariantIter).first < ref_pos + del_len) {
+            // check variant in homopolymer
+            if (homopolymerLength((*currentVariantIter).first, ref_string) >= 3) {
+                
+                int curPos = (*currentVariantIter).first;
+                auto norVar = (*currentVariantIter).second.Variant[Genome::NORMAL];
+                int refAlleleLen = norVar.Ref.length();
+                int altAlleleLen = norVar.Alt.length();
+                
+                // SNP
+                if (refAlleleLen == 1 && altAlleleLen == 1) {
+                    // get the next match
+                    char base_chr = seq_nt16_str[bam_seqi(bam_get_seq(aln), query_pos)];
+                    std::string base(1, base_chr);
+
+                    if (base == vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos]) {
+                        hp1Count++;
+                        variantsHP[curPos] = 0;
+                    }
+                    if (base == vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos]) {
+                        hp2Count++;
+                        variantsHP[curPos] = 1;
+                    }
+                    countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
+                }
+                
+                // the read deletion contain VCF's deletion
+                else if (refAlleleLen != 1 && altAlleleLen == 1) {
+
+                    int hp1Length = vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos].length();
+                    int hp2Length = vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos].length();
+                    // hp1 occur deletion
+                    if (hp1Length != 1 && hp2Length == 1) {
+                        hp1Count++;
+                        variantsHP[curPos] = 0;
+                    }
+                    // hp2 occur deletion
+                    else if (hp1Length == 1 && hp2Length != 1) {
+                        hp2Count++;
+                        variantsHP[curPos] = 1;
+                    }
+                    countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
+                }
+            }
+        }
+    }
+}
+
+void germlineJudgeBase::germlineJudgeSVHap(const bam1_t &aln, VCF_Info* vcfSet, int& hp1Count, int& hp2Count, const int& tagGeneType){
+    auto readIter = vcfSet[tagGeneType].readSVHapCount.find(bam_get_qname(&aln));
+    if( readIter != vcfSet[tagGeneType].readSVHapCount.end() ){
+        hp1Count += vcfSet[tagGeneType].readSVHapCount[bam_get_qname(&aln)][0];
+        hp2Count += vcfSet[tagGeneType].readSVHapCount[bam_get_qname(&aln)][1];
+    }
+}
+
+int germlineJudgeBase::germlineDetermineReadHap(
+    int& hp1Count, 
+    int& hp2Count, 
+    double& min, 
+    double& max, 
+    double& percentageThreshold, 
+    int& pqValue, 
+    int& psValue, 
+    std::map<int, int>& countPS, 
+    int* totalHighSimilarity, 
+    int* totalWithOutVaraint
+){
+    int hpResult = ReadHP::unTag;
+
+    if(hp1Count > hp2Count){
+        min = hp2Count;
+        max = hp1Count;
+    }
+    else{
+        min = hp1Count;
+        max = hp2Count;
+    }
+
+    if( max/(max+min) < percentageThreshold){
+        // no tag
+        pqValue = 0;
+        if(totalHighSimilarity != nullptr) (*totalHighSimilarity)++;
+    }
+    else{
+        if(hp1Count > hp2Count){
+            hpResult = ReadHP::H1;
+        }
+        if(hp1Count < hp2Count){
+            hpResult = ReadHP::H2;
+        }
+    }
+
+    if( max == 0 ){
+        pqValue=0;
+        if(totalWithOutVaraint != nullptr) (*totalWithOutVaraint)++;
+    }
+    else if( max == ( max + min ) ){
+        pqValue=40;
+    }
+    else{
+        pqValue=-10*(std::log10((double)min/double(max+min)));
+    }
+    
+    // cross two block
+    if( countPS.size() > 1  ){
+        hpResult = ReadHP::unTag;
+    }
+    //set psValue
+    if(hpResult != ReadHP::unTag){
+        auto psIter = countPS.begin();
+        psValue = (*psIter).first;
+    }
+    return hpResult;
+}
+
+void germlineJudgeBase::writeGermlineTagLog(std::ofstream* tagResult, const bam1_t& aln, const bam_hdr_t& bamHdr, int& hpResult, double& max, double& min, int& hp1Count, int& hp2Count, int& pqValue, const std::map<int, int>& variantsHP, const std::map<int, int>& countPS){
+    if (tagResult != nullptr) {
+        // write tag log file
+        std::string hpResultStr = ((hpResult == ReadHP::unTag) ? "." : std::to_string(hpResult));
+        std::string psResultStr = ".";
+
+        if (hpResultStr != ".") {
+            auto psIter = countPS.begin();
+            psResultStr = std::to_string(psIter->first);
+        }
+
+        (*tagResult) << bam_get_qname(&aln) << "\t"
+                     << bamHdr.target_name[aln.core.tid] << "\t"
+                     << aln.core.pos << "\t"
+                     << max / (max + min) << "\t"
+                     << hpResultStr << "\t"
+                     << psResultStr << "\t"
+                     << hp1Count + hp2Count << "\t"
+                     << hp1Count << "\t"
+                     << hp2Count << "\t"
+                     << pqValue << "\t";
+
+        // print position and HP
+        for (const auto& v : variantsHP) {
+            (*tagResult) << " " << v.first << "," << v.second;
+        }
+
+        (*tagResult) << "\t";
+
+        // belong PS, number of variant
+        for (const auto& v : countPS) {
+            (*tagResult) << " " << v.first << "," << v.second;
+        }
+
+        (*tagResult) << "\n";
+    }
+}
+
 void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, RefAltSet>::iterator &currentVariantIter, VCF_Info *vcfSet, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
     int curPos = (*currentVariantIter).first;
     auto curVar = (*currentVariantIter).second;
@@ -602,6 +899,7 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, RefAltSet>::iterator &cur
                 }
                 norCountPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
             }
+
         //the normal SNP GT is phased heterozgous & the tumor SNP GT is homozygous 
         }else if((curVar.Variant[Genome::NORMAL].is_phased_hetero) && (curVar.Variant[Genome::TUMOR].is_homozygous)){   
             if(curVar.Variant[Genome::NORMAL].Ref == base || curVar.Variant[Genome::NORMAL].Alt == base){
@@ -664,7 +962,6 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, RefAltSet>::iterator &cur
         }
     // only tumor SNP at the current position
     }else if(curVar.isExistTumor == true){
-
         //the tumor SNP GT is phased heterozygous
         if(curVar.Variant[Genome::TUMOR].is_phased_hetero == true){
             if(curVar.Variant[Genome::TUMOR].Ref == base || curVar.Variant[Genome::TUMOR].Alt == base){
@@ -799,7 +1096,7 @@ int SomaticJudgeBase::determineReadHP(std::map<int, int> &hpCount, int &pqValue,
 
     // cross two block
     // had at least one tumor-unique SNP in the current read
-    if(hpCount[3] != 0 && hpCount[4] != 0 ){
+    if(hpCount[3] != 0){
         if(norCountPS.size() > 1){
             hpResult = ReadHP::unTag;
             if(totalCrossTwoBlock != nullptr) (*totalCrossTwoBlock)++;
@@ -874,14 +1171,34 @@ std::string SomaticJudgeBase::convertIntNucToStr(int base){
 }
 
 void SomaticJudgeBase::recordReadHp(int &pos, int &hpResult, int &BaseHP, std::map<int, ReadHpResult> &varReadHpResult){
-    varReadHpResult[pos].hpResultCounter[hpResult]++;
+    varReadHpResult[pos].readHpCounter[hpResult]++;
     
     if(hpResult != ReadHP::unTag){
         if(BaseHP == SnpHP::SOMATIC_H3){
+            if(hpResult != ReadHP::H1_1 && hpResult != ReadHP::H2_1 && hpResult != ReadHP::H3){
+                std::cerr << "Error(recordReadHp) => error read hp : BaseHP: " <<BaseHP << " readHP: " << hpResult << " pos: " << pos+1 << std::endl; 
+                exit(1);
+            }
             varReadHpResult[pos].somaticSnpH3count++;
+            varReadHpResult[pos].somaticBaseReadHpCounter[hpResult]++;
         }
     }
 }
+
+void SomaticJudgeBase::recordDeriveHp(int &pos, int &deriveHP, float deriveHPsimilarity, std::map<int, ReadHpResult> &varReadHpResult){
+    if(deriveHP != SnpHP::GERMLINE_H1 && deriveHP != SnpHP::GERMLINE_H2 && deriveHP != SnpHP::NONE_SNP){
+        std::cerr << "Error(recordDeriveHp) => error derive hp : pos: " <<pos+1 << " deriveHP: " << deriveHP << std::endl; 
+        exit(1);        
+    }
+    varReadHpResult[pos].deriveHP = deriveHP;
+    if(deriveHPsimilarity != 0.0){
+        varReadHpResult[pos].deriveHPsimilarVec.emplace_back(deriveHPsimilarity);
+        if(deriveHPsimilarity != 1.0){
+            // std::cout << "deriveHPsimilarity: " << deriveHPsimilarity << "\n";
+            // std::cout << "deriveHPsimilarityVec: " << varReadHpResult[pos].deriveHPsimilarVec.back() << "\n";
+        }
+    }
+} 
 
 readHpDistriLog::readHpDistriLog(){
 
@@ -922,77 +1239,76 @@ void readHpDistriLog::writeReadHpDistriLog(HaplotagParameters &params, std::stri
         (*readHpDistriLog) << "##SomaticSNP: " << somaticSnpCount << "\n";
         (*readHpDistriLog) << "#Chr\t"
                             << "Pos\t"
-                            << "Type\t"
-                            << "AltCount\t\t"
+                            << "DeriveHP\t"
+                            << "DeriveHPsimilarity\t\t"
+                            << "AltCount\t"
+                            << "somaticBase_H1-1\t"
+                            << "somaticBase_H2-1\t"
+                            << "somaticBase_H3\t\t"
                             << "HP1read\t"
-                            << "HP1-1read\t"
-                            << "HP1-2read\t"
                             << "HP2read\t"
+                            << "HP1-1read\t"
                             << "HP2-1read\t"
-                            << "HP2-2read\t"
                             << "HP3read\t"
-                            << "HP4read\t"
                             << "untagRead\t"
                             << "HP1ratio\t"
-                            << "HP1-1ratio\t"
-                            << "HP1-2ratio\t"
                             << "HP2ratio\t"
+                            << "HP1-1ratio\t"
                             << "HP2-1ratio\t"
-                            << "HP2-2ratio\t"
-                            << "HP3ratio\t"
-                            << "HP4ratio\n";
+                            << "HP3ratio\n";
     }
 
     for(auto chr: chrVec){
         std::map<int, ReadHpResult>::iterator curVarReadHpIter = chrVarReadHpResult[chr].begin();
         while(curVarReadHpIter != chrVarReadHpResult[chr].end()){
             int pos = (*curVarReadHpIter).first + 1;
-            int HP1readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H1];
-            int HP1_1readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H1_1];
-            int HP1_2readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H1_2];
+            int HP1readCount = (*curVarReadHpIter).second.readHpCounter[ReadHP::H1];
+            int HP1_1readCount = (*curVarReadHpIter).second.readHpCounter[ReadHP::H1_1];
 
-            int HP2readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H2];
-            int HP2_1readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H2_1];
-            int HP2_2readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H2_2];
+            int HP2readCount = (*curVarReadHpIter).second.readHpCounter[ReadHP::H2];
+            int HP2_1readCount = (*curVarReadHpIter).second.readHpCounter[ReadHP::H2_1];
 
-            int HP3readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H3];
-            int HP4readCount = (*curVarReadHpIter).second.hpResultCounter[ReadHP::H4];
+            int HP3readCount = (*curVarReadHpIter).second.readHpCounter[ReadHP::H3];
 
-            int totaltagRead = HP1readCount + HP2readCount + HP3readCount + HP4readCount + HP1_1readCount + HP1_2readCount + HP2_1readCount + HP2_2readCount;
+            int totaltagRead = HP1readCount + HP2readCount + HP3readCount + HP1_1readCount + HP2_1readCount;
 
             float HP1readRatio = (float)HP1readCount / (float)totaltagRead; 
             float HP1_1readRatio = (float)HP1_1readCount / (float)totaltagRead; 
-            float HP1_2readRatio = (float)HP1_2readCount / (float)totaltagRead; 
 
             float HP2readRatio = (float)HP2readCount / (float)totaltagRead; 
             float HP2_1readRatio = (float)HP2_1readCount / (float)totaltagRead; 
-            float HP2_2readRatio = (float)HP2_2readCount / (float)totaltagRead; 
 
             float HP3readRatio = (float)HP3readCount / (float)totaltagRead; 
-            float HP4readRatio = (float)HP4readCount / (float)totaltagRead;
 
+            float meanDeriveHPsimilarity = 0.0;
+            if((*curVarReadHpIter).second.deriveHPsimilarVec.size() != 0){
+                float size = (*curVarReadHpIter).second.deriveHPsimilarVec.size();
+                for(float deriveHPsimilarity: (*curVarReadHpIter).second.deriveHPsimilarVec){
+                    meanDeriveHPsimilarity += deriveHPsimilarity;
+                    // std::cout << deriveHPsimilarity << "\t";
+                }
+                meanDeriveHPsimilarity /= size;
+            }
             (*readHpDistriLog) << std::fixed << std::setprecision(3) 
                                 << chr << "\t"
                                 << pos << "\t"
-                                << "somatic" << "\t"
-                                << (*curVarReadHpIter).second.somaticSnpH3count << "\t\t"
+                                << "H" << (*curVarReadHpIter).second.deriveHP << "\t"
+                                << meanDeriveHPsimilarity << "\t\t"
+                                << (*curVarReadHpIter).second.somaticSnpH3count << "\t"
+                                << (*curVarReadHpIter).second.somaticBaseReadHpCounter[ReadHP::H1_1] << "\t"
+                                << (*curVarReadHpIter).second.somaticBaseReadHpCounter[ReadHP::H2_1] << "\t"
+                                << (*curVarReadHpIter).second.somaticBaseReadHpCounter[ReadHP::H3] << "\t\t"
                                 << HP1readCount << "\t"
+                                << HP2readCount << "\t\t"
                                 << HP1_1readCount << "\t"
-                                << HP1_2readCount << "\t\t"
-                                << HP2readCount << "\t"
                                 << HP2_1readCount << "\t"
-                                << HP2_2readCount << "\t\t"
                                 << HP3readCount << "\t"
-                                << HP4readCount << "\t"
-                                << (*curVarReadHpIter).second.hpResultCounter[ReadHP::unTag] << "\t"
+                                << (*curVarReadHpIter).second.readHpCounter[ReadHP::unTag] << "\t"
                                 << HP1readRatio << "\t"
-                                << HP1_1readRatio << "\t"
-                                << HP1_2readRatio << "\t\t"
                                 << HP2readRatio << "\t"
+                                << HP1_1readRatio << "\t"
                                 << HP2_1readRatio << "\t"
-                                << HP2_2readRatio << "\t\t"
-                                << HP3readRatio << "\t"
-                                << HP4readRatio << "\n";
+                                << HP3readRatio << "\n";
             curVarReadHpIter++;
         }
     }
@@ -1125,7 +1441,7 @@ void readHpDistriLog::writeTagReadCoverRegionLog(HaplotagParameters &params, std
         (*tagReadCoverRegionLog) << "##################################\n";
         (*tagReadCoverRegionLog) << "# Somatic reads cover region bed #\n";
         (*tagReadCoverRegionLog) << "##################################\n";
-        (*tagReadCoverRegionLog) << "##MappingQualityThreshold:"        << params.qualityThreshold << "\n";
+        (*tagReadCoverRegionLog) << "##MappingQualityThreshold: "   << params.qualityThreshold << "\n";
         (*tagReadCoverRegionLog) << "##----Chr coverage ratio----\n";
         (*tagReadCoverRegionLog) << "##Total chr coverage ratio: " << totalChrCoverageRatio << "\n";
         for(auto chr: chrVec){
@@ -1226,6 +1542,7 @@ SomaticVarCaller::SomaticVarCaller(){
     SomaticChrPosInfo = new std::map<std::string, std::map<int, HP3_Info>>();
     chrVarReadHpResult = new std::map<std::string, std::map<int, ReadHpResult>>();
     callerReadHpDistri = new readHpDistriLog();
+    denseTumorSnpInterval = new std::map<std::string, std::map<int, std::pair<int, denseSnpInterval>>>();
 }
 
 SomaticVarCaller::~SomaticVarCaller(){
@@ -1236,6 +1553,7 @@ void SomaticVarCaller::releaseMemory(){
     delete SomaticChrPosInfo;
     delete chrVarReadHpResult;
     delete callerReadHpDistri;
+    delete denseTumorSnpInterval;
 }
 
 void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat,const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, HaplotagParameters &params, VCF_Info *vcfSet, BamBaseCounter &NorBase){
@@ -1261,7 +1579,7 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
     SomaticFilterParaemter somaticParams;
 
     // setting somatic calling filter params
-    InitialSomaticFilterParams(somaticParams);  
+    InitialSomaticFilterParams(somaticParams, params.enableFilter);  
 
     // init data structure and get core n
     htsThreadPool threadPool = {NULL, 0};
@@ -1270,6 +1588,27 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
         fprintf(stderr, "Error creating thread pool\n");
         exit(1);
     }
+
+    // record reference last variant pos
+    std::vector<int> last_tumor_pos;
+    for( auto chr : chrVec ){
+        bool existLastTumorPos = false;
+
+        for (auto lastVariantIter = mergedChrVarinat[chr].rbegin(); lastVariantIter != mergedChrVarinat[chr].rend(); ++lastVariantIter) {
+            if ((*lastVariantIter).second.isExistTumor) {
+                last_tumor_pos.push_back((*lastVariantIter).first);
+                existLastTumorPos = true;
+                break;
+            }
+        }
+        
+        if(!existLastTumorPos){
+            last_tumor_pos.push_back(0);
+        }
+    }
+
+    // reference fasta parser
+    FastaParser fastaParser(params.fastaFile, chrVec, last_tumor_pos, params.numThreads);
 
     // loop all chromosome
     #pragma omp parallel for schedule(dynamic) num_threads(params.numThreads) 
@@ -1282,19 +1621,28 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
         // chr, variant position
         std::map<int, HP3_Info> *somaticPosInfo = nullptr;
         // read ID, reads hpResult 
-        std::map<int, ReadHpResult> *readHpDistributed = nullptr;
+        std::map<int, ReadHpResult> *localCallerReadHpDistri = nullptr;
+        
+        // pos, (endPos, denseSnpInterval)
+        std::map<int, std::pair<int, denseSnpInterval>> *localDenseTumorSnpInterval = nullptr;
+
         // read ID, SNP HP count 
         std::map<std::string, ReadVarHpCount> readHpResultSet;
         // position, read ID, baseHP 
         std::map<int, std::map<std::string, int>> somaticPosReadHPCount;
 
+
         // records all variants within this chromosome.
         std::map<int, RefAltSet> currentChrVariants;
+
+        // fetch chromosome string
+        std::string ref_string = fastaParser.chrString.at(chr);
 
         #pragma omp critical
         {
             somaticPosInfo = &((*SomaticChrPosInfo)[chr]);
-            readHpDistributed = &((*chrVarReadHpResult)[chr]);
+            localCallerReadHpDistri = &((*chrVarReadHpResult)[chr]);
+            localDenseTumorSnpInterval = &((*denseTumorSnpInterval)[chr]);
             currentChrVariants = mergedChrVarinat[chr];
         }
 
@@ -1341,42 +1689,63 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
             }
             else if(int(bam.aln->core.pos) <= (*lastVariant).first){
                 //statistics for tumor SNP base count and depth, and classify cases
-                StatisticSomaticPosInfo(*bam.bamHdr, *bam.aln, chr, params, &NorBase, vcfSet, *somaticPosInfo, currentChrVariants, firstVariantIter, readHpResultSet, somaticPosReadHPCount);
+                StatisticSomaticPosInfo(*bam.bamHdr, *bam.aln, chr, params, &NorBase, vcfSet, *somaticPosInfo, currentChrVariants, firstVariantIter, readHpResultSet, somaticPosReadHPCount, ref_string);
             }
         }
+
+        //get close somatic SNP interval
+        getDenseTumorSnpInterval(*somaticPosInfo, readHpResultSet, somaticPosReadHPCount, *localDenseTumorSnpInterval);
+
         //calculate information and filter somatic SNPs
         SomaticFeatureFilter(somaticParams, currentChrVariants, chr, *somaticPosInfo);
 
-        //find other somatic variants HP4/HP5
+        //find other somatic variants HP4/HP5 (temporary)
         FindOtherSomaticSnpHP(chr, *somaticPosInfo, currentChrVariants);
+
+        // Shannon entropy filter(temporary)
+        ShannonEntropyFilter(chr, *somaticPosInfo, currentChrVariants, ref_string);
 
         //calibrate read HP to remove low confidence H3/H4 SNP
         CalibrateReadHP(chr, somaticParams, *somaticPosInfo, readHpResultSet, somaticPosReadHPCount);
 
         //calculate all read HP result
-        CalculateChrReadHP(params, chr, readHpResultSet, somaticPosReadHPCount);
+        CalculateReadSetHP(params, chr, readHpResultSet, somaticPosReadHPCount);
 
         //statistic all read HP in somatic SNP position
-        StatisticSomaticPosReadHP(chr, *somaticPosInfo, somaticPosReadHPCount, readHpResultSet, *readHpDistributed);
+        StatisticSomaticPosReadHP(chr, *somaticPosInfo, somaticPosReadHPCount, readHpResultSet, *localCallerReadHpDistri);
 
         //merge local read hp result to global read hp result
         #pragma omp critical
         {
-            callerReadHpDistri->mergeLocalReadHp(chr, *readHpDistributed);
+            callerReadHpDistri->mergeLocalReadHp(chr, *localCallerReadHpDistri);
         }
 
         somaticPosInfo = nullptr;
-        readHpDistributed = nullptr;
+        localCallerReadHpDistri = nullptr;
         hts_itr_destroy(Iter);
     }
     hts_tpool_destroy(threadPool.pool);
     std::cerr<< difftime(time(NULL), begin) << "s\n";
+
+    int tumorOnlySNP = 0;
+    for(auto chr : chrVec){
+        auto somaticPosIter = (*SomaticChrPosInfo)[chr].begin();
+        while(somaticPosIter != (*SomaticChrPosInfo)[chr].end()){
+            if((*somaticPosIter).second.isHighConSomaticSNP){
+                tumorOnlySNP++;
+            }
+            somaticPosIter++;
+        }
+    }
+    std::cerr << "calling somatic SNPs: " << tumorOnlySNP << std::endl;
     
     if(somaticParams.writeVarLog){
         //write the log file for variants with positions tagged as HP3
         WriteSomaticVarCallingLog(params ,somaticParams, chrVec, NorBase, mergedChrVarinat);
 
         WriteOtherSomaticHpLog(params, chrVec, mergedChrVarinat);
+
+        WriteDenseTumorSnpIntervalLog(params, chrVec);
 
         callerReadHpDistri->writeReadHpDistriLog(params, "_readDistri_Scaller.out", chrVec);
 
@@ -1385,14 +1754,15 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
 
         // record the position that can't derived because exist H1-1 and H2-1 reads
         callerReadHpDistri->writeReadHpDistriLog(params, "_readDistri_Scaller_derive_by_H1_H2.out", chrVec);
+
     }
     return;
 }
 
-void SomaticVarCaller::InitialSomaticFilterParams(SomaticFilterParaemter &somaticParams){
+void SomaticVarCaller::InitialSomaticFilterParams(SomaticFilterParaemter &somaticParams, bool enableFilter){
     
     // Determine whether to apply the filter
-    somaticParams.applyFilter = true;
+    somaticParams.applyFilter = enableFilter;
     somaticParams.writeVarLog = true;
 
     // Below the mapping quality read ratio threshold
@@ -1401,23 +1771,23 @@ void SomaticVarCaller::InitialSomaticFilterParams(SomaticFilterParaemter &somati
     // Phased heterozygous SNPs filter threshold
     somaticParams.Hetero_OnlyHP3ReadRatioThreshold = 1.0;
     somaticParams.Hetero_MessyReadRatioThreshold = 1.0;
-    somaticParams.Hetero_readCountThreshold = 1;
-    somaticParams.Hetero_VAF_upper_threshold = 1.0;
+    somaticParams.Hetero_readCountThreshold = 3;
+    somaticParams.Hetero_VAF_upper_threshold = 1.1;
     somaticParams.Hetero_VAF_lower_threshold = 0.1;
     somaticParams.Hetero_tumDeletionRatio = 0.6;
 
     // Unphased Heterozygous SNPs filter threshold
     somaticParams.Unphased_Hetero_OnlyHP3ReadRatioThreshold = 1.0;
     somaticParams.Unphased_Hetero_MessyReadRatioThreshold = 1.0;
-    somaticParams.Unphased_Hetero_readCountThreshold = 1;
-    somaticParams.Unphased_Hetero_VAF_upper_threshold = 1.0;
+    somaticParams.Unphased_Hetero_readCountThreshold = 3;
+    somaticParams.Unphased_Hetero_VAF_upper_threshold = 1.1;
     somaticParams.Unphased_Hetero_VAF_lower_threshold = 0.1;
     somaticParams.Unphased_Hetero_tumDeletionRatio = 0.6;
 
     // Homozygous SNPs filter threshold
     somaticParams.Homo_OnlyHP3ReadRatioThreshold = 1.0;
     somaticParams.Homo_MessyReadRatioThreshold = 1.0;
-    somaticParams.Homo_readCountThreshold = 1;
+    somaticParams.Homo_readCountThreshold = 3;
     somaticParams.Homo_VAF_upper_threshold = 1.1; //not used
     somaticParams.Homo_VAF_lower_threshold = 0.4;
     somaticParams.Homo_tumDeletionRatio = 0.4;
@@ -1455,7 +1825,7 @@ void SomaticVarCaller::SetSomaticFilterParams(const SomaticFilterParaemter &soma
     }
 }
 
-void SomaticVarCaller::StatisticSomaticPosInfo(const  bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, HaplotagParameters &params, BamBaseCounter *NorBase, VCF_Info *vcfSet, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, RefAltSet> &currentChrVariants, std::map<int, RefAltSet>::iterator &firstVariantIter, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount){
+void SomaticVarCaller::StatisticSomaticPosInfo(const  bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, HaplotagParameters &params, BamBaseCounter *NorBase, VCF_Info *vcfSet, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, RefAltSet> &currentChrVariants, std::map<int, RefAltSet>::iterator &firstVariantIter, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, std::string &ref_string){
     
     std::map<int, int> hpCount;
     hpCount[1] = 0; 
@@ -1520,23 +1890,22 @@ void SomaticVarCaller::StatisticSomaticPosInfo(const  bam_hdr_t &bamHdr,const ba
                     char base_chr = seq_nt16_str[bam_seqi(q,query_pos + offset)];
                     std::string base(1, base_chr);
 
-
                     //waring : using ref length to split SNP and indel that will be effect case ratio result 
                     if ( aln.core.qual >= params.somaticCallingMpqThreshold ){
                         SomaticJudgeSnpHP(currentVariantIter, vcfSet , chr, base, hpCount, NorCountPS, TumCountPS, &variantsHP, &readPosHP3, NorBase, &somaticPosInfo);
-                        if((*currentVariantIter).second.isExistTumor && !((*currentVariantIter).second.isExistNormal)){
+                        if((*currentVariantIter).second.isExistTumor){
                             readTumorOnlyPos.push_back((*currentVariantIter).first);
                         }
                     }
 
                     //statistically analyze SNP information exclusive to the tumor
-                    if((*currentVariantIter).second.isExistTumor && !((*currentVariantIter).second.isExistNormal)){
+                    if((*currentVariantIter).second.isExistTumor){
                         int tumRefLength = (*currentVariantIter).second.Variant[Genome::TUMOR].Ref.length();
                         int tumAltLength = (*currentVariantIter).second.Variant[Genome::TUMOR].Alt.length();
 
                         if(tumRefLength == 1 && tumAltLength == 1){
                             if ( aln.core.qual >= params.somaticCallingMpqThreshold ){
-                                //counting current tumor SNP basd and depth with filtered MPQ
+                                //counting current tumor SNP basd and depth with filtered MPQ          
                                 if(base == "A"){
                                     somaticPosInfo[(*currentVariantIter).first].base.MPQ_A_count++;
                                 }else if(base == "C"){
@@ -1580,7 +1949,7 @@ void SomaticVarCaller::StatisticSomaticPosInfo(const  bam_hdr_t &bamHdr,const ba
             while( currentVariantIter != currentChrVariants.end() && (*currentVariantIter).first < ref_pos + length){
                 
                 //statistically analyze SNP information exclusive to the tumor
-                if((*currentVariantIter).second.isExistTumor && !((*currentVariantIter).second.isExistNormal)){
+                if((*currentVariantIter).second.isExistTumor){
 
                     int curPos = (*currentVariantIter).first;
 
@@ -1618,10 +1987,40 @@ void SomaticVarCaller::StatisticSomaticPosInfo(const  bam_hdr_t &bamHdr,const ba
         }
     }
 
-
     //classify read cases where tumor SNPs have low VAF in normal samples
     if(!readPosHP3.empty()){
         ClassifyReadsByCase(readPosHP3, NorCountPS, hpCount, params, somaticPosInfo);
+        //record read HP for filter FP
+        int pqValue = 0;   
+        double normalHPsimilarity = 0.0;
+        double tumorHPsimilarity = 0.0;
+        int hpResult =determineReadHP(hpCount, pqValue, NorCountPS, normalHPsimilarity, tumorHPsimilarity, params.percentageThreshold, nullptr, nullptr, nullptr);
+        // if(strcmp(bam_get_qname(&aln), "SRR25005626.14369963") == 0){
+        //     std::cout << "hp1: " << hpCount[SnpHP::GERMLINE_H1] << " hp2: " << hpCount[SnpHP::GERMLINE_H2] << " hp3: " << hpCount[SnpHP::SOMATIC_H3] << std::endl;
+        //     std::cout << "hpResult: " << hpResult << std::endl;
+        // }
+        
+        for(auto pos : readPosHP3){
+            int baseHP = SnpHP::NONE_SNP;
+            if(variantsHP.find(pos) != variantsHP.end()){
+                baseHP = variantsHP[pos];
+            }else{
+                std::cerr << "Error (SomaticStatisticSomaticPosInfo) => can't find the position" << std::endl;
+                std::cerr << "chr:" << chr << " pos: " << pos+1 << std::endl;
+                std::cerr << "readID: " << bam_get_qname(&aln) << std::endl;
+                exit(1);
+            }
+            if(baseHP != SnpHP::SOMATIC_H3){
+                std::cerr << "Error (SomaticStatisticSomaticPosInfo) => baseHP is not HP3 : chr:" << chr << " pos: " << pos+1 << " baseHP: " << baseHP << std::endl;
+                exit(1);
+            }
+            if(hpResult == ReadHP::H1_1 || hpResult == ReadHP::H2_1 || hpResult == ReadHP::H3 || hpResult == ReadHP::unTag){
+                somaticPosInfo[pos].ReadHpCount[hpResult]++;
+            }else if(hpResult == ReadHP::H1 || hpResult == ReadHP::H2){
+                std::cerr << "Error (SomaticStatisticSomaticPosInfo) => error somatic read HP : chr:" << chr << " pos: " << pos+1 << " hpResult: " << hpResult << std::endl;
+                exit(1);      
+            }
+        }
     }
 
     //record variants HP count for each read in tumor-only position
@@ -1631,7 +2030,7 @@ void SomaticVarCaller::StatisticSomaticPosInfo(const  bam_hdr_t &bamHdr,const ba
         //read ID overide
         if(readHpResultSet.find(readID) != readHpResultSet.end()){
             readHpResultSet[readID].readIDcount++;
-            readID = readID + "-" + std::to_string(readHpResultSet[readID].readIDcount++);
+            readID = readID + "-" + std::to_string(readHpResultSet[readID].readIDcount);
         }
 
         readHpResultSet[readID].HP1= hpCount[1];
@@ -1650,7 +2049,6 @@ void SomaticVarCaller::StatisticSomaticPosInfo(const  bam_hdr_t &bamHdr,const ba
         //}
 
         for(auto pos : readTumorOnlyPos){
-            
             int somaticSnpBaseHP = SnpHP::NONE_SNP;
 
             if(variantsHP.find(pos) != variantsHP.end()){
@@ -1674,20 +2072,22 @@ void SomaticVarCaller::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curP
         std::cerr << "ERROR (SomaticDetectJudgeHP) => SomaticPos pointer cannot be nullptr"<< std::endl;
         exit(1);
     }
+
     
     if((*NorBase).isHighRefAllelleFreq(chrName, curPos) == true){
         std::string TumorRefBase = curVar.Variant[Genome::TUMOR].Ref;
-        std::string TumorAltBase = curVar.Variant[Genome::TUMOR].Alt;
+        std::string TumorAltBase = curVar.Variant[Genome::TUMOR].Alt; 
 
         //max count base match to refBase in normal.bam
-        if((*NorBase).getMaxFreqBase(chrName, curPos) == TumorRefBase){
+        // if((*NorBase).getMaxFreqBase(chrName, curPos) == TumorRefBase){
+        
             if(base == TumorAltBase){
                 hpCount[3]++;
                 if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::SOMATIC_H3;
 
                 //record postions that tagged as HP3 for calculating the confidence of somatic positions
                 (*readPosHP3).push_back(curPos);
-                (*SomaticPos)[curPos].isNormalPosLowVAF = true;                                
+                (*SomaticPos)[curPos].isNormalPosLowVAF = true;                            
 
             //base is not match to TumorRefBase & TumorAltBase (other HP)
             }else if(base != TumorRefBase && base != TumorAltBase){
@@ -1700,26 +2100,17 @@ void SomaticVarCaller::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curP
             if(tumCountPS != nullptr) (*tumCountPS)[vcfSet[Genome::TUMOR].chrVariantPS[chrName][curPos]]++;
 
         //max count base not match to tumorRefBase in normal.bam
-        }else if((*NorBase).getMaxFreqBase(chrName, curPos) != TumorRefBase){
-            //temp 
-        }
+        // }else if((*NorBase).getMaxFreqBase(chrName, curPos) != TumorRefBase){
+        //     //temp 
+        // }
     //exist more than one type of base at the current position in normal.bam 
-    }else{
-        //temp
+    // }else{
+    //     //temp
     }
 }
 
 void SomaticVarCaller::ClassifyReadsByCase(std::vector<int> &readPosHP3, std::map<int, int> &NorCountPS, std::map<int, int> &hpCount, const HaplotagParameters &params, std::map<int, HP3_Info> &somaticPosInfo){
     
-    /*double max, min;
-    if(hpCount[3] >= hpCount[4]){
-        max = hpCount[3];
-        min = hpCount[4];
-    }else{
-        max = hpCount[4];
-        min = hpCount[3];
-    }*/
-
     //decide whether to tag the read or not
     bool recordRead = true;
     /*if( max/(max+min) < params.percentageThreshold){
@@ -1769,14 +2160,14 @@ void SomaticVarCaller::ClassifyReadsByCase(std::vector<int> &readPosHP3, std::ma
         }else if(tagCleanHP3Read){
             somaticPosInfo[somaticPos].totalCleanHP3Read++;
             if(hpCount[1] == 0 && hpCount[2] == 0 && hpCount[3] != 0){
-                somaticPosInfo[somaticPos].OnlyHP3Read++;
+                somaticPosInfo[somaticPos].pure_H3_read++;
             }else if(hpCount[1] !=0  && hpCount[2] == 0){ 
-                somaticPosInfo[somaticPos].HP1withHP3Read++;      
+                somaticPosInfo[somaticPos].pure_H1_1_read++;      
             }else if(hpCount[1] == 0 && hpCount[2] != 0){ 
-                somaticPosInfo[somaticPos].HP2withHP3Read++;                            
+                somaticPosInfo[somaticPos].pure_H2_1_read++;                            
             }
         }else{
-            somaticPosInfo[somaticPos].MessyHPRead++;
+            somaticPosInfo[somaticPos].Mixed_HP_read++;
         }
     }
 }
@@ -1787,26 +2178,32 @@ void SomaticVarCaller::SomaticFeatureFilter(const SomaticFilterParaemter &somati
     while( somaticVarIter != somaticPosInfo.end()){
 
         //Stage 1 filter
-        if((*somaticVarIter).second.isNormalPosLowVAF == false){
+        if((*somaticVarIter).second.isNormalPosLowVAF == false && somaticParams.applyFilter){
+        // if((*somaticVarIter).second.isNormalPosLowVAF == false){
             somaticVarIter++;
             continue;
         }
 
         //calculating Read Case Ratio
         int totalCleanHP3Read = (*somaticVarIter).second.totalCleanHP3Read;
-        int totalHP1WithHP3Read = (*somaticVarIter).second.HP1withHP3Read;
-        int totalHP2WithHP3Read = (*somaticVarIter).second.HP2withHP3Read;
-        int totalOnlyHP3Read = (*somaticVarIter).second.OnlyHP3Read;
-        int totalMessyHPRead = (*somaticVarIter).second.MessyHPRead;
+        int totalHP1WithHP3Read = (*somaticVarIter).second.pure_H1_1_read;
+        int totalHP2WithHP3Read = (*somaticVarIter).second.pure_H2_1_read;
+        int totalOnlyHP3Read = (*somaticVarIter).second.pure_H3_read;
+        int totalMessyHPRead = (*somaticVarIter).second.Mixed_HP_read;
 
         (*somaticVarIter).second.CaseReadCount = totalCleanHP3Read + totalMessyHPRead;
 
-        (*somaticVarIter).second.MessyHPReadRatio = (float)totalMessyHPRead / ((float)totalCleanHP3Read + (float)totalMessyHPRead);
-
-        (*somaticVarIter).second.HP1withHP3ReadRatio = (float)totalHP1WithHP3Read / ((float)totalCleanHP3Read + (float)totalMessyHPRead);
-        (*somaticVarIter).second.HP2WithHP3ReadRatio = (float)totalHP2WithHP3Read / ((float)totalCleanHP3Read + (float)totalMessyHPRead);
-        (*somaticVarIter).second.OnlyHP3ReadRatio = (float)totalOnlyHP3Read / ((float)totalCleanHP3Read + (float)totalMessyHPRead);
-
+        if((*somaticVarIter).second.CaseReadCount != 0){
+            (*somaticVarIter).second.Mixed_HP_readRatio = (float)totalMessyHPRead / ((float)totalCleanHP3Read + (float)totalMessyHPRead);
+            (*somaticVarIter).second.pure_H1_1_readRatio = (float)totalHP1WithHP3Read / ((float)totalCleanHP3Read + (float)totalMessyHPRead);
+            (*somaticVarIter).second.pure_H2_1_readRatio = (float)totalHP2WithHP3Read / ((float)totalCleanHP3Read + (float)totalMessyHPRead);
+            (*somaticVarIter).second.pure_H3_readRatio = (float)totalOnlyHP3Read / ((float)totalCleanHP3Read + (float)totalMessyHPRead);
+        }else{
+            (*somaticVarIter).second.Mixed_HP_readRatio = 0.0;
+            (*somaticVarIter).second.pure_H1_1_readRatio = 0.0;
+            (*somaticVarIter).second.pure_H2_1_readRatio = 0.0;
+            (*somaticVarIter).second.pure_H3_readRatio = 0.0;
+        }
 
         //get tumor depth & filtered MPQ tumor depth
         int tumDepth = (*somaticVarIter).second.base.depth;
@@ -1880,6 +2277,9 @@ void SomaticVarCaller::SomaticFeatureFilter(const SomaticFilterParaemter &somati
             (*somaticVarIter).second.tumDelRatio = (float)tumDeletionCount / ((float)tumDeletionCount + (float)tumDepth);
         }
 
+        int somaticReadH1_1 = (*SomaticChrPosInfo)[chr][(*somaticVarIter).first].ReadHpCount[ReadHP::H1_1];
+        int somaticReadH2_1 = (*SomaticChrPosInfo)[chr][(*somaticVarIter).first].ReadHpCount[ReadHP::H2_1];
+
         //filter threshold 
         float OnlyHP3ReadRatioThreshold;
         float messyReadRatioThreshold;
@@ -1898,18 +2298,285 @@ void SomaticVarCaller::SomaticFeatureFilter(const SomaticFilterParaemter &somati
         if( (!somaticParams.applyFilter) ||
             (
             //((*somaticVarIter).second.OnlyHP3ReadRatio < OnlyHP3ReadRatioThreshold) && 
-            ((*somaticVarIter).second.MessyHPReadRatio < messyReadRatioThreshold) && 
-            ((*somaticVarIter).second.CaseReadCount > readCountThreshold) &&
+            //((*somaticVarIter).second.base.lowMpqReadRatio <= tumLowMpqRatioThreshold) &&
+            ((*somaticVarIter).second.Mixed_HP_readRatio < messyReadRatioThreshold) && 
+            ((*somaticVarIter).second.CaseReadCount > readCountThreshold) /*&&
             ((*somaticVarIter).second.base.VAF > VAF_lower_threshold) && 
-            ((*somaticVarIter).second.base.VAF < VAF_upper_threshold) &&
-            ((*somaticVarIter).second.tumDelRatio < tumDeletionRatioThreshold) &&
-            ((*somaticVarIter).second.base.lowMpqReadRatio <= tumLowMpqRatioThreshold)
+            ((*somaticVarIter).second.base.VAF < VAF_upper_threshold)*/
+            //((*somaticVarIter).second.tumDelRatio < tumDeletionRatioThreshold) &&
             ) ){
-              
+            
+            // haplotype consistency filter
+            if((somaticParams.applyFilter) && (*somaticVarIter).second.CaseReadCount <= 10 && (*somaticVarIter).second.base.VAF <= 0.2){
+                if((somaticReadH1_1 > 0 && somaticReadH2_1 > 0)){
+                    somaticVarIter++;
+                    continue;
+                }
+            }     
+
+            //z-score filter
+            if((somaticParams.applyFilter) && (*somaticVarIter).second.CaseReadCount <= 10 && (*somaticVarIter).second.base.VAF <= 0.15){
+                int intervalSnpCount = (*somaticVarIter).second.intervalSnpCount;
+                float zScore = (*somaticVarIter).second.zScore;
+                if(intervalSnpCount > 4 && zScore <= 2.0 && zScore >= 0.0){
+                    somaticVarIter++;
+                    continue;
+                }
+            }
             (*somaticVarIter).second.isHighConSomaticSNP = true;
         }
 
         somaticVarIter++;          
+    }
+}
+
+void SomaticVarCaller::ShannonEntropyFilter(const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, RefAltSet> &currentChrVariants, std::string &ref_string){
+    int window_size = 10;
+    auto somaticVarIter = somaticPosInfo.begin();
+    while(somaticVarIter != somaticPosInfo.end()){
+        int read_count = (*somaticVarIter).second.CaseReadCount;
+        if(read_count <= 10 && (*somaticVarIter).second.isHighConSomaticSNP){
+            int snp_pos = (*somaticVarIter).first;
+            int window_start = snp_pos - window_size/2;
+            int window_end = snp_pos + window_size/2;
+
+            int A_count=0;
+            int C_count=0;
+            int T_count=0;
+            int G_count=0;
+
+            char homopolymer_base = ' ';
+            int homopolymer_length = 0;
+
+            char max_homopolymer_base= ' ';
+            int max_homopolymer_length=0;
+            // std::cout << "------somatic SNP------: "<< snp_pos << std::endl;
+            for(int pos = window_start; pos <= window_end; pos++){
+                char base = ref_string.at(pos);
+                A_count += base == 'A' ? 1 : 0;
+                C_count += base == 'C' ? 1 : 0;
+                T_count += base == 'T' ? 1 : 0;
+                G_count += base == 'G' ? 1 : 0;
+
+
+                // std::cout << "pos: " << pos << " base: " << base << std::endl;
+                // std::cout << "homopolymer_base: " << homopolymer_base << " homoplerLen: " << homopolymer_length << std::endl;
+                //count homopolymer length  
+                if(homopolymer_base == base){
+                    homopolymer_length++;
+                }else{
+                    if(max_homopolymer_length < homopolymer_length){
+                        max_homopolymer_length = homopolymer_length;
+                        max_homopolymer_base = homopolymer_base;
+                        // std::cout << "---------------> max_base: " << max_homopolymer_base << " maxLen: " << max_homopolymer_length << std::endl;
+                    }
+                    homopolymer_base = base;
+                    homopolymer_length = 1;
+
+                }
+
+            }
+
+            // std::cout << "homopolymer_base: " << homopolymer_base << " homoplerLen: " << homopolymer_length << std::endl;
+            if(max_homopolymer_length < homopolymer_length){
+                max_homopolymer_length = homopolymer_length;
+                max_homopolymer_base = homopolymer_base;
+            }
+            // std::cout << "---------------> max_base: " << max_homopolymer_base << " maxLen: " << max_homopolymer_length << std::endl;
+            // std::cout << " " << std::endl;
+
+
+            // if(homopolymer_length >= 5){
+            // }
+            // std::cout << "A_count: " << A_count << " C_count: " << C_count << " T_count: " << T_count << " G_count: " << G_count << std::endl;
+            double entropy = calculateShannonEntropy(A_count, C_count, T_count, G_count);
+            (*somaticVarIter).second.shannonEntropy = entropy;
+            (*somaticVarIter).second.homopolymerLength = max_homopolymer_length;
+            //filter out the low entropy somatic SNP
+            if(entropy < 1.5){
+                // (*somaticVarIter).second.isHighConSomaticSNP = false;
+            }
+        }
+        somaticVarIter++;
+    }
+}
+
+double SomaticVarCaller::entropyComponent(int count, int total){
+    if (count == 0) return 0.0;
+    double p = static_cast<double>(count) / total;
+    return -p * std::log2(p);
+}
+
+
+double SomaticVarCaller::calculateShannonEntropy(int nA, int nC, int nT, int nG){
+    int total = nA + nC + nT + nG;
+    if (total == 0) return 0.0; 
+    // calculate Shannon entropy
+    double entropy = entropyComponent(nA, total) +
+                     entropyComponent(nC, total) +
+                     entropyComponent(nT, total) +
+                     entropyComponent(nG, total);
+
+    // std::cout << "total: " << total << std::endl;
+    // std::cout << "entropy A: " << entropyComponent(nA, total) << std::endl;
+    // std::cout << "entropy C: " << entropyComponent(nC, total) << std::endl;
+    // std::cout << "entropy T: " << entropyComponent(nT, total) << std::endl;
+    // std::cout << "entropy G: " << entropyComponent(nG, total) << std::endl;
+    // std::cout << "entropy: " << entropy << std::endl;
+
+    return entropy;
+}
+
+double SomaticVarCaller::calculateMean(const std::map<int, double>& data){
+    double size = data.size();
+    if(size == 0) return 0.0;
+    
+    double sum = 0.0;
+    for(auto meanIter : data){
+        sum += meanIter.second;
+    }
+    return sum / size;
+}
+
+double SomaticVarCaller::calculateStandardDeviation(const std::map<int, double>& data, double mean){
+    double variance = 0.0;
+    for (auto meanIter : data) {
+        double value = meanIter.second;
+        variance += (value - mean) * (value - mean);
+    }
+    return std::sqrt(variance / data.size());
+}
+
+void SomaticVarCaller::calculateZScores(const std::map<int, double>& data, double mean, double stdDev, std::map<int, double> &zScores){
+    for (auto meanIter : data) {
+        double value = meanIter.second;
+        if(stdDev == 0){
+            zScores[meanIter.first] = 0.0;
+        }else{
+            zScores[meanIter.first] = ((value - mean) / stdDev); // calculate z-score
+        }
+    }
+}
+
+void SomaticVarCaller::calculateIntervalZScore(bool &isStartPos, int &startPos, int &endPos, int &snpCount, denseSnpInterval &denseSnp, std::map<int, std::pair<int, denseSnpInterval>> &localDenseTumorSnpInterval){
+    double mean = calculateMean(denseSnp.snpAltMean);
+    double stdDev = calculateStandardDeviation(denseSnp.snpAltMean, mean);
+    calculateZScores(denseSnp.snpAltMean, mean, stdDev, denseSnp.snpZscore);
+
+    denseSnp.snpCount = snpCount;
+    denseSnp.totalAltMean = mean;
+    denseSnp.StdDev = stdDev;   
+
+    localDenseTumorSnpInterval[startPos] = std::make_pair(endPos, denseSnp); // save the interval
+
+    isStartPos = false;
+    startPos = 0;
+    snpCount = 0;
+    denseSnp.snpAltMean.clear();
+    denseSnp.snpZscore.clear();
+}
+
+void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, HP3_Info> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, std::map<int, std::pair<int, denseSnpInterval>> &localDenseTumorSnpInterval){
+    //calculate the mean of HP3 reads at each tumor SNP position
+    for(auto somaticPosIter = somaticPosReadHPCount.begin(); somaticPosIter != somaticPosReadHPCount.end(); somaticPosIter++){
+        float readCount = 0.0;
+        float altMean = 0.0;
+        int minStartPos = INT_MAX;
+        int maxEndPos = INT_MIN;
+
+        for(auto readHPIter = somaticPosIter->second.begin(); readHPIter != somaticPosIter->second.end(); readHPIter++){
+            int baseHP = readHPIter->second;
+            if(baseHP != SnpHP::SOMATIC_H3) continue;
+            readCount++;
+
+            if(readHpResultSet.find(readHPIter->first) != readHpResultSet.end()){
+                altMean += readHpResultSet[readHPIter->first].HP3;
+                minStartPos = std::min(minStartPos, readHpResultSet[readHPIter->first].startPos);
+                maxEndPos = std::max(maxEndPos, readHpResultSet[readHPIter->first].endPos);
+                // if(somaticPosIter->first + 1 == 81435550 || somaticPosIter->first + 1 == 81435861){
+                //     std::cout << "ReadID: " << readHPIter->first << " baseHP: " << baseHP << " HP3: " << readHpResultSet[readHPIter->first].HP3 << std::endl;
+                // }
+            }else{
+                std::cerr << "ERROR: readID not found in readHpResultSet: " << readHPIter->first << std::endl;
+                exit(1);
+            }
+        }
+        if(altMean != 0) altMean /= readCount;
+
+        if(somaticPosInfo.find(somaticPosIter->first) != somaticPosInfo.end()){
+            somaticPosInfo[somaticPosIter->first].MeanAltCountPerVarRead = altMean;
+        }else{
+            std::cerr << "ERROR: somaticPosInfo not found: " << somaticPosIter->first << std::endl;
+            exit(1);
+        }
+        // if(somaticPosIter->first + 1 == 81435550 || somaticPosIter->first + 1 == 81435861){
+        //     std::cout << "pos: " << somaticPosIter->first + 1 << " readCount: " << readCount << " AltMeanCount: " << altMean << " minStartPos: " << minStartPos<< " maxEndPos: " << maxEndPos << std::endl;
+        // }
+    }
+
+    //find the interval of tumor SNPs
+    auto somaticPosIter = somaticPosInfo.begin();
+    bool isStartPos = false;
+    int startPos = 0;
+    int snpCount = 0;
+    int dense_distance = 5000;
+    denseSnpInterval denseSnp;
+
+    while (somaticPosIter != somaticPosInfo.end()){
+        int curPos = somaticPosIter->first;
+
+        // ensure not out of bounds
+        auto nextIter = std::next(somaticPosIter);
+        if (nextIter != somaticPosInfo.end()){
+            int nextPos = nextIter->first;
+
+            if (nextPos - curPos <= dense_distance) {
+                if (!isStartPos) {
+                    isStartPos = true;
+                    startPos = curPos;
+                    snpCount++;
+                    denseSnp.snpAltMean[curPos] = somaticPosIter->second.MeanAltCountPerVarRead;
+                    // altMeanVec.push_back(somaticPosIter->second.altMeanCount);
+                    // altPosVec.push_back(pos);
+                    // std::cout << "------------->startPos: " << startPos << " AltMean: " << somaticPosIter->second.MeanAltCountPerVarRead << std::endl;
+                }
+                denseSnp.snpAltMean[nextPos] = nextIter->second.MeanAltCountPerVarRead;
+                // altMeanVec.push_back(nextIter->second.altMeanCount);
+                // altPosVec.push_back(nextPos);
+                snpCount++;
+                // std::cout << "pos: " << pos << " nextPos: " << nextPos << " snpCount: " << snpCount << " altVecSize: " << altMeanVec.size() << " nextAltMean: " << nextIter->second.altMeanCount << std::endl;
+            } else {
+                if (isStartPos) {
+                    calculateIntervalZScore(isStartPos, startPos, curPos, snpCount, denseSnp, localDenseTumorSnpInterval);
+                    // std::cout << "------------->endPos: " << pos << " stdDev: " << stdDev << "\n"<< std::endl;
+                }else{
+                    // std::cerr << "ERROR: isStartPos is false: pos: " << curPos << " nextPos: " << nextPos << " startPos: " << startPos << std::endl;
+                }
+            }
+        }
+
+        somaticPosIter = nextIter;
+    }
+
+    // check if there is an unfinished interval
+    if (isStartPos) {
+        int endPos = somaticPosInfo.rbegin()->first;
+        if(endPos - startPos <= dense_distance){
+            // std::cout << "Last interval ------------->" << "startPos: " << startPos << " endPos: " << endPos << std::endl;
+            calculateIntervalZScore(isStartPos, startPos, endPos, snpCount, denseSnp, localDenseTumorSnpInterval);
+        }
+        // localDenseTumorSnpInterval[startPos] = std::make_pair(somaticPosInfo.rbegin()->first, denseSnpInterval()); // save the last interval
+    }
+
+    // record the zScore of each SNP in the dense tumor interval
+    for (const auto& entry : localDenseTumorSnpInterval) {
+        if(entry.second.second.snpCount > 1){
+            for(auto snpIter: entry.second.second.snpZscore){
+                somaticPosInfo[snpIter.first].inDenseTumorInterval = true;
+                somaticPosInfo[snpIter.first].zScore = abs(snpIter.second);
+                somaticPosInfo[snpIter.first].intervalSnpCount = entry.second.second.snpCount;
+            }
+        }
     }
 }
 
@@ -1991,23 +2658,23 @@ void SomaticVarCaller::CalibrateReadHP(const std::string &chr, const SomaticFilt
 
                         switch (baseHP) {
                             case SnpHP::GERMLINE_H1:
+                                break;
                             case SnpHP::GERMLINE_H2:
-                                std::cerr << "ERROR (calibrate read HP) => somatic Variant had HP1 or HP2 SNP :" << std::endl;
-                                std::cerr << "readID: " << readID << " chr: " << chr << " pos: " << pos + 1 << std::endl;
-                                std::cerr << "baseHP: " << baseHP << std::endl;
-                                exit(1);
+                                // std::cerr << "ERROR (calibrate read HP) => somatic Variant had HP1 or HP2 SNP :" << std::endl;
+                                // std::cerr << "readID: " << readID << " chr: " << chr << " pos: " << pos + 1 << std::endl;
+                                // std::cerr << "baseHP: " << baseHP << std::endl;
+                                // exit(1);
+                                break;
                             case SnpHP::SOMATIC_H3:
                                 readHpResultSet[readID].HP3--; break;
-                            case SnpHP::SOMATIC_H4:
-                                readHpResultSet[readID].HP4--; break;
                             default:
                                 break;
                         }
 
-                        if(readHpResultSet[readID].HP3 < 0 || readHpResultSet[readID].HP4 < 0){
+                        if(readHpResultSet[readID].HP3 < 0){
                             std::cerr << "ERROR (calibrate read HP) => read HP3 or HP4 SNP count < 0 :" << std::endl;
                             std::cerr << "readID: "<< readID << " chr: "<< chr << " pos: " << pos+1<< std::endl;
-                            std::cerr << "HP3: "<< readHpResultSet[readID].HP3 << " HP4: "<< readHpResultSet[readID].HP3  << std::endl;
+                            std::cerr << "HP3: "<< readHpResultSet[readID].HP3 << std::endl;
                             exit(1);
                         }
                     }
@@ -2020,7 +2687,7 @@ void SomaticVarCaller::CalibrateReadHP(const std::string &chr, const SomaticFilt
         }
 }
 
-void SomaticVarCaller::CalculateChrReadHP(const HaplotagParameters &params, const std::string &chr, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount){
+void SomaticVarCaller::CalculateReadSetHP(const HaplotagParameters &params, const std::string &chr, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount){
         std::map<std::string, ReadVarHpCount>::iterator readTotalHPcountIter = readHpResultSet.begin();
         while(readTotalHPcountIter != readHpResultSet.end()){
             std::string readID = (*readTotalHPcountIter).first;
@@ -2042,14 +2709,14 @@ void SomaticVarCaller::CalculateChrReadHP(const HaplotagParameters &params, cons
         }
 }
 
-void SomaticVarCaller::StatisticSomaticPosReadHP(const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, ReadHpResult> &readHpDistributed){
+void SomaticVarCaller::StatisticSomaticPosReadHP(const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, ReadHpResult> &localReadHpDistri){
     std::map<int, HP3_Info>::iterator somaticVarIter = somaticPosInfo.begin();
     while(somaticVarIter != somaticPosInfo.end()){
         if((*somaticVarIter).second.isHighConSomaticSNP){
             int pos = (*somaticVarIter).first;
 
             if(somaticPosReadHPCount.find(pos) != somaticPosReadHPCount.end()){
-                readHpDistributed[pos] = ReadHpResult();
+                localReadHpDistri[pos] = ReadHpResult();
 
                 // record the number of HP1-1 or HP2-1 derived from Base HP3
                 std::map<int, int> deriveByHPfromBaseHp3;
@@ -2061,7 +2728,7 @@ void SomaticVarCaller::StatisticSomaticPosReadHP(const std::string &chr, std::ma
                     int baseHP = readIdBaseHP.second;
                     int hpResult = readHpResultSet[readID].hpResult;
 
-                    recordReadHp(pos, hpResult, baseHP, readHpDistributed);
+                    recordReadHp(pos, hpResult, baseHP, localReadHpDistri);
 
                     if(baseHP == SnpHP::SOMATIC_H3){
                         switch (hpResult) {
@@ -2090,7 +2757,7 @@ void SomaticVarCaller::StatisticSomaticPosReadHP(const std::string &chr, std::ma
                     }
                 }
 
-                readHpDistributed[pos].existDeriveByH1andH2 = false;
+                localReadHpDistri[pos].existDeriveByH1andH2 = false;
 
                 if(HP1_1ratio >= 1.0){
                     (*somaticVarIter).second.somaticReadDeriveByHP = SnpHP::GERMLINE_H1;
@@ -2100,29 +2767,29 @@ void SomaticVarCaller::StatisticSomaticPosReadHP(const std::string &chr, std::ma
                     (*somaticVarIter).second.somaticReadDeriveByHP = SnpHP::NONE_SNP;
 
                     if((0 < HP1_1ratio && HP1_1ratio < 1.0)  || (0 < HP2_1ratio && HP2_1ratio < 1.0)){
-                        readHpDistributed[pos].existDeriveByH1andH2 = true;
+                        localReadHpDistri[pos].existDeriveByH1andH2 = true;
                         // std::cerr << "ERROR (statistic all read HP) => somatic Variant had HP1-1 and HP2-1 reads :"<< std::endl;
                         // std::cerr << "chr: "<< chr << " pos: " << pos+1 <<std::endl;
                         // std::cerr << "HP1-1_ratio: "<< HP1_1ratio << " HP2-1_ratio: "<< HP2_1ratio << std::endl;
                         // std::cerr << "HP1-1: "<< deriveByHPfromBaseHp3["1-1"] << " HP2-1: "<< deriveByHPfromBaseHp3["2-1"] << " HP3: "<< readHpDistributed[pos].HP3read << " HP4: "<< readHpDistributed[pos].HP4read<< std::endl;
                     }
                 }
+                //record derive HP of current snp
+                recordDeriveHp(pos, (*somaticVarIter).second.somaticReadDeriveByHP, 0.0, localReadHpDistri);
 
-                if( readHpDistributed[pos].hpResultCounter[ReadHP::H3] == 0 && 
-                    readHpDistributed[pos].hpResultCounter[ReadHP::H4] == 0 && 
-                    readHpDistributed[pos].hpResultCounter[ReadHP::H1_1] == 0 &&
-                    readHpDistributed[pos].hpResultCounter[ReadHP::H1_2] == 0 &&
-                    readHpDistributed[pos].hpResultCounter[ReadHP::H2_1] == 0 &&  
-                    readHpDistributed[pos].hpResultCounter[ReadHP::H2_2] == 0){
-                    std::cerr << "ERROR (statistic all read HP) => hadn't exist somatic HP read in : chr: "<< chr << " pos: " << pos+1 <<std::endl;
-                    std::cerr << "HP1-1: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H1_1] 
-                              << " HP1-2: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H1_2] 
-                              << " HP2-1: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H2_1] 
-                              << " HP2-2: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H2_2] 
-                              << " HP3: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H3] 
-                              << " HP4: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H4]
-                              << std::endl;
-                    exit(1); 
+                //error: haven't exist somatic HP read in current position 
+                if( localReadHpDistri[pos].readHpCounter[ReadHP::H3] == 0 && 
+                    localReadHpDistri[pos].readHpCounter[ReadHP::H1_1] == 0 &&
+                    localReadHpDistri[pos].readHpCounter[ReadHP::H2_1] == 0){
+                    // std::cerr << "ERROR (statistic all read HP) => hadn't exist somatic HP read in : chr: "<< chr << " pos: " << pos+1 <<std::endl;
+                    // std::cerr << "HP1-1: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H1_1] 
+                    //           << " HP1-2: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H1_2] 
+                    //           << " HP2-1: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H2_1] 
+                    //           << " HP2-2: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H2_2] 
+                    //           << " HP3: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H3] 
+                    //           << " HP4: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H4]
+                    //           << std::endl;
+                    // exit(1); 
                 }
 
             }else{
@@ -2144,7 +2811,7 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
         exit(1);
     }
 
-    std::cout << "writing somatic varinats calling log ... ";
+    std::cerr << "writing somatic varinats calling log ... ";
     std::time_t begin = time(NULL);
 
     int totalSomaticSNP = 0;
@@ -2181,7 +2848,7 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                  << "##\n"
                  << "##  Filtered : " << somaticParams.applyFilter << "\n"
                  << "##  Calling mapping quality :" << params.somaticCallingMpqThreshold << "\n"
-                 << "##  Low mapping quality read ratio threshold : " << somaticParams.LowMpqRatioThreshold << "\n"
+                 //<< "##  Low mapping quality read ratio threshold : " << somaticParams.LowMpqRatioThreshold << "\n"
                  << "##\n"; 
     (*tagHP3Log) << "##---Phased Heterozygous SNP---\n"
                  //<< "##  Only HP3 Read Ratio threshold : " << somaticParams.Unphased_Hetero_OnlyHP3ReadRatioThreshold << "\n"
@@ -2189,7 +2856,7 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                  << "##  Read Count threshold : " << somaticParams.Unphased_Hetero_readCountThreshold << "\n"
                  << "##  VAF upper bound threshold : " << somaticParams.Unphased_Hetero_VAF_upper_threshold << "\n"
                  << "##  VAF lower bound threshold : " << somaticParams.Unphased_Hetero_VAF_lower_threshold << "\n"
-                 << "##  Tumor deletion ratio threshold : " << somaticParams.Unphased_Hetero_tumDeletionRatio << "\n"
+                 //<< "##  Tumor deletion ratio threshold : " << somaticParams.Unphased_Hetero_tumDeletionRatio << "\n"
                  << "##\n"; 
     (*tagHP3Log) << "##---Unphased Heterozygous SNP---\n"
                  //<< "##  Only HP3 Read Ratio threshold : " << somaticParams.Hetero_OnlyHP3ReadRatioThreshold << "\n"
@@ -2197,7 +2864,7 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                  << "##  Read Count threshold : " << somaticParams.Hetero_readCountThreshold << "\n"
                  << "##  VAF upper bound threshold : " << somaticParams.Hetero_VAF_upper_threshold << "\n"
                  << "##  VAF lower bound threshold : " << somaticParams.Hetero_VAF_lower_threshold << "\n"
-                 << "##  Tumor deletion ratio threshold : " << somaticParams.Hetero_tumDeletionRatio << "\n"
+                 //<< "##  Tumor deletion ratio threshold : " << somaticParams.Hetero_tumDeletionRatio << "\n"
                  << "##\n"; 
     (*tagHP3Log) << "##---Homozygous SNP---\n"
                  //<< "##  Only HP3 Read Ratio threshold : " << somaticParams.Homo_OnlyHP3ReadRatioThreshold << "\n"
@@ -2205,35 +2872,62 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                  << "##  Read Count threshold : " << somaticParams.Homo_readCountThreshold << "\n"
                  << "##  VAF upper bound threshold : " << somaticParams.Homo_VAF_upper_threshold << "\n"
                  << "##  VAF lower bound threshold : " << somaticParams.Homo_VAF_lower_threshold << "\n"
-                 << "##  Tumor deletion ratio threshold : " << somaticParams.Homo_tumDeletionRatio << "\n"
+                 //<< "##  Tumor deletion ratio threshold : " << somaticParams.Homo_tumDeletionRatio << "\n"
                  << "##---------------------------------------- \n"
                  << "##\n"
                  << "##Total Somatic SNPs: " << totalSomaticSNP << "\n"
                  << "##\n"; 
     (*tagHP3Log) << "#CHROM\t" 
-                 << "POS\t" 
+                 << "POS\t"
+                 << "ID\t"
+                 << "REF\t" 
+                 << "ALT\t"
+                 << "AltCount\t"
                  << "ReadCount\t" 
-                 << "(HP1withHP3,HP2withHP3,OnlyHP3,MessyHP)\t"
-                 << "unTag\t" 
-                 << "HP1withHP3Ratio\t" 
-                 << "HP2withHP3Ratio\t" 
-                 << "OnlyHP3Ratio\t" 
-                 << "MessyReadRatio\t" 
-                 << "norVAF\t"  
-                 << "tumVAF\t"
-                 << "subtract Depth\t" 
+                 << "NorAltCount\t"
+                 << "PureH1-1\t"
+                 << "PureH2-1\t"
+                 << "PureH3\t"
+                 << "MixedHpRead\t"
+                 << "UnTag\t" 
+                 << "PureH1-1ratio\t" 
+                 << "PureH2-1ratio\t" 
+                 << "PureH3ratio\t" 
+                 << "MixedHpReadRatio\t" 
+                 << "NorVAF\t"  
+                 << "TumVAF\t"
+                 << "NorMpqVAF\t"
+                 << "TumMpqVAF\t"
+                 << "NorVAF_substract\t"
+                 << "TumVAF_substract\t"
                  << "NorDepth\t"  
                  << "TumDepth\t"
+                 << "Subtract_Depth\t" 
                  << "NorDeletionCount\t"
                  << "TumDeletionCount\t"
-                 << "norDeletionRatio\t"
-                 << "tumDeletionRatio\t"
-                 << "norMpqVAF\t"
-                 << "tumMpqVAF\t"
-                 << "norVAF_substract\t"
-                 << "tumVAF_substract\t"
-                 << "norMpqReadRatio\t"
-                 << "tumMpqReadRatio\t"  
+                 << "NorDeletionRatio\t"
+                 << "TumDeletionRatio\t"
+                 << "NorMpqReadRatio\t"
+                 << "TumMpqReadRatio\t"  
+                 << "ShannonEntropy\t"
+                 << "HomopolymerLength\t"
+                 << "H1readCount\t"
+                 << "H2readCount\t"
+                 << "H1_1readCount\t"
+                 << "H2_1readCount\t"
+                 << "H3readCount\t"
+                 << "GermlineReadHpCount\t"
+                 << "GermlineReadHpConsistencyRatio\t"
+                 << "SomaticReadHpConsistencyRatio\t"
+                 << "BaseGermlineReadHpConsistencyRatio\t"
+                 << "SomaticRead_H1-1\t"
+                 << "SomaticRead_H2-1\t"
+                 << "SomaticRead_H3\t"
+                 << "SomaticRead_unTag\t"
+                 << "AltMeanCountPerVarRead\t"
+                 << "zScore\t"
+                 << "IntervalSnpCount\t"
+                 << "ExistNorSnp\t"
                  << "GT\n";
 
     //write variants information
@@ -2248,18 +2942,18 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
             }
 
             //calculating Case Ratio
-            int totalHP1WithHP3Read = (*somaticVarIter).second.HP1withHP3Read;
-            int totalHP2WithHP3Read = (*somaticVarIter).second.HP2withHP3Read;
-            int totalOnlyHP3Read = (*somaticVarIter).second.OnlyHP3Read;
-            int totalMessyHPRead = (*somaticVarIter).second.MessyHPRead;
+            int pure_H1_1_read = (*somaticVarIter).second.pure_H1_1_read;
+            int pure_H2_1_read = (*somaticVarIter).second.pure_H2_1_read;
+            int pure_H3_read = (*somaticVarIter).second.pure_H3_read;
+            int Mixed_HP_read = (*somaticVarIter).second.Mixed_HP_read;
             int unTagCount = (*somaticVarIter).second.unTag;
             int readCount = (*somaticVarIter).second.CaseReadCount;
 
-            float messyHPReadRatio = (*somaticVarIter).second.MessyHPReadRatio;
+            float mixed_HP_readRatio = (*somaticVarIter).second.Mixed_HP_readRatio;
 
-            float HP1withHP3ReadRatio = (*somaticVarIter).second.HP1withHP3ReadRatio;
-            float HP2WithHP3ReadRatio = (*somaticVarIter).second.HP2WithHP3ReadRatio;
-            float OnlyHP3ReadRatio = (*somaticVarIter).second.OnlyHP3ReadRatio;
+            float pure_H1_1_readRatio = (*somaticVarIter).second.pure_H1_1_readRatio;
+            float pure_H2_1_readRatio = (*somaticVarIter).second.pure_H2_1_readRatio;
+            float pure_H3_readRatio = (*somaticVarIter).second.pure_H3_readRatio;
 
             int norDepth = NorBase.getDepth(chr, (*somaticVarIter).first);
             int norMpqDepth = NorBase.getMpqDepth(chr, (*somaticVarIter).first);
@@ -2296,7 +2990,7 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                 tumMpqAltCount = (*SomaticChrPosInfo)[chr][(*somaticVarIter).first].base.MPQ_C_count;
                 norAltCount = NorBase.getBaseCcount(chr, (*somaticVarIter).first);
             }else if(AltBase == "T"){
-                tumMpqAltCount = (*SomaticChrPosInfo)[chr][(*somaticVarIter).first].base.MPQ_T_count;
+                tumMpqAltCount = (*SomaticChrPosInfo)[chr][(*somaticVarIter).first].base.MPQ_T_count;       
                 norAltCount = NorBase.getBaseTcount(chr, (*somaticVarIter).first);
             }else if(AltBase == "G"){
                 tumMpqAltCount = (*SomaticChrPosInfo)[chr][(*somaticVarIter).first].base.MPQ_G_count;
@@ -2310,16 +3004,22 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
             float tumVAF = (*somaticVarIter).second.base.VAF;
             float tumMpqVAF = (float)tumMpqAltCount / (float)tumMpqDepth;
 
-            float norVAF =  (float)norAltCount / (float)norDepth;
+            float norVAF =  0.0;
+            if(norAltCount > 0) norVAF = (float)norAltCount / (float)norDepth;
+            
             float norCountVAF = NorBase.getVAF(chr,(*somaticVarIter).first);
             float norMpqVAF = NorBase.getFilterdMpqVAF(chr,(*somaticVarIter).first);
 
             if(norVAF != norCountVAF){
                 std::cerr << "Error(diff nor VAF) => can't find GTtype at chr: " << chr << " pos: " << ((*somaticVarIter).first) + 1;
+                std::cerr << "norVAF: " << norVAF << " norCountVAF: " << norCountVAF << std::endl;
                 exit(1); 
             }
             float norVAF_substract = (norMpqVAF - norCountVAF);
-            float norMPQReadRatio = (float)(norDepth - norMpqDepth) / (float)norDepth;
+
+            float norMPQReadRatio = 0.0; 
+
+            if(norDepth > 0) norMPQReadRatio = (float)(norDepth - norMpqDepth) / (float)norDepth;
             float TmpNorMPQReadRatio = NorBase.getLowMpqReadRatio(chr,(*somaticVarIter).first);
 
             if(norMPQReadRatio != TmpNorMPQReadRatio){
@@ -2364,42 +3064,152 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
             float tumDeletionRatio = (*somaticVarIter).second.tumDelRatio;
 
             if(norDeletionCount == 0){
-                norDeletionRatio = 0.0;
+                norDeletionRatio = 0.0;     
             }else{
                 norDeletionRatio = (float)norDeletionCount / ((float)norDeletionCount + (float)norDepth);
             }
 
+            // the distribution of reads HP at the current position
+            int H1readCount = (*chrVarReadHpResult)[chr][(*somaticVarIter).first].readHpCounter[ReadHP::H1];
+            int H2readCount = (*chrVarReadHpResult)[chr][(*somaticVarIter).first].readHpCounter[ReadHP::H2];
+            int H1_1readCount = (*chrVarReadHpResult)[chr][(*somaticVarIter).first].readHpCounter[ReadHP::H1_1];
+            int H2_1readCount = (*chrVarReadHpResult)[chr][(*somaticVarIter).first].readHpCounter[ReadHP::H2_1];
+            int H3readCount = (*chrVarReadHpResult)[chr][(*somaticVarIter).first].readHpCounter[ReadHP::H3];
+            
+            // the ratio of the read count of H1 and H2
+            int germlineReadHpCount = H1readCount + H2readCount;
+            float germlineReadHpConsistencyRatio = 0.0;
+            if(H1readCount > 0 && H2readCount > 0){
+                germlineReadHpConsistencyRatio = (H1readCount > H2readCount) ? ((float)H1readCount / (float)(H1readCount + H2readCount)) : ((float)H2readCount / (float)(H1readCount + H2readCount));
+            }else if(H1readCount == 0 && H2readCount == 0){
+                germlineReadHpConsistencyRatio = 0.0;
+            }
+            else{
+                germlineReadHpConsistencyRatio = 1.0;
+            }
+
+            // the ratio of the germlineHP based on depth
+            float percentageOfGermlineHp = 0.0;
+            if(tumDepth > 0 && norDepth > 0){
+                percentageOfGermlineHp = (float)germlineReadHpCount / (float)tumDepth;            
+            }
+
+            // the count of reads have somatic base at current position
+            int somaticVarReadH1_1 = (*SomaticChrPosInfo)[chr][(*somaticVarIter).first].ReadHpCount[ReadHP::H1_1];
+            int somaticVarReadH2_1 = (*SomaticChrPosInfo)[chr][(*somaticVarIter).first].ReadHpCount[ReadHP::H2_1];
+            int somaticVarReadH3 = (*SomaticChrPosInfo)[chr][(*somaticVarIter).first].ReadHpCount[ReadHP::H3];
+            int untaggedReadCount = (*SomaticChrPosInfo)[chr][(*somaticVarIter).first].ReadHpCount[ReadHP::unTag];
+
+            // the count of reads based on germline HP
+            int BaseOnH1ReadCount = H1readCount + H1_1readCount;
+            int BaseOnH2ReadCount = H2readCount + H2_1readCount;
+
+
+            // the ratio of the read count of H1 and H2 based on germline HP
+            float baseOnGermlineReadHpConsistencyRatio = 0.0;
+            if(BaseOnH1ReadCount > 0 && BaseOnH2ReadCount > 0){
+                baseOnGermlineReadHpConsistencyRatio = (BaseOnH1ReadCount > BaseOnH2ReadCount) ? ((float)BaseOnH1ReadCount / (float)(BaseOnH1ReadCount + BaseOnH2ReadCount)) : ((float)BaseOnH2ReadCount / (float)(BaseOnH1ReadCount + BaseOnH2ReadCount));
+            }else if(BaseOnH1ReadCount == 0 && BaseOnH2ReadCount == 0){
+                baseOnGermlineReadHpConsistencyRatio = 0.0;
+            }
+            else{
+                baseOnGermlineReadHpConsistencyRatio = 1.0;
+            }
+
+            // if((*somaticVarIter).first + 1 == 132883723){
+            //     printf("H1readCount: %d H2readCount: %d\n", H1readCount, H2readCount);
+            //     printf("H1-1: %d H2-1: %d  H3: %d\n", H1_1readCount, H2_1readCount, H3readCount);
+            //     printf("baseOnH1: %d baseOnH2: %d\n", BaseOnH1ReadCount, BaseOnH2ReadCount);
+            //     printf("baseOnGermlineReadHpConsistencyRatio: %f\n", baseOnGermlineReadHpConsistencyRatio);
+            //     exit(1);
+            // }
+
+            float somaticReadHpConsistencyRatio = 0.0;
+            if(H1_1readCount > 0 && H2_1readCount > 0){     
+                somaticReadHpConsistencyRatio = (H1_1readCount > H2_1readCount) ? ((float)H1_1readCount / (float)(H1_1readCount + H2_1readCount)) : ((float)H2_1readCount / (float)(H1_1readCount + H2_1readCount));
+            }else if(H1_1readCount == 0 && H2_1readCount == 0){
+                somaticReadHpConsistencyRatio = 0.0;
+            }
+            else{
+                somaticReadHpConsistencyRatio = 1.0;
+            }
+
+            // If the filter is not applied, the altCount will not equal the sum of somaticRead 
+            //(somaticRead H1_1 to H3 does not include SNPs present in both tumor and normal positions)
+            // if(somaticReadH1_1 + somaticReadH2_1 + somaticReadH3 + somaticReadUnTag != tumMpqAltCount){
+            //     std::cerr << "Error (SomaticFeatureFilter) => altCount is not equal to the sum of somaticRead : chr:" << chr << " pos: " << (*somaticVarIter).first + 1 << std::endl;
+            //     std::cerr << "altCount: " << tumMpqAltCount << " somaticReadH1-1: " << somaticReadH1_1 << " somaticReadH2-1: " << somaticReadH2_1 << " somaticReadH3: " << somaticReadH3 << " somaticReadUnTag: " << somaticReadUnTag << std::endl;
+            //     exit(1);
+            // }
+
+            double zScore = -1.0;
+            if((*somaticVarIter).second.inDenseTumorInterval){
+                if((*somaticVarIter).second.zScore < 0.0){
+                    std::cerr << "Error(zScore) => chr: " << chr << " pos: " << ((*somaticVarIter).first) + 1 << " zScore: " << (*somaticVarIter).second.zScore << std::endl;
+                    exit(1);
+                }else{
+                    zScore = (*somaticVarIter).second.zScore;
+                }
+            }
             
             //HP3 SNP position (1-base)
             int HP3pos = (*somaticVarIter).first + 1;
-
+            
             //write information
-            (*tagHP3Log) << std::fixed << std::setprecision(3) 
-                        << chr << " \t"  //1 
+            // (*tagHP3Log) << std::fixed << std::setprecision(3) 
+                        // << chr << " \t"  
+            (*tagHP3Log)<< chr << " \t"  //1 
                         << HP3pos << "\t"  //2
-                        << readCount << "\t\t"  //3
-                        << "(" << totalHP1WithHP3Read << "," << totalHP2WithHP3Read << "," << totalOnlyHP3Read << "," << totalMessyHPRead << ")\t" //4 
-                        << unTagCount << "\t\t"  //5
-                        << HP1withHP3ReadRatio <<"\t"  //6
-                        << HP2WithHP3ReadRatio << "\t"  //7
-                        << OnlyHP3ReadRatio << "\t"  //8
-                        << messyHPReadRatio << "\t\t"  //9
-                        << norVAF << "\t"  //10
-                        << tumVAF << "\t\t"  //11
-                        << subtractDepth << "\t"  //12 
-                        << norDepth << "\t"  //13
-                        << tumDepth << "\t"  //14
-                        << norDeletionCount << "\t"  //15
-                        << tumDeletionCount << "\t"  //16
-                        << norDeletionRatio << "\t"  //17
-                        << tumDeletionRatio << "\t"  //18
-                        << norMpqVAF << "\t" //19
-                        << tumMpqVAF << "\t\t" //20
-                        << norVAF_substract << "\t" //21
-                        << tumVAF_substract << "\t\t" //22
-                        << norMPQReadRatio << "\t" //23
-                        << tumLowMpqReadRatio << "\t" //24
-                        << GTtype <<"\n";  //25
+                        << "." << "\t"  //3
+                        << RefBase << "\t" //4
+                        << AltBase << "\t" //5
+                        << tumMpqAltCount << "\t" //6
+                        << readCount << "\t\t"  //7
+                        << norAltCount << "\t" //8
+                        << pure_H1_1_read << "\t" //9
+                        << pure_H2_1_read << "\t" //10
+                        << pure_H3_read << "\t" //11
+                        << Mixed_HP_read << "\t" //12
+                        << unTagCount << "\t\t"  //13
+                        << pure_H1_1_readRatio <<"\t"  //14
+                        << pure_H2_1_readRatio << "\t"  //15
+                        << pure_H3_readRatio << "\t"  //16
+                        << mixed_HP_readRatio << "\t\t"  //17
+                        << norVAF << "\t"  //18
+                        << tumVAF << "\t\t"  //19   
+                        << norMpqVAF << "\t" //20
+                        << tumMpqVAF << "\t\t" //21
+                        << norVAF_substract << "\t" //22
+                        << tumVAF_substract << "\t\t" //23
+                        << norDepth << "\t"  //24
+                        << tumDepth << "\t"  //25
+                        << subtractDepth << "\t"  //26 
+                        << norDeletionCount << "\t"  //27
+                        << tumDeletionCount << "\t"  //28
+                        << norDeletionRatio << "\t"  //29
+                        << tumDeletionRatio << "\t"  //30
+                        << norMPQReadRatio << "\t" //31
+                        << tumLowMpqReadRatio << "\t" //32
+                        << (*somaticVarIter).second.shannonEntropy << "\t" //33
+                        << (*somaticVarIter).second.homopolymerLength << "\t\t" //34
+                        << H1readCount << "\t" //35
+                        << H2readCount << "\t" //36
+                        << H1_1readCount << "\t" //37
+                        << H2_1readCount << "\t" //38
+                        << H3readCount << "\t" //39
+                        << germlineReadHpCount << "\t" //40
+                        << germlineReadHpConsistencyRatio << "\t" //41
+                        << somaticReadHpConsistencyRatio << "\t" //42
+                        << baseOnGermlineReadHpConsistencyRatio << "\t" //43
+                        << somaticVarReadH1_1 << "\t" //44
+                        << somaticVarReadH2_1 << "\t" //45
+                        << somaticVarReadH3 << "\t" //46
+                        << untaggedReadCount << "\t" //47
+                        << (*somaticVarIter).second.MeanAltCountPerVarRead << "\t" //48
+                        << zScore << "\t" //49
+                        << (*somaticVarIter).second.intervalSnpCount << "\t" //50
+                        << mergedChrVarinat[chr][(*somaticVarIter).first].isExistNormal << "\t" //51
+                        << GTtype <<"\n";  //52
                         
             somaticVarIter++;          
         }
@@ -2472,6 +3282,58 @@ void SomaticVarCaller::WriteOtherSomaticHpLog(const HaplotagParameters &params, 
     (*OtherHpSomaticVarLog).close();
     delete OtherHpSomaticVarLog;
     OtherHpSomaticVarLog = nullptr;
+}
+
+void SomaticVarCaller::WriteDenseTumorSnpIntervalLog(const HaplotagParameters &params, const std::vector<std::string> &chrVec){
+    std::ofstream *closeSomaticSnpIntervalLog=NULL;
+    std::string logPosfix = "_denseTumorSnpInterval.log";
+    closeSomaticSnpIntervalLog=new std::ofstream(params.resultPrefix + logPosfix);
+
+    int totalIntervalCount = 0;
+    for(auto chr: chrVec){
+        totalIntervalCount += (*denseTumorSnpInterval)[chr].size();
+    }
+
+    if(!closeSomaticSnpIntervalLog->is_open()){
+        std::cerr<< "Fail to open write file: " << params.resultPrefix + logPosfix << "\n";
+        exit(1);
+    }else{
+        (*closeSomaticSnpIntervalLog) << "################################\n";
+        (*closeSomaticSnpIntervalLog) << "# Dense Tumor SNP Interval Log #\n";
+        (*closeSomaticSnpIntervalLog) << "################################\n";
+        (*closeSomaticSnpIntervalLog) << "##MappingQualityThreshold:"  << params.qualityThreshold << "\n";
+        (*closeSomaticSnpIntervalLog) << "##Tatal intervals:"  << totalIntervalCount << "\n";
+        (*closeSomaticSnpIntervalLog) << "#CHROM\t"
+                                      << "startPos-endPos\t"
+                                      << "SnpCount\t"
+                                      << "totalAltMean\t"
+                                      << "stdDev\t"
+                                      << "zScore\n"; //standard deviation
+    }
+
+    for(auto chr: chrVec){
+        for(auto intervalIter: (*denseTumorSnpInterval)[chr]){
+            int startPos = intervalIter.first;
+            int endPos = intervalIter.second.first;
+            int snpCount = intervalIter.second.second.snpCount;
+
+            (*closeSomaticSnpIntervalLog) << chr << ":"
+                                    << startPos + 1 << "-"
+                                    << endPos + 1 << "\t"
+                                    << snpCount << "\t"
+                                    << intervalIter.second.second.totalAltMean << "\t"
+                                    << intervalIter.second.second.StdDev << "\n";
+            for(auto snpIter: intervalIter.second.second.snpAltMean){
+                double zScore = intervalIter.second .second.snpZscore[snpIter.first];
+                (*closeSomaticSnpIntervalLog) <<"#snp:altMean:zScore=>  " << snpIter.first + 1 << " : " << snpIter.second << " : " << zScore << "\n";
+            }
+            (*closeSomaticSnpIntervalLog) << "#\n";
+            
+        }
+    }
+    (*closeSomaticSnpIntervalLog).close();
+    delete closeSomaticSnpIntervalLog;
+    closeSomaticSnpIntervalLog = nullptr;
 }
 
 std::map<std::string, std::map<int, HP3_Info>> SomaticVarCaller::getSomaticChrPosInfo(){
@@ -2898,30 +3760,30 @@ void highConBenchmark::parserProcess(std::string &input, VCF_Info &Info, std::ma
         RefAlt tmp;
         tmp.Ref = fields[3]; 
         tmp.Alt = fields[4];
-        mergedChrVarinat[chr][pos].Variant[Genome::SEQC_HIGH_CON] = tmp;
-        mergedChrVarinat[chr][pos].isExistSeqcHighCon = true;
+        mergedChrVarinat[chr][pos].Variant[Genome::HIGH_CON_SOMATIC] = tmp;
+        mergedChrVarinat[chr][pos].isExistHighConSomatic = true;
     }
 }
 
 void highConBenchmark::recordDelReadCount(const std::string &chr, std::map<int, RefAltSet>::iterator &currentVariantIter){
     if(!openTestingFunc) return;
     
-    if(currentVariantIter->second.isExistSeqcHighCon){
+    if(currentVariantIter->second.isExistHighConSomatic){
         int pos = (*currentVariantIter).first;
         posAltRefDelCount[chr][pos].delCount++;
 
         //record somatic position for record crossing high con snp read
         highConSomaticPos.push_back(std::make_pair(pos, SnpHP::NONE_SNP));
-    }        
+    }
 }
 
 void highConBenchmark::recordRefAltAlleleCount(const std::string &chr, std::string &base, std::map<int, RefAltSet>::iterator &currentVariantIter){
     if(!openTestingFunc) return;
 
-    if(currentVariantIter->second.isExistSeqcHighCon){
+    if(currentVariantIter->second.isExistHighConSomatic){
         int pos = currentVariantIter->first;
-        std::string refAllele = currentVariantIter->second.Variant[Genome::SEQC_HIGH_CON].Ref;
-        std::string altAllele = currentVariantIter->second.Variant[Genome::SEQC_HIGH_CON].Alt;
+        std::string refAllele = currentVariantIter->second.Variant[Genome::HIGH_CON_SOMATIC].Ref;
+        std::string altAllele = currentVariantIter->second.Variant[Genome::HIGH_CON_SOMATIC].Alt;
 
         int baseHP = SnpHP::NONE_SNP;
 
@@ -2936,14 +3798,24 @@ void highConBenchmark::recordRefAltAlleleCount(const std::string &chr, std::stri
     }
 }
 
-void highConBenchmark::recordCrossingHighConSnpRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, RefAltSet> &currentChrVariants){
-    // if not open testing function, return
-    if(!openTestingFunc) return;
-
+somaticReadLog highConBenchmark::createBasicSomaticReadLog(const std::string &chr, std::string &readID, std::string &hpResult, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, int> &hpCount){
     somaticReadLog tmp;
     tmp.chr = chr;
     tmp.readID = readID;
     tmp.hpResult = hpResult;
+    tmp.germlineVarSimilarity = norHPsimilarity;
+    tmp.deriveByHpSimilarity = deriveByHpSimilarity;
+    tmp.germlineSnpCount = hpCount[SnpHP::GERMLINE_H1] + hpCount[SnpHP::GERMLINE_H2];
+    tmp.tumorSnpCount = hpCount[SnpHP::SOMATIC_H3];
+
+    return tmp;
+}
+
+void highConBenchmark::recordCrossingHighConSnpRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, RefAltSet> &currentChrVariants){
+    // if not open testing function, return
+    if(!openTestingFunc) return;
+
+    somaticReadLog tmp = createBasicSomaticReadLog(chr, readID, hpResult, norHPsimilarity, deriveByHpSimilarity, hpCount);
 
     bool isCrossHighConSomatic = false;
     bool existHighConVaraints = false;
@@ -2995,14 +3867,11 @@ void highConBenchmark::recordCrossingHighConSnpRead(const std::string &chr, std:
     }
 }
 
-void highConBenchmark::recordTaggedSomaticRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, RefAltSet> &currentChrVariants){
+void highConBenchmark::recordTaggedSomaticRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, RefAltSet> &currentChrVariants){
     // if not open testing function, return
     if(!openTestingFunc) return;
 
-    somaticReadLog tmp;
-    tmp.chr = chr;
-    tmp.readID = readID;
-    tmp.hpResult = hpResult;
+    somaticReadLog tmp = createBasicSomaticReadLog(chr, readID, hpResult, norHPsimilarity, deriveByHpSimilarity, hpCount);
 
     bool readExistHighConSomatic = false;
 
@@ -3011,7 +3880,7 @@ void highConBenchmark::recordTaggedSomaticRead(const std::string &chr, std::stri
         int pos = varIter->first;
         int snpHP = varIter->second;
         if(currentChrVariants.find(pos) != currentChrVariants.end()){
-            if(currentChrVariants[pos].isExistSeqcHighCon && (snpHP == SnpHP::SOMATIC_H3 || snpHP == SnpHP::SOMATIC_H4)){
+            if(currentChrVariants[pos].isExistHighConSomatic && (snpHP == SnpHP::SOMATIC_H3 || snpHP == SnpHP::SOMATIC_H4)){
                 tmp.somaticSnpHp[pos] = snpHP;
                 readExistHighConSomatic = true;
             }
@@ -3021,6 +3890,29 @@ void highConBenchmark::recordTaggedSomaticRead(const std::string &chr, std::stri
 
     if(readExistHighConSomatic){
         taggedSomaticReadVec.push_back(tmp);
+    }
+}
+
+void highConBenchmark::recordTaggedRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, RefAltSet> &currentChrVariants){
+    // if not open testing function, return
+    if(!openTestingFunc) return;
+    
+    if(hpResult != "."){
+        somaticReadLog tmp = createBasicSomaticReadLog(chr, readID, hpResult, norHPsimilarity, deriveByHpSimilarity, hpCount);
+
+        auto varIter = variantsHP.begin();
+        while(varIter != variantsHP.end()){
+            int pos = varIter->first;
+            int snpHP = varIter->second;
+            if(currentChrVariants.find(pos) != currentChrVariants.end()){
+                if(currentChrVariants[pos].isExistHighConSomatic && (snpHP == SnpHP::SOMATIC_H3 || snpHP == SnpHP::SOMATIC_H4)){
+                    tmp.somaticSnpHp[pos] = snpHP;
+                }
+            }
+            varIter++;
+        }
+
+        totalReadVec.push_back(tmp);
     }
 }
 
@@ -3043,7 +3935,7 @@ void highConBenchmark::writePosAlleleCountLog(std::vector<std::string> &chrVec, 
         (*refAltCountLog) << "#############################\n";
         (*refAltCountLog) << "# Somatic SNP allele count #\n";
         (*refAltCountLog) << "#############################\n";
-        (*refAltCountLog) << "##High confidence VCF:"  << params.seqcHighCon << "\n";
+        (*refAltCountLog) << "##High confidence VCF:"  << params.benchmarkVcf << "\n";
         (*refAltCountLog) << "##MappingQualityThreshold:"  << params.qualityThreshold << "\n";
         (*refAltCountLog) << "##Tatal variants:"  << totalVariantCount << "\n";
         (*refAltCountLog) << "#CHROM\t"
@@ -3059,8 +3951,8 @@ void highConBenchmark::writePosAlleleCountLog(std::vector<std::string> &chrVec, 
         for(auto &posIter : posAltRefDelCount[chr]){
             (*refAltCountLog) << chr << "\t"
                               << posIter.first << "\t"
-                              << mergedChrVarinat[chr][posIter.first].Variant[Genome::SEQC_HIGH_CON].Ref << "\t"
-                              << mergedChrVarinat[chr][posIter.first].Variant[Genome::SEQC_HIGH_CON].Alt << "\t"
+                              << mergedChrVarinat[chr][posIter.first].Variant[Genome::HIGH_CON_SOMATIC].Ref << "\t"
+                              << mergedChrVarinat[chr][posIter.first].Variant[Genome::HIGH_CON_SOMATIC].Alt << "\t"
                               << posIter.second.refCount << "\t"
                               << posIter.second.altCount << "\t"
                               << posIter.second.delCount << "\n";
@@ -3072,6 +3964,11 @@ void highConBenchmark::writePosAlleleCountLog(std::vector<std::string> &chrVec, 
     refAltCountLog = nullptr;
 }
 
+void highConBenchmark::writeTaggedReadLog(HaplotagParameters &params, std::string logPosfix){
+    // if not open testing function, return
+    if(!openTestingFunc) return;
+    writeReadLog(params, logPosfix, totalReadVec);
+}
 void highConBenchmark::writeTaggedSomaticReadLog(HaplotagParameters &params, std::string logPosfix){
     // if not open testing function, return
     if(!openTestingFunc) return;
@@ -3105,6 +4002,8 @@ void highConBenchmark::writeReadLog(HaplotagParameters &params, std::string logP
         }
     }
 
+    int totalReads = totalReadVec.size();
+
     if(!somaticReadLog->is_open()){
         std::cerr<< "Fail to open write file: " << params.resultPrefix + logPosfix << "\n";
         exit(1);
@@ -3112,13 +4011,18 @@ void highConBenchmark::writeReadLog(HaplotagParameters &params, std::string logP
         (*somaticReadLog) << "#####################\n";
         (*somaticReadLog) << "# Somatic Reads Log #\n";
         (*somaticReadLog) << "#####################\n";
-        (*somaticReadLog) << "##High confidence VCF: "  << params.seqcHighCon << "\n";
+        (*somaticReadLog) << "##High confidence VCF: "  << params.benchmarkVcf << "\n";
         (*somaticReadLog) << "##MappingQualityThreshold: "  << params.qualityThreshold << "\n";
+        (*somaticReadLog) << "##Tatal reads: "  << totalReads << "\n";
         (*somaticReadLog) << "##Tatal tagged somatic reads: "  << totalTaggedSomaticReads << "\n";
         (*somaticReadLog) << "##Tatal truth somatic reads: "  << totalTruthSomaticReads << "\n";
         (*somaticReadLog) << "##Truth somatic read ratio: "  << (float)totalTaggedSomaticReads / (float)totalTruthSomaticReads << "\n";
         (*somaticReadLog) << "#CHROM\t"
                           << "ReadID\t"
+                          << "germlineVarSimilarity\t"
+                          << "deriveByHpSimilarity\t"
+                          << "germlineSnpCount\t"
+                          << "tumorSnpCount\t"
                           << "Haplotype\t"
                           << "somaticVariant,HP\n";
     }
@@ -3127,6 +4031,10 @@ void highConBenchmark::writeReadLog(HaplotagParameters &params, std::string logP
 
         (*somaticReadLog) << somaticRead.chr << "\t"
                           << somaticRead.readID << "\t"
+                          << somaticRead.germlineVarSimilarity << "\t"
+                          << somaticRead.deriveByHpSimilarity << "\t"
+                          << somaticRead.germlineSnpCount << "\t"
+                          << somaticRead.tumorSnpCount << "\t"
                           << "H" << somaticRead.hpResult << "\t";
 
         for(auto SnpHp: somaticRead.somaticSnpHp){
@@ -3146,7 +4054,7 @@ void highConBenchmark::displaySomaticVarCount(std::vector<std::string> &chrVec, 
     for(auto &chr : chrVec){
         std::map<int, RefAltSet>::iterator chrVariantIter = mergedChrVarinat[chr].begin();
         while(chrVariantIter != mergedChrVarinat[chr].end()){
-            if(chrVariantIter->second.isExistSeqcHighCon){
+            if(chrVariantIter->second.isExistHighConSomatic){
                 totalVariantCount++;
             }
             chrVariantIter++;
@@ -3237,11 +4145,13 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const int geneType){
             (*tagResult) << "##qualityThreshold:"        << params.qualityThreshold           << "\n";
             (*tagResult) << "##percentageThreshold:"     << params.percentageThreshold        << "\n";
             (*tagResult) << "##tagSupplementary:"        << params.tagSupplementary           << "\n";
-            (*tagResult) << "#Read\t"
-                         << "Chr\t"
+            (*tagResult) << "#ReadID\t"
+                         << "CHROM\t"
                          << "ReadStart\t"
-                         << "Confidnet(%)\t"
-                         << "Haplotype\t"
+                         << "Confidnet(%)\t";
+            if(tagTumorMode)
+            (*tagResult) << "deriveByHpSimilarity\t";
+            (*tagResult) << "Haplotype\t"
                          << "PhaseSet\t"
                          << "TotalAllele\t"
                          << "HP1Allele\t"
@@ -3391,6 +4301,7 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const int geneType){
         //write read cover region in whole genome
         hpAfterInheritance->writeTagReadCoverRegionLog(params, "_readCoverRegion.bed", *chrVec, *chrLength);
         //write somatic read log
+        highConSomaticData.writeTaggedReadLog(params, "_totalRead.out");
         highConSomaticData.writeTaggedSomaticReadLog(params, "_somaticRead.out");
         highConSomaticData.writeCrossHighConSnpReadLog(params, "_crossHighConSnpRead.out");
         highConSomaticData.writePosAlleleCountLog(*chrVec, params, "_alleleCount.out", *mergedChrVarinat);
@@ -3461,10 +4372,7 @@ int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, s
 
             while( currentVariantIter != currentChrVariants.end() && (*currentVariantIter).first < ref_pos + length){
 
-                int curPos = (*currentVariantIter).first;
                 auto norVar = (*currentVariantIter).second.Variant[Genome::NORMAL];
-                int refAlleleLen = norVar.Ref.length();
-                int altAlleleLen = norVar.Alt.length();
 
                 int offset = (*currentVariantIter).first - ref_pos;
 
@@ -3474,98 +4382,8 @@ int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, s
                     uint8_t *q = bam_get_seq(&aln);
                     char base_chr = seq_nt16_str[bam_seqi(q,query_pos + offset)];
                     std::string base(1, base_chr);
-                    
-                    // currentVariant is SNP
-                    if( refAlleleLen == 1 && altAlleleLen == 1 ){
-                        // Detected that the base of the read is either REF or ALT. 
-                        if( (base == norVar.Ref) || (base == norVar.Alt) ){
 
-                            std::map<int, int>::iterator posPSiter = vcfSet[Genome::NORMAL].chrVariantPS[chrName].find((*currentVariantIter).first);
-
-                            if( posPSiter == vcfSet[Genome::NORMAL].chrVariantPS[chrName].end() ){
-                                std::cerr<< curPos << "\t"
-                                         << norVar.Ref << "\t"
-                                         << norVar.Alt << "\n";
-                                exit(EXIT_SUCCESS);
-                            }
-                            else{
-                                if( base == vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos]){
-                                    hp1Count++;
-                                    variantsHP[curPos]=0;
-                                }
-                                if( base == vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos]){
-                                    hp2Count++;
-                                    variantsHP[curPos]=1;
-                                }
-                                countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
-                            }
-                            
-                        }
-                    }
-                    // currentVariant is insertion
-                    else if( refAlleleLen == 1 && altAlleleLen != 1 && i+1 < aln_core_n_cigar){
-                        
-                        int hp1Length = vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos].length();
-                        int hp2Length = vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos].length();
-                        
-                        if ( ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 1 ) {
-                            // hp1 occur insertion
-                            if( hp1Length != 1 && hp2Length == 1 ){
-                                hp1Count++;
-                                variantsHP[curPos]=0;
-                            }
-                            // hp2 occur insertion
-                            else if( hp1Length == 1 && hp2Length != 1 ){
-                                hp2Count++;
-                                variantsHP[curPos]=1;
-                            }
-                        }
-                        else {
-                            // hp1 occur insertion
-                            if( hp1Length != 1 && hp2Length == 1 ){
-                                hp2Count++;
-                                variantsHP[curPos]=1;
-                            }
-                            // hp2 occur insertion
-                            else if( hp1Length == 1 && hp2Length != 1 ){
-                                hp1Count++;
-                                variantsHP[curPos]=0;
-                            }
-                        }
-                        countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
-                    } 
-                    // currentVariant is deletion
-                    else if( refAlleleLen != 1 && altAlleleLen == 1 && i+1 < aln_core_n_cigar) {
-                        
-                        int hp1Length = vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos].length();
-                        int hp2Length = vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos].length();
-                        
-                        if ( ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2 ) {
-                            // hp1 occur deletion
-                            if( hp1Length != 1 && hp2Length == 1 ){
-                                hp1Count++;
-                                variantsHP[curPos]=0;
-                            }
-                            // hp2 occur deletion
-                            else if( hp1Length == 1 && hp2Length != 1 ){
-                                hp2Count++;
-                                variantsHP[curPos]=1;
-                            }
-                        }
-                        else {
-                            // hp2 occur deletion
-                            if( hp1Length != 1 && hp2Length == 1 ){
-                                hp2Count++;
-                                variantsHP[curPos]=1;
-                            }
-                            // hp1 occur deletion
-                            else if( hp1Length == 1 && hp2Length != 1 ){
-                                hp1Count++;
-                                variantsHP[curPos]=0;
-                            }
-                        }
-                        countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
-                    } 
+                    germlineJudgeSnpHap(chrName, vcfSet, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, hp1Count, hp2Count, variantsHP, countPS);
 
                 }
                 currentVariantIter++;
@@ -3579,60 +4397,8 @@ int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, s
         }
             // 2: deletion from the reference
         else if( cigar_op == 2 ){
-            
-            if(ref_string != ""){
-                int del_len = length;
-                if ( ref_pos + del_len + 1 == (*currentVariantIter).first ){
-                    //if( homopolymerLength((*currentVariantIter).first , ref_string) >=3 ){
-                        // special case
-                    //}
-                }
-                else if( (*currentVariantIter).first >= ref_pos  && (*currentVariantIter).first < ref_pos + del_len ){
-                    // check variant in homopolymer
-                    if( homopolymerLength((*currentVariantIter).first , ref_string) >=3 ){
-                        
-                        int curPos = (*currentVariantIter).first;
-                        auto norVar = (*currentVariantIter).second.Variant[Genome::NORMAL];
-                        int refAlleleLen = norVar.Ref.length();
-                        int altAlleleLen = norVar.Alt.length();
-                        
-                        // SNP
-                        if( refAlleleLen == 1 && altAlleleLen == 1){
-                            // get the next match
-                            char base_chr = seq_nt16_str[bam_seqi(bam_get_seq(&aln), query_pos)];
-                            std::string base(1, base_chr);
 
-                            if( base == vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos]){
-                                hp1Count++;
-                                variantsHP[curPos]=0;
-                            }
-                            if( base == vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos]){
-                                hp2Count++;
-                                variantsHP[curPos]=1;
-                            }
-                            countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
-                        }
-                        
-                        // the read deletion contain VCF's deletion
-                        else if( refAlleleLen != 1 && altAlleleLen == 1){
-
-                            int hp1Length = vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos].length();
-                            int hp2Length = vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos].length();
-                            // hp1 occur deletion
-                            if( hp1Length != 1 && hp2Length == 1 ){
-                                hp1Count++;
-                                variantsHP[curPos]=0;
-                            }
-                            // hp2 occur deletion
-                            else if( hp1Length == 1 && hp2Length != 1 ){
-                                hp2Count++;
-                                variantsHP[curPos]=1;
-                            }
-                            countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
-                        }
-                    }
-                }
-            }
+            germlineJudgeDeletionHap(chrName, ref_string, ref_pos, length, query_pos, currentVariantIter, vcfSet, &aln, hp1Count, hp2Count, variantsHP, countPS);
             ref_pos += length;
         }
             // 3: skipped region from the reference
@@ -3654,95 +4420,17 @@ int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, s
         }
     }
 
+    // get the number of SVs occurring on different haplotypes in a read
+    germlineJudgeSVHap(aln, vcfSet, hp1Count, hp2Count, tagGeneType);
+
     double min,max;
-
-    auto readIter = vcfSet[tagGeneType].readSVHapCount.find(bam_get_qname(&aln));
-    if( readIter != vcfSet[tagGeneType].readSVHapCount.end() ){
-        hp1Count += vcfSet[tagGeneType].readSVHapCount[bam_get_qname(&aln)][0];
-        hp2Count += vcfSet[tagGeneType].readSVHapCount[bam_get_qname(&aln)][1];
-    }
-
-    if(hp1Count > hp2Count){
-        min = hp2Count;
-        max = hp1Count;
-    }
-    else{
-        min = hp1Count;
-        max = hp2Count;
-    }
-
     int hpResult = ReadHP::unTag;
-    if( max/(max+min) < percentageThreshold){
-        // no tag
-        pqValue = 0;
-        totalHighSimilarity++;
-    }
-    else{
-        if(hp1Count > hp2Count){
-            hpResult = ReadHP::H1;
-        }
-        if(hp1Count < hp2Count){
-            hpResult = ReadHP::H2;
-        }
-    }
 
-    if( max == 0 ){
-        pqValue=0;
-        totalWithOutVaraint++;
-    }
-    else if( max == ( max + min ) ){
-        pqValue=40;
-    }
-    else{
-        pqValue=-10*(std::log10((double)min/double(max+min)));
-    }
+    // determine the haplotype of the read
+    hpResult = germlineDetermineReadHap(hp1Count, hp2Count, min, max, percentageThreshold, pqValue, psValue, countPS, &totalHighSimilarity, &totalWithOutVaraint);
     
-    // cross two block
-    if( countPS.size() > 1  ){
-        hpResult = ReadHP::unTag;
-    }
-    //set psValue
-    if(hpResult != ReadHP::unTag){
-        auto psIter = countPS.begin();
-        psValue = (*psIter).first;
-    }
-
-    if(tagResult!=NULL){
-        //write tag log file
-        std::string hpResultStr = ((hpResult == ReadHP::unTag )? "." : std::to_string(hpResult) );
-        std::string psResultStr = ".";
-
-        if( hpResultStr != "." ){
-            auto psIter = countPS.begin();
-            psResultStr = std::to_string((*psIter).first);
-        }
-
-        (*tagResult)<< bam_get_qname(&aln)              << "\t"
-                    << bamHdr.target_name[aln.core.tid] << "\t"
-                    << aln.core.pos                     << "\t"
-                    << max/(max+min)                    << "\t"
-                    << hpResultStr                      << "\t"
-                    << psResultStr                      << "\t"
-                    << hp1Count+hp2Count                << "\t"
-                    << hp1Count                         << "\t"
-                    << hp2Count                         << "\t"
-                    << pqValue                          << "\t";
-
-
-        // print position and HP
-        for(auto v : variantsHP ){
-            (*tagResult)<< " " << v.first << "," << v.second ;
-        }
-
-        (*tagResult) << "\t";
-
-        // belong PS, number of variant
-        for(auto v : countPS ){
-            (*tagResult)<< " " << v.first << "," << v.second ;
-        }
-
-        (*tagResult)<< "\n";
-    }
+    //write tag log file
+    writeGermlineTagLog(tagResult, aln, bamHdr, hpResult, max, min, hp1Count, hp2Count, pqValue, variantsHP, countPS);
 
     return hpResult;
 }
@@ -3758,8 +4446,8 @@ int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
     //record variants on this read
     std::map<int, int> variantsHP;
 
-    // poition, deriveByHp
-    std::map<int, int> somaticVarDeriveHP;
+    // poition, <BaseHP,deriveByHp>
+    std::map<int, std::pair<int , int>> somaticVarDeriveHP;
 
     //record PS count(vcf type, PS value, count)
     std::map<int, int> tumCountPS;
@@ -3817,9 +4505,18 @@ int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
                         //record the somatic snp derive by which germline hp in this read
                         if((*chrPosReadCase)[chrName][(*currentVariantIter).first].isHighConSomaticSNP){
                             int deriveByHp = (*chrPosReadCase)[chrName][(*currentVariantIter).first].somaticReadDeriveByHP;
-                            somaticVarDeriveHP[(*currentVariantIter).first] = deriveByHp;
+                            int BaseHp = SnpHP::NONE_SNP;
+                            // if(base == (*currentVariantIter).second.Variant[Genome::TUMOR].Alt){
+                            //     BaseHp = SnpHP::SOMATIC_H3;
+                            // }
+                            if(variantsHP.find((*currentVariantIter).first) != variantsHP.end()){
+                                if(variantsHP[(*currentVariantIter).first] == SnpHP::SOMATIC_H3){
+                                    BaseHp = SnpHP::SOMATIC_H3;
+                                }
+                            }
+                            somaticVarDeriveHP[(*currentVariantIter).first] = std::make_pair(BaseHp, deriveByHp);
                         }
-                    }   
+                    } 
                     
                     highConSomaticData.recordRefAltAlleleCount(chrName, base, currentVariantIter);
                 }
@@ -3878,31 +4575,43 @@ int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
     // determine the haplotype of the read
     int hpResult = ReadHP::unTag;
     hpResult = determineReadHP(hpCount, pqValue, norCountPS, norHPsimilarity, tumHPsimilarity, percentageThreshold, &totalHighSimilarity, &totalCrossTwoBlock, &totalWithOutVaraint);
+    std::string readID_test = bam_get_qname(&aln);
 
     //Record read HP result before correction hp result
     if(!somaticVarDeriveHP.empty()){
         for(auto somaticVarIter : somaticVarDeriveHP){
             int pos = somaticVarIter.first;
-            int baseHP = SnpHP::NONE_SNP;
+            int baseHP = somaticVarIter.second.first;
+            int deriveHP = somaticVarIter.second.second;
             //if current read have somatic SNP then record the somatic SNP
-            if(variantsHP.find(pos) != variantsHP.end()){
-                baseHP = variantsHP[pos];
-            }
+            // if(variantsHP.find(pos) != variantsHP.end()){
+            //     baseHP = variantsHP[pos];
+            // }
             recordReadHp(pos, hpResult, baseHP, (*beforeCorrReadHpResult)[chrName]);
+            recordDeriveHp(pos, deriveHP, 0.0, (*beforeCorrReadHpResult)[chrName]);
         }
     }
 
-    //correction read HP result by deriveByHp 
+    //correction read HP result by deriveByHp
+    float deriveByHpSimilarity = 0.0;
+ 
     if(hpResult == ReadHP::H3){
         int deriveByH1 = 0;
         int deriveByH2 = 0;
         for(auto& somaticVarIter : somaticVarDeriveHP){
-            if(somaticVarIter.second == SnpHP::GERMLINE_H1){
-                deriveByH1++;
+            int baseHP = somaticVarIter.second.first;
+            int deriveHP = somaticVarIter.second.second;
+            if(baseHP == SnpHP::SOMATIC_H3){
+                if(deriveHP == SnpHP::GERMLINE_H1){
+                    deriveByH1++;
+                }
+                else if(deriveHP == SnpHP::GERMLINE_H2){
+                    deriveByH2++;
+                }
             }
-            else if(somaticVarIter.second == SnpHP::GERMLINE_H2){
-                deriveByH2++;
-            }
+            // if(strcmp(bam_get_qname(&aln), "SRR25005626.4310873") == 0){
+            //     std::cerr << "pos: " << somaticVarIter.first+1 << " BaseHP: " << BaseHP << " deriveHP: " << deriveHP << std::endl;
+            // }
         }
 
         int max = 0;
@@ -3920,14 +4629,16 @@ int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
             maxHp = SnpHP::GERMLINE_H2;
         }
 
-        float deriveByHpSimilarity = (max == 0) ? 0.0 : (max / (max + min));
+        //float deriveByHpSimilarity = (max == 0) ? 0.0 : ((float)max / ((float)max + (float)min));
+        deriveByHpSimilarity = (max == 0) ? 0.0 : ((float)max / ((float)max + (float)min));
 
         if(deriveByHpSimilarity != 1.0 && deriveByHpSimilarity != 0.0){
-            std::cerr << "deriveByHpSimilarity: " << deriveByHpSimilarity << std::endl;
-            std::cerr << "deriveByH1: " << deriveByH1 << " deriveByH2: " << deriveByH2 << std::endl;
-            std::cerr << "readID: " << bam_get_qname(&aln) << std::endl;
-            exit(1);
+            // std::cerr << "deriveByH1: " << deriveByH1 << " deriveByH2: " << deriveByH2 << std::endl;
+            // std::cerr << "deriveByHpSimilarity: " << deriveByHpSimilarity << std::endl;
+            // std::cerr << "readID: " << bam_get_qname(&aln) << std::endl;
+            //exit(1);
         }
+
 
         if(deriveByHpSimilarity >= percentageThreshold){
             switch(maxHp){
@@ -3942,7 +4653,7 @@ int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
     }
 
     if(hpCount[1] == 0 && hpCount[2] == 0){
-        if(hpResult == ReadHP::H3 && hpCount[3] != 0 && hpCount[4] == 0){
+        if(hpResult == ReadHP::H3 && hpCount[3] != 0){
             totalreadOnlyH3Snp++;
         }
     }
@@ -3951,12 +4662,14 @@ int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
     if(!somaticVarDeriveHP.empty()){
         for(auto somaticVarIter : somaticVarDeriveHP){
             int pos = somaticVarIter.first;
-            int baseHP = SnpHP::NONE_SNP;
+            int baseHP = somaticVarIter.second.first;
+            int deriveHP = somaticVarIter.second.second;
             //if current read have somatic SNP then record the somatic SNP
-            if(variantsHP.find(pos) != variantsHP.end()){
-                baseHP = variantsHP[pos];
-            }
+            // if(variantsHP.find(pos) != variantsHP.end()){
+            // baseHP = variantsHP[pos];
+            // }
             recordReadHp(pos, hpResult, baseHP, (*afterCorrReadHpResult)[chrName]);
+            recordDeriveHp(pos, deriveHP, deriveByHpSimilarity , (*afterCorrReadHpResult)[chrName]);
 
             // update cover region at somatic position
             if(hpResult != ReadHP::unTag){      
@@ -3988,10 +4701,15 @@ int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
     if( hpResult != ReadHP::unTag ){
         std::map<int, int>::iterator psIter;
         if(hpResult != ReadHP::H1 && hpResult != ReadHP::H2){
-            if(tumCountPS.size() != 0){
-                psIter = tumCountPS.begin();
+            // if(tumCountPS.size() != 0){
+            //     psIter = tumCountPS.begin();
+            //     psResultStr = std::to_string((*psIter).first);
+            //     psValue = (*psIter).first;    
+            // }
+            if(norCountPS.size() != 0){
+                psIter = norCountPS.begin();
                 psResultStr = std::to_string((*psIter).first);
-                psValue = (*psIter).first;    
+                psValue = (*psIter).first;
             }
             // the read only had unphased hetero tumor SNPs or homo SNPs
             else{
@@ -4008,8 +4726,9 @@ int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
     std::string readID = bam_get_qname(&aln);
     
     //record somatic read
-    highConSomaticData.recordCrossingHighConSnpRead(chrName, readID, hpResultStr, variantsHP, currentChrVariants);
-    highConSomaticData.recordTaggedSomaticRead(chrName, readID , hpResultStr, variantsHP, currentChrVariants);
+    highConSomaticData.recordTaggedRead(chrName, readID , hpResultStr, variantsHP, hpCount, norHPsimilarity, deriveByHpSimilarity, currentChrVariants);
+    highConSomaticData.recordTaggedSomaticRead(chrName, readID , hpResultStr, variantsHP, hpCount, norHPsimilarity, deriveByHpSimilarity, currentChrVariants);
+    highConSomaticData.recordCrossingHighConSnpRead(chrName, readID, hpResultStr, variantsHP, hpCount, norHPsimilarity, deriveByHpSimilarity, currentChrVariants);
 
     //write tag log file
     if(tagResult!=NULL){
@@ -4018,6 +4737,7 @@ int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
                     << bamHdr.target_name[aln.core.tid]             << "\t"
                     << aln.core.pos                                 << "\t"
                     << norHPsimilarity                              << "\t"
+                    << deriveByHpSimilarity                         << "\t"
                     << "H" << hpResultStr                           << "\t"
                     << psResultStr                                  << "\t"
                     << hpCount[1]+hpCount[2]+hpCount[3]+hpCount[4]  << "\t" //modify
@@ -4031,7 +4751,7 @@ int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
 
         // print position and HP
         for(auto v : variantsHP ){
-            (*tagResult)<< " " << v.first << "," << v.second ;
+            (*tagResult)<< " " << (v.first + 1) << "," << v.second ;
         }
 
         (*tagResult) << "\t";
@@ -4195,6 +4915,7 @@ void HaplotagProcess::TaggingProcess(HaplotagParameters &params)
     std::cerr<< "log file:              " << (params.writeReadLog ? (params.resultPrefix+".out") : "") << "\n";
     std::cerr<< "-------------------------------------------\n";
     std::cerr<< "somatic mode:                    " << (params.tagTumorSnp ? "true" : "false") << "\n"; 
+    std::cerr<< "somatic variant filter:          " << (params.enableFilter ? "true" : "false") << "\n"; 
     std::cerr<< "tag region:                      " << (!params.region.empty() ? params.region : "all") << "\n";
     if(params.tagTumorSnp)
     std::cerr<< "somatic calling mapping quality: " << params.somaticCallingMpqThreshold    << "\n"; 
@@ -4217,13 +4938,13 @@ void HaplotagProcess::TaggingProcess(HaplotagParameters &params)
 
     if(tagTumorMode){
         //load seqc high con file for benchmarking
-        if(params.seqcHighCon != ""){
+        if(params.benchmarkVcf != ""){
             std::time_t begin = time(NULL);
             std::cerr<< "loading high confidence SNP ... ";
             highConSomaticData.setTestingFunc(true);
-            highConSomaticData.loadHighConSomatic(params.seqcHighCon, vcfSet[Genome::SEQC_HIGH_CON], *mergedChrVarinat);
+            highConSomaticData.loadHighConSomatic(params.benchmarkVcf, vcfSet[Genome::HIGH_CON_SOMATIC], *mergedChrVarinat);
             std::cerr<< difftime(time(NULL), begin) << "s\n";
-            highConSomaticData.displaySomaticVarCount(vcfSet[Genome::SEQC_HIGH_CON].chrVec, *mergedChrVarinat);
+            highConSomaticData.displaySomaticVarCount(vcfSet[Genome::HIGH_CON_SOMATIC].chrVec, *mergedChrVarinat);
         }
         //load tumor snp vcf
         if(params.tumorSnpFile != ""){
@@ -4249,24 +4970,6 @@ void HaplotagProcess::TaggingProcess(HaplotagParameters &params)
     vcfParser.variantParser(params.snpFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
     vcfParser.reset();
     std::cerr<< difftime(time(NULL), begin) << "s\n";
-
-    // int tumor_snp_count = 0;
-    // int normal_snp_count = 0;
-    // for(auto& chrIter : vcfSet[Genome::NORMAL].chrVec){
-    //     auto chrVarIter = (*mergedChrVarinat)[chrIter].begin();
-    //     while(chrVarIter != (*mergedChrVarinat)[chrIter].end()){
-    //         if((*chrVarIter).second.isExistTumor){
-    //             tumor_snp_count++;
-    //         }
-    //         if((*chrVarIter).second.isExistNormal){
-    //             normal_snp_count++;
-    //         }
-    //         chrVarIter++;
-    //     }
-    // }
-    // std::cerr << "Normal SNP count: " << normal_snp_count << std::endl;
-    // std::cerr << "Tumor SNP count: " << tumor_snp_count << std::endl;
-
     // load SV vcf file
     if(params.svFile!=""){
         begin = time(NULL);
@@ -4330,11 +5033,33 @@ void HaplotagProcess::TaggingProcess(HaplotagParameters &params)
         }
     }
 
+    int tumor_snp_count = 0;
+    int normal_snp_count = 0;
+    int overlap_snp_count = 0;
+    for(auto& chrIter : (*chrVec)){
+        auto chrVarIter = (*mergedChrVarinat)[chrIter].begin();
+        while(chrVarIter != (*mergedChrVarinat)[chrIter].end()){
+            if((*chrVarIter).second.isExistTumor){
+                tumor_snp_count++;
+            }
+            if((*chrVarIter).second.isExistNormal){
+                normal_snp_count++;
+            }
+            if((*chrVarIter).second.isExistTumor && (*chrVarIter).second.isExistNormal){
+                overlap_snp_count++;
+            }
+            chrVarIter++;
+        }
+    }
+    std::cerr << "Normal SNP count: " << normal_snp_count << std::endl;
+    std::cerr << "Tumor SNP count: " << tumor_snp_count << std::endl;
+    std::cerr << "Overlap SNP count: " << overlap_snp_count << std::endl;
+
     //somatic SNPs calling
     if(tagTumorMode){
 
         //Count each base numbers at tumor SNP position in the Normal.bam
-        BamBaseCounter *NorBase = new BamBaseCounter();
+        BamBaseCounter *NorBase = new BamBaseCounter(params.enableFilter);
         NorBase->CountingBamBase(params.bamFile, params, (*mergedChrVarinat), *chrVec, *chrLength, Genome::TUMOR);
 
         //record the HP3 confidence of each read
@@ -4346,7 +5071,7 @@ void HaplotagProcess::TaggingProcess(HaplotagParameters &params)
         delete SomaticVar;
         NorBase = nullptr;
         SomaticVar = nullptr;
-        //return;
+        return;
     }
 
     // tag read

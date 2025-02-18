@@ -13,7 +13,7 @@ static const char *CORRECT_USAGE_MESSAGE =
 "   [General mode]\n"
 "      -s, --snp-file=NAME             input SNP vcf file.\n"
 "      -b, --bam-file=NAME             input bam file.\n"
-"      -r, --reference=NAME            reference fasta.\n\n"
+"      -r, --reference=NAME            reference FASTA.\n\n"
 //"required arguments for somatic mode (tumor/normal pair data):\n"
 "   [Somatic mode] (tumor/normal pair data):\n"
 "      --somaticMode                   enable somatic mutation tagging. default: false (disabled)\n"
@@ -42,7 +42,7 @@ static const char *CORRECT_USAGE_MESSAGE =
 
 static const char* shortopts = "s:b:o:t:q:p:r:";
 
-enum { OPT_HELP = 1, TAG_SUP, SV_FILE, REGION, LOG, MOD_FILE, CRAM, TUM_SNP, TUM_BAM, SC_MPQ, TAG_TUM, HIGH_CON};
+enum { OPT_HELP = 1, TAG_SUP, SV_FILE, REGION, LOG, MOD_FILE, CRAM, TUM_SNP, TUM_BAM, SC_MPQ, TAG_TUM, HIGH_CON, DISABLE_FILTER};
 
 static const struct option longopts[] = { 
     { "help",                 no_argument,        NULL, OPT_HELP },
@@ -53,6 +53,7 @@ static const struct option longopts[] = {
     { "reference",            required_argument,  NULL, 'r' },
     { "tagSupplementary",     no_argument,        NULL, TAG_SUP },
     { "somaticMode",          no_argument,        NULL, TAG_TUM },  //new
+    { "disableFilter",        no_argument,        NULL, DISABLE_FILTER },  //new
     { "sv-file",              required_argument,  NULL, SV_FILE },
     { "mod-file",             required_argument,  NULL, MOD_FILE },
     { "out-prefix",           required_argument,  NULL, 'o' },
@@ -88,6 +89,7 @@ namespace opt
     static bool tumorMode = false;  //new
     static std::string command="longphase ";
     static std::string highConSnp="";
+    static bool enableFilter = true;
 }
 
 void HaplotagOptions(int argc, char** argv)
@@ -116,6 +118,7 @@ void HaplotagOptions(int argc, char** argv)
             case TAG_SUP:  opt::tagSupplementary = true; break;
             case SC_MPQ: arg >> opt::qualityThreshold; break; //new
             case HIGH_CON: arg >> opt::highConSnp; break;
+            case DISABLE_FILTER: opt::enableFilter = false; break;
             case CRAM:     opt::outputFormat = "cram"; break;
             case LOG:      opt::writeReadLog = true; break;
             case OPT_HELP:
@@ -286,8 +289,8 @@ int HaplotagMain(int argc, char** argv, std::string in_version)
     ecParams.version=in_version;
     ecParams.command=opt::command;
     ecParams.outputFormat=opt::outputFormat;
-    ecParams.seqcHighCon=opt::highConSnp;
-
+    ecParams.benchmarkVcf=opt::highConSnp;
+    ecParams.enableFilter=opt::enableFilter;
     HaplotagProcess processor;
     processor.TaggingProcess(ecParams);
 
