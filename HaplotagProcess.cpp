@@ -1838,7 +1838,7 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
         SomaticFeatureFilter(somaticParams, currentChrVariants, chr, *somaticPosInfo);
 
         //find other somatic variants HP4/HP5 (temporary)
-        FindOtherSomaticSnpHP(chr, *somaticPosInfo, currentChrVariants);
+        // FindOtherSomaticSnpHP(chr, *somaticPosInfo, currentChrVariants);
 
         // Shannon entropy filter(temporary)
         ShannonEntropyFilter(chr, *somaticPosInfo, currentChrVariants, ref_string);
@@ -2413,7 +2413,7 @@ void SomaticVarCaller::SomaticFeatureFilter(const SomaticFilterParaemter &somati
         if(tumDeletionCount == 0){
             (*somaticVarIter).second.tumDelRatio = 0.0;
         }else{
-            (*somaticVarIter).second.tumDelRatio = (float)tumDeletionCount / ((float)tumDeletionCount + (float)tumDepth);
+            (*somaticVarIter).second.tumDelRatio = (float)tumDeletionCount / (float)tumDepth;
         }
 
         int somaticReadH1_1 = (*SomaticChrPosInfo)[chr][(*somaticVarIter).first].ReadHpCount[ReadHP::H1_1];
@@ -3213,7 +3213,7 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
             if(norDeletionCount == 0){
                 norDeletionRatio = 0.0;     
             }else{
-                norDeletionRatio = (float)norDeletionCount / ((float)norDeletionCount + (float)norDepth);
+                norDeletionRatio = (float)norDeletionCount / (float)norDepth;
             }
 
             // the distribution of reads HP at the current position
@@ -3295,11 +3295,11 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
 
             //difference of the germline consistency ratio in tumor and normal bam
             float germlineReadHpConsistencyRatioDifference = 0.0;
-            germlineReadHpConsistencyRatioDifference = abs(germlineReadHpConsistencyRatio - germlineReadHpConsistencyRatioInNorBam);
+            germlineReadHpConsistencyRatioDifference = germlineReadHpConsistencyRatio - germlineReadHpConsistencyRatioInNorBam;
             
             //difference of the percentage of germline HP in tumor and normal bam
             float percentageOfGermlineHpDifference = 0.0;
-            percentageOfGermlineHpDifference = abs(percentageOfGermlineHp - percentageOfGermlineHpInNorBam);
+            percentageOfGermlineHpDifference = percentageOfGermlineHp - percentageOfGermlineHpInNorBam;
 
             // If the filter is not applied, the altCount will not equal the sum of somaticRead 
             //(somaticRead H1_1 to H3 does not include SNPs present in both tumor and normal positions)
@@ -5083,7 +5083,7 @@ void HaplotagProcess::TaggingProcess(HaplotagParameters &params)
     std::cerr<< "log file:              " << (params.writeReadLog ? (params.resultPrefix+".out") : "") << "\n";
     std::cerr<< "-------------------------------------------\n";
     std::cerr<< "somatic mode:                    " << (params.tagTumorSnp ? "true" : "false") << "\n"; 
-    std::cerr<< "somatic variant filter:          " << (params.enableFilter ? "true" : "false") << "\n"; 
+    std::cerr<< "enable somatic variant filter:   " << (params.enableFilter ? "true" : "false") << "\n"; 
     std::cerr<< "tag region:                      " << (!params.region.empty() ? params.region : "all") << "\n";
     if(params.tagTumorSnp)
     std::cerr<< "somatic calling mapping quality: " << params.somaticCallingMpqThreshold    << "\n"; 
@@ -5239,7 +5239,7 @@ void HaplotagProcess::TaggingProcess(HaplotagParameters &params)
         delete SomaticVar;
         NorBase = nullptr;
         SomaticVar = nullptr;
-        return;
+        // return;
     }
 
     // tag read
