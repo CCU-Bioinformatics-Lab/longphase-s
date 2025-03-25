@@ -322,14 +322,14 @@ struct HP3_Info{
 };
 
 struct HistogramData {
-    size_t count;     
+    double count;     
     double percentage; 
-    HistogramData(size_t c = 0, double p = 0.0) : count(c), percentage(p) {}
+    HistogramData(double c = 0, double p = 0.0) : count(c), percentage(p) {}
 };
 
 struct Peak{
     size_t histo_index;
-    size_t height;
+    double height;
     PeakTrend left_trend;
     PeakTrend right_trend;
 
@@ -344,7 +344,7 @@ struct Peak{
         return a.height > b.height;
     }
 
-    Peak(size_t index = 0, size_t height = 0) 
+    Peak(size_t index = 0, double height = 0) 
         : histo_index(index), height(height), 
           left_trend(PeakTrend::NONE), 
           right_trend(PeakTrend::NONE),
@@ -356,9 +356,14 @@ class Histogram {
         const size_t MAX_HISTOGRAM_SIZE = 1000000;
 
         std::vector<HistogramData> histogram;
+
         size_t total_snp_count;
-        size_t max_height;
+        double max_height;
         std::pair<size_t, size_t> data_range;
+
+        // Gaussian filter parameters
+        static constexpr double DEFAULT_SIGMA = 1.0;
+        static constexpr int KERNEL_SIZE_MULTIPLIER = 6;
     
     public:
         Histogram();
@@ -367,16 +372,21 @@ class Histogram {
         void calculateStatistics();    
         const std::vector<HistogramData>& getHistogram() const { return histogram; }
         size_t getTotalSnpCount() const { return total_snp_count; }
-        size_t getMaxHeight() const { return max_height; }
+        double getMaxHeight() const { return max_height; }
         const std::pair<size_t, size_t>& getDataRange() const { return data_range; }
+
+        // New Gaussian filter functions
+        void applyGaussianFilter(double sigma = DEFAULT_SIGMA);
+        std::vector<double> createGaussianKernel(double sigma);
+        Histogram getSmoothedHistogram(double sigma);
 };
 
 
-class PeakSet {
+class PeakProcessor {
     private:
         struct Valley {
             size_t index;
-            size_t height;
+            double height;
             double percentage;
         };
 
@@ -396,7 +406,7 @@ class PeakSet {
             SaddlePointInfo() : found(false), index(-1) ,peak() ,next_peak() ,pre_peak() {}
         };
 
-        static constexpr double THRESHOLD_PERCENTAGE_LIMIT = 0.25;
+        static constexpr double THRESHOLD_PERCENTAGE_LIMIT = 0.3;
 
         std::vector<Peak> peaksVec;
         int mainPeakCount;
@@ -411,8 +421,8 @@ class PeakSet {
     public:
         std::vector<std::string> exec_log;
 
-        void findPeaks(const std::vector<HistogramData>& histogram, const size_t min_peak_count);
-        void removeClosePeaks(size_t minDistance);
+        void findPeaks(const std::vector<HistogramData>& histogram, const double min_peak_count);
+        void removeClosePeaks(const size_t minDistance);
         void determineTrends();  
         void findMainPeakCandidates();
         bool findFirstPriorityMainPeak();
@@ -425,14 +435,16 @@ class PeakSet {
 
         void writePeakValleyLog(const HaplotagParameters &params,
                                 const std::vector<HistogramData>& histogram,
+                                const std::vector<HistogramData>& smoothed_histogram,
                                 size_t &total_snp_count,
                                 const std::pair<size_t, size_t>& data_range,
-                                size_t &max_height,
-                                double &min_peak_ratio,
-                                size_t &peak_threshold);
+                                double &max_height,
+                                const double &MIN_PEAK_RATIO,
+                                double &peak_threshold,
+                                double &sigma);
 
-        PeakSet();
-        ~PeakSet();
+        PeakProcessor();
+        ~PeakProcessor();
 };
 
 class BamFileRAII {
@@ -548,10 +560,10 @@ class TumorPurityPredictor{
         const std::vector<std::string>& chrVec;    
         BamBaseCounter& norBase;
         std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo;
+
         size_t initial_data_size;
-
-
         FilterCounts filterCounts;
+
     public:
         TumorPurityPredictor(
             const HaplotagParameters& params,
@@ -562,10 +574,13 @@ class TumorPurityPredictor{
         ~TumorPurityPredictor();
         double predictTumorPurity();
         void buildPurityFeatureValueVec(std::vector<PurityData> &purityFeatureValueVec);
+
         int findPeakValleythreshold(const HaplotagParameters& params, const std::vector<PurityData> &purityFeatureValueVec);
         void peakValleyFilter(std::vector<PurityData> &purityFeatureValueVec, int &germlineReadHpCountThreshold);
+
         BoxPlotValue statisticPurityData(std::vector<PurityData> &purityFeatureValueVec);
         void removeOutliers(std::vector<PurityData> &purityFeatureValueVec, BoxPlotValue &plotValue);
+
         void writePurityLog(const HaplotagParameters &params, double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold);
 };
 
@@ -611,9 +626,10 @@ class SomaticVarCaller: public SomaticJudgeBase{
 
         void SetFilterParamsWithPurity(SomaticFilterParaemter &somaticParams, double &tumorPurity);
     
-        void StatisticTumorVariantData(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, const HaplotagParameters &params, BamBaseCounter *NorBase, VCF_Info *vcfSet
+        void extractTumorVariantData(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, const HaplotagParameters &params, BamBaseCounter *NorBase, VCF_Info *vcfSet
                                    , std::map<int, HP3_Info> &posReadCase, std::map<int, RefAltSet> &currentChrVariants, std::map<int, RefAltSet>::iterator &firstVariantIter
                                    , std::map<std::string, ReadVarHpCount> &readTotalHPcount, std::map<int, std::map<std::string, int>> &somaticPosReadID, std::string &ref_string);
+        
         void ClassifyReadsByCase(std::vector<int> &readPosHP3, std::map<int, int> &NorCountPS, std::map<int, int> &hpCount, const HaplotagParameters &params, std::map<int, HP3_Info> &somaticPosInfo);
 
         double calculateStandardDeviation(const std::map<int, double>& data, double mean);

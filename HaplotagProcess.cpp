@@ -1838,7 +1838,7 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
             }
             else if(int(bam.aln->core.pos) <= (*lastVariant).first){
                 //statistics for tumor SNP base count and depth, and classify cases
-                StatisticTumorVariantData(*bam.bamHdr, *bam.aln, chr, params, &NorBase, vcfSet, *somaticPosInfo, currentChrVariants, firstVariantIter, *readHpResultSet, *tumorPosReadCorrBaseHP, ref_string);
+                extractTumorVariantData(*bam.bamHdr, *bam.aln, chr, params, &NorBase, vcfSet, *somaticPosInfo, currentChrVariants, firstVariantIter, *readHpResultSet, *tumorPosReadCorrBaseHP, ref_string);
             }
         }
         hts_itr_destroy(Iter);
@@ -1971,7 +1971,7 @@ void SomaticVarCaller::InitialSomaticFilterParams(SomaticFilterParaemter &somati
     somaticParams.IntervalSnpCount_VAF_maxThr = 0.15;
 }
 
-void SomaticVarCaller::StatisticTumorVariantData(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, const HaplotagParameters &params, BamBaseCounter *NorBase, VCF_Info *vcfSet, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, RefAltSet> &currentChrVariants, std::map<int, RefAltSet>::iterator &firstVariantIter, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP, std::string &ref_string){
+void SomaticVarCaller::extractTumorVariantData(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, const HaplotagParameters &params, BamBaseCounter *NorBase, VCF_Info *vcfSet, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, RefAltSet> &currentChrVariants, std::map<int, RefAltSet>::iterator &firstVariantIter, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP, std::string &ref_string){
     
     std::map<int, int> hpCount;
     hpCount[1] = 0; 
@@ -3732,7 +3732,9 @@ TumorPurityPredictor::TumorPurityPredictor(
     std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo
 ) : params(params), chrVec(chrVec), norBase(norBase), chrPosSomaticInfo(chrPosSomaticInfo), initial_data_size(0){}
 
-TumorPurityPredictor::~TumorPurityPredictor(){}
+TumorPurityPredictor::~TumorPurityPredictor(){
+
+}
 
 double TumorPurityPredictor::predictTumorPurity(){
    std::cerr << "predicting tumor purity... ";
@@ -3914,32 +3916,35 @@ int TumorPurityPredictor::findPeakValleythreshold(const HaplotagParameters& para
         // calculate the percentage of data and resize the histogram
         histogram.calculateStatistics();
 
-        PeakSet peakSet;
+        double sigma = 0.5;
+        std::cerr << "[INFO] apply gaussian filter with sigma: " << sigma << std::endl;
+        // apply gaussian filter
+        Histogram smoothedHistogram = histogram.getSmoothedHistogram(sigma);
 
-        double min_peak_ratio = 0.05;
-        int min_distance = 2;
+        PeakProcessor peakSet;
 
-        size_t max_height = histogram.getMaxHeight();
-        size_t total_snp_count = histogram.getTotalSnpCount();
-        std::pair<size_t, size_t> data_range = histogram.getDataRange();
+        static constexpr double MIN_PEAK_RATIO = 0.05;
+        static constexpr int MIN_DISTANCE = 2;
 
-        size_t peak_threshold = std::max(
-            static_cast<size_t>((double)max_height * min_peak_ratio), 
+        double max_height = smoothedHistogram.getMaxHeight();
+        size_t total_snp_count = smoothedHistogram.getTotalSnpCount();
+        std::pair<size_t, size_t> data_range = smoothedHistogram.getDataRange();
+
+        double peak_threshold = std::max(
+            static_cast<size_t>((double)max_height * MIN_PEAK_RATIO), 
             static_cast<size_t>(1)
         );
 
         //find the peaks with the threshold
-        peakSet.findPeaks(histogram.getHistogram(), peak_threshold);
-
+        peakSet.findPeaks(smoothedHistogram.getHistogram(), peak_threshold);
         //remove close peak with min_distance
-        peakSet.removeClosePeaks(min_distance);
+        peakSet.removeClosePeaks(MIN_DISTANCE);
         //determine the trend of the peak
         peakSet.determineTrends();
         //find the main peak
         peakSet.findMainPeakCandidates();
-
         //set the threshold by the lowest valley
-        peakSet.SetThresholdByValley(histogram.getHistogram());
+        peakSet.SetThresholdByValley(smoothedHistogram.getHistogram());
 
         threshold = peakSet.getThreshold();
 
@@ -3952,11 +3957,13 @@ int TumorPurityPredictor::findPeakValleythreshold(const HaplotagParameters& para
         if(params.writeReadLog){
             peakSet.writePeakValleyLog(params, 
                                 histogram.getHistogram(),  
+                                smoothedHistogram.getHistogram(),  
                                 total_snp_count, 
                                 data_range, 
                                 max_height, 
-                                min_peak_ratio, 
-                                peak_threshold);
+                                MIN_PEAK_RATIO, 
+                                peak_threshold,
+                                sigma);
         }
 
     }catch(const std::exception& e){
@@ -4192,17 +4199,111 @@ void Histogram::calculateStatistics(){
     }
 }
 
-PeakSet::PeakSet(){
+void Histogram::applyGaussianFilter(double sigma) {
+    try{
+        if (histogram.empty()) {
+            throw std::runtime_error("histogram is empty");
+        }
+
+        std::vector<double> kernel = createGaussianKernel(sigma);
+        
+        if (kernel.empty() || kernel.size() % 2 == 0) {
+            throw std::invalid_argument("Invalid kernel: must be non-empty with odd size");
+        }
+
+        std::vector<HistogramData> temp = histogram; 
+        const size_t half_size = kernel.size() / 2;
+
+        // Apply convolution with edge padding
+        for (size_t i = 0; i < histogram.size(); ++i) {
+            double smoothed_count = 0.0;
+
+            for (size_t j = 0; j < kernel.size(); ++j) {
+                size_t idx = 0;
+                if (i + j >= half_size) {
+                    idx = i + j - half_size;
+                    if (idx >= histogram.size()) {
+                        idx = histogram.size() - 1;
+                    }
+                }
+
+                smoothed_count += temp[idx].count * kernel[j];
+            }
+
+            // Check for overflow
+            if (!std::isfinite(smoothed_count)) {
+                throw std::runtime_error("Invalid smoothed value detected: possible numerical overflow");
+            }
+
+            histogram[i].count = smoothed_count;
+        }
+
+        // Update the statistics
+        calculateStatistics();
+
+    }catch(const std::exception& e){
+        throw std::runtime_error("Gaussian filter failed: " + std::string(e.what()));
+    }
+} 
+
+std::vector<double> Histogram::createGaussianKernel(double sigma) {
+    const double MIN_SIGMA = 0.1;
+    const double MAX_SIGMA = 2.0;
+
+    if (sigma < MIN_SIGMA || sigma > MAX_SIGMA) {
+        throw std::invalid_argument("Sigma must be between 0.1 and 2.0");
+    }
+
+    // Calculate kernel size (6 * sigma + 1)
+    int kernel_size = static_cast<int>(KERNEL_SIZE_MULTIPLIER * sigma + 1);
+    if (kernel_size % 2 == 0) {
+        kernel_size += 1;  // Ensure odd kernel size
+    }
+
+    std::vector<double> kernel(kernel_size);
+    int half_size = kernel_size / 2;
+
+    // Create Gaussian kernel
+    double sum = 0.0;
+    for (int i = 0; i < kernel_size; ++i) {
+        double x = i - half_size;
+        kernel[i] = std::exp(-0.5 * (x / sigma) * (x / sigma));
+        sum += kernel[i];
+    }
+
+    // Normalize kernel
+    for (double& k : kernel) {
+        k /= sum;
+    }
+
+    return kernel;
+}
+
+Histogram Histogram::getSmoothedHistogram(double sigma) {
+    // create a copy of the current object
+    Histogram temp = *this; 
+    try{
+        // apply gaussian filter
+        temp.applyGaussianFilter(sigma);
+        return temp;
+    }catch(const std::exception& e){
+        std::cerr << "[ERROR] Failed to get smoothed histogram: " << e.what() << std::endl;
+        std::cerr << "[INFO] Falling back to original histogram" << std::endl;
+        return *this;
+    }
+} 
+
+PeakProcessor::PeakProcessor(){
     mainPeakCount = 0;
     mainPeak = MainPeakInfo();
     saddlePoint = SaddlePointInfo();
 }
 
-PeakSet::~PeakSet(){
+PeakProcessor::~PeakProcessor(){
 
 }
 
-void PeakSet::findPeaks(const std::vector<HistogramData>& histogram, const size_t min_peak_height){
+void PeakProcessor::findPeaks(const std::vector<HistogramData>& histogram, const double min_peak_height){
     try{
         if(histogram.empty()){
             throw std::invalid_argument("Histogram is empty");
@@ -4245,7 +4346,7 @@ void PeakSet::findPeaks(const std::vector<HistogramData>& histogram, const size_
     }
 }
 
-void PeakSet::removeClosePeaks(size_t minDistance) {
+void PeakProcessor::removeClosePeaks(const size_t minDistance) {
     try{
         if (peaksVec.empty()) {
             throw std::runtime_error("No peaks found in peaksVec");
@@ -4270,7 +4371,7 @@ void PeakSet::removeClosePeaks(size_t minDistance) {
     }
 }
 
-void PeakSet::determineTrends() {
+void PeakProcessor::determineTrends() {
     try{
         if(peaksVec.empty()){
             throw std::runtime_error("No peaks found in peaksVec");
@@ -4295,7 +4396,7 @@ void PeakSet::determineTrends() {
     }
 }
 
-void PeakSet::findMainPeakCandidates() {
+void PeakProcessor::findMainPeakCandidates() {
     try{
         //find the main peak
         if(peaksVec.empty()){
@@ -4332,7 +4433,7 @@ void PeakSet::findMainPeakCandidates() {
     }
 }
 
-bool PeakSet::findFirstPriorityMainPeak() {
+bool PeakProcessor::findFirstPriorityMainPeak() {
 
     bool found_first_main_peak = false;
     try{
@@ -4371,7 +4472,7 @@ bool PeakSet::findFirstPriorityMainPeak() {
     return found_first_main_peak;
 }
 
-bool PeakSet::findSaddlePoint() {
+bool PeakProcessor::findSaddlePoint() {
     //find the saddle point
     bool found_saddle_point = false;
     try{
@@ -4422,7 +4523,7 @@ bool PeakSet::findSaddlePoint() {
     return found_saddle_point;
 }
 
-bool PeakSet::findLowestValley(const std::vector<HistogramData>& histogram, size_t start_index, size_t end_index, Valley& result) {
+bool PeakProcessor::findLowestValley(const std::vector<HistogramData>& histogram, size_t start_index, size_t end_index, Valley& result) {
     // check the index
     if (start_index >= end_index || end_index > histogram.size()) {
         exec_log.push_back("[ERROR] (findLowestValley) index out of range: start: " + std::to_string(start_index) + " end: " + std::to_string(end_index) + " histogram.size(): " + std::to_string(histogram.size()));
@@ -4448,7 +4549,7 @@ bool PeakSet::findLowestValley(const std::vector<HistogramData>& histogram, size
     return found;
 }
 
-void PeakSet::SetThresholdByValley(const std::vector<HistogramData>& histogram){
+void PeakProcessor::SetThresholdByValley(const std::vector<HistogramData>& histogram){
     bool found_first_main_peak = false;
     mainPeak.peak = Peak();
     
@@ -4487,7 +4588,7 @@ void PeakSet::SetThresholdByValley(const std::vector<HistogramData>& histogram){
             }
 
 
-            //threshold >= 0.25, remove the lowest height valley
+            //threshold >= 0.3, remove the lowest height valley
             if(thresholdPercentage >= THRESHOLD_PERCENTAGE_LIMIT || !found_valley){
                 // reset the lowest valley
                 lowestValley = Valley();
@@ -4495,7 +4596,7 @@ void PeakSet::SetThresholdByValley(const std::vector<HistogramData>& histogram){
                 threshold = 0;
                 bool found_valley = false;
 
-                exec_log.push_back("[INFO] threshold >= 0.25%, reset threshold to " + std::to_string(threshold) + "(" + std::to_string(thresholdPercentage) + ")");
+                exec_log.push_back("[INFO] threshold >= " + std::to_string(THRESHOLD_PERCENTAGE_LIMIT) + "%, reset threshold to " + std::to_string(threshold) + "(" + std::to_string(thresholdPercentage) + ")");
                 exec_log.push_back("[INFO] check the pre peak of the saddle point");
                 
                 // saddle point is not the first peak
@@ -4522,7 +4623,7 @@ void PeakSet::SetThresholdByValley(const std::vector<HistogramData>& histogram){
 
     // Final check threshold
     if(thresholdPercentage >= THRESHOLD_PERCENTAGE_LIMIT){
-        exec_log.push_back("[INFO] Final threshold over 0.25%, set to 0: "+ std::to_string(threshold) + "(" + std::to_string(thresholdPercentage) + ")");
+        exec_log.push_back("[INFO] Final threshold over " + std::to_string(THRESHOLD_PERCENTAGE_LIMIT) + "%, set to 0: "+ std::to_string(threshold) + "(" + std::to_string(thresholdPercentage) + ")");
         thresholdPercentage = 0.0;
         threshold = 0;
     }
@@ -4530,7 +4631,7 @@ void PeakSet::SetThresholdByValley(const std::vector<HistogramData>& histogram){
 
 }
 
-Peak PeakSet::getPeak(size_t histo_index, int offset){
+Peak PeakProcessor::getPeak(size_t histo_index, int offset){
     try{
         for(size_t i = 0; i < peaksVec.size(); i++){
             if(peaksVec[i].histo_index == histo_index){
@@ -4547,11 +4648,11 @@ Peak PeakSet::getPeak(size_t histo_index, int offset){
     }
 }
 
-int PeakSet::getThreshold(){
+int PeakProcessor::getThreshold(){
     return threshold;
 }
 
-std::string PeakSet::transformTrend(const PeakTrend &trend) {
+std::string PeakProcessor::transformTrend(const PeakTrend &trend) {
     switch(trend) {
         case PeakTrend::NONE: return "NONE";
         case PeakTrend::UP: return "UP";
@@ -4561,14 +4662,16 @@ std::string PeakSet::transformTrend(const PeakTrend &trend) {
     }
 }
 
-void PeakSet::writePeakValleyLog(
+void PeakProcessor::writePeakValleyLog(
     const HaplotagParameters &params,
     const std::vector<HistogramData>& histogram,
+    const std::vector<HistogramData>& smoothed_histogram,
     size_t &total_snp_count,
     const std::pair<size_t, size_t>& data_range,
-    size_t &max_height,
-    double &min_peak_ratio,
-    size_t &peak_threshold) {
+    double &max_height,
+    const double &MIN_PEAK_RATIO,
+    double &peak_threshold,
+    double &sigma) {
 
     std::string postfix = "_germlineReadHpCountInNorBam_histogram.out";
     std::ofstream histogramFile(params.resultPrefix + postfix);
@@ -4580,20 +4683,29 @@ void PeakSet::writePeakValleyLog(
     histogramFile << "#total snp count: " << total_snp_count << std::endl;
     histogramFile << "#data range: " << data_range.first << " to " << data_range.second << std::endl;
     histogramFile << "#max height: " << max_height << std::endl;
-    histogramFile << "#min peak ratio: " << min_peak_ratio << std::endl;
+    histogramFile << "#min peak ratio: " << MIN_PEAK_RATIO << std::endl;
     histogramFile << "#peak threshold: " << peak_threshold << std::endl;
+    histogramFile << "#gaussian filter sigma: " << sigma << std::endl;
 
     //write exec log to file
     histogramFile << "#========Execution Log==========" << std::endl;
     for(const auto& log : exec_log){
         histogramFile << "#" << log << std::endl;
     }
-    histogramFile << "#========Histogram==========" << std::endl;
-    histogramFile << "#index (germline Hp read count in normal bam), height (snp count), percentage" << std::endl;
-    //write histogram to file
+    histogramFile << "\nindex (germline Hp read count in normal bam), height (snp count), percentage\n" << std::endl;
+    //write smoothed histogram 
+    histogramFile << "#Smoothed Histogram Start" << std::endl;
+    for(size_t i = 0; i < smoothed_histogram.size(); i++){
+        histogramFile << std::fixed << std::setprecision(2) << i << "\t" << smoothed_histogram[i].count << "\t" << smoothed_histogram[i].percentage << std::endl;
+    }
+    histogramFile << "#Smoothed Histogram End\n" << std::endl;
+
+    //write histogram 
+    histogramFile << "#Histogram Start" << std::endl;
     for(size_t i = 0; i < histogram.size(); i++){
         histogramFile << i << "\t" << histogram[i].count << "\t" << histogram[i].percentage << std::endl;
     }
+    histogramFile << "#Histogram End\n" << std::endl;
 
     histogramFile << "\n#==========Peak Trend Analysis==========" << std::endl;
     histogramFile << "#peak count: " << peaksVec.size() << std::endl;
