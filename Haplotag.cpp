@@ -292,7 +292,7 @@ int HaplotagMain(int argc, char** argv, std::string in_version)
     ecParams.benchmarkVcf=opt::highConSnp;
     ecParams.enableFilter=opt::enableFilter;
     HaplotagProcess processor;
-    processor.TaggingProcess(ecParams);
+    processor.taggingProcess(ecParams);
 
     return 0;
 }

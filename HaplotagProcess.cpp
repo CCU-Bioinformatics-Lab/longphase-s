@@ -11,7 +11,6 @@ BamBaseCounter::~BamBaseCounter(){
     delete ChrVariantBase;
 };
 
-
 void BamBaseCounter::CountingBamBase(
     const std::string &BamFile, 
     const HaplotagParameters &params, 
@@ -669,7 +668,7 @@ void BamBaseCounter::displayPosInfo(std::string chr, int pos){
     }
 }
 
-void germlineJudgeBase::germlineGetRefLastVarPos(
+void GermlineJudgeBase::germlineGetRefLastVarPos(
     std::vector<int>& last_pos, 
     const std::vector<std::string>& chrVec, 
     VCF_Info* vcfSet, 
@@ -687,7 +686,7 @@ void germlineJudgeBase::germlineGetRefLastVarPos(
 }
 
 
-void germlineJudgeBase::germlineJudgeSnpHap(
+void GermlineJudgeBase::germlineJudgeSnpHap(
     const std::string& chrName,
     VCF_Info* vcfSet,
     RefAlt& norVar,
@@ -804,7 +803,7 @@ void germlineJudgeBase::germlineJudgeSnpHap(
 }
 
 
-void germlineJudgeBase::germlineJudgeDeletionHap(
+void GermlineJudgeBase::germlineJudgeDeletionHap(
     const std::string& chrName,
     const std::string& ref_string,
     int& ref_pos,
@@ -872,7 +871,7 @@ void germlineJudgeBase::germlineJudgeDeletionHap(
     }
 }
 
-void germlineJudgeBase::germlineJudgeSVHap(const bam1_t &aln, VCF_Info* vcfSet, int& hp1Count, int& hp2Count, const int& tagGeneType){
+void GermlineJudgeBase::germlineJudgeSVHap(const bam1_t &aln, VCF_Info* vcfSet, int& hp1Count, int& hp2Count, const int& tagGeneType){
     auto readIter = vcfSet[tagGeneType].readSVHapCount.find(bam_get_qname(&aln));
     if( readIter != vcfSet[tagGeneType].readSVHapCount.end() ){
         hp1Count += vcfSet[tagGeneType].readSVHapCount[bam_get_qname(&aln)][0];
@@ -880,7 +879,7 @@ void germlineJudgeBase::germlineJudgeSVHap(const bam1_t &aln, VCF_Info* vcfSet, 
     }
 }
 
-int germlineJudgeBase::germlineDetermineReadHap(
+int GermlineJudgeBase::germlineDetermineReadHap(
     int& hp1Count, 
     int& hp2Count, 
     double& min, 
@@ -940,7 +939,7 @@ int germlineJudgeBase::germlineDetermineReadHap(
     return hpResult;
 }
 
-void germlineJudgeBase::writeGermlineTagLog(std::ofstream& tagResult, const bam1_t& aln, const bam_hdr_t& bamHdr, int& hpResult, double& max, double& min, int& hp1Count, int& hp2Count, int& pqValue, const std::map<int, int>& variantsHP, const std::map<int, int>& countPS){
+void GermlineJudgeBase::writeGermlineTagLog(std::ofstream& tagResult, const bam1_t& aln, const bam_hdr_t& bamHdr, int& hpResult, double& max, double& min, int& hp1Count, int& hp2Count, int& pqValue, const std::map<int, int>& variantsHP, const std::map<int, int>& countPS){
     // write tag log file
     std::string hpResultStr = ((hpResult == ReadHP::unTag) ? "." : std::to_string(hpResult));
     std::string psResultStr = ".";
@@ -1348,15 +1347,15 @@ void SomaticJudgeBase::recordDeriveHp(int &pos, int &deriveHP, float deriveHPsim
     }
 } 
 
-readHpDistriLog::readHpDistriLog(){
+ReadHpDistriLog::ReadHpDistriLog(){
 
 }
 
-readHpDistriLog::~readHpDistriLog(){
+ReadHpDistriLog::~ReadHpDistriLog(){
 
 }
 
-void readHpDistriLog::mergeLocalReadHp(const std::string &chr, std::map<int, ReadHpResult> &localReadHpResult){
+void ReadHpDistriLog::mergeLocalReadHp(const std::string &chr, std::map<int, ReadHpResult> &localReadHpResult){
     std::map<int, ReadHpResult>::iterator localReadHpIter = localReadHpResult.begin();
     while(localReadHpIter != localReadHpResult.end()){
         int pos = (*localReadHpIter).first;
@@ -1365,7 +1364,7 @@ void readHpDistriLog::mergeLocalReadHp(const std::string &chr, std::map<int, Rea
     }
 }
 
-void readHpDistriLog::writeReadHpDistriLog(HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec){
+void ReadHpDistriLog::writeReadHpDistriLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec){
     std::ofstream *readHpDistriLog=NULL;
     readHpDistriLog=new std::ofstream(params.resultPrefix + logPosfix);
 
@@ -1465,7 +1464,7 @@ void readHpDistriLog::writeReadHpDistriLog(HaplotagParameters &params, std::stri
     readHpDistriLog = nullptr;
 }
 
-void readHpDistriLog::writePosCoverRegionLog(HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec){
+void ReadHpDistriLog::writePosCoverRegionLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec){
     std::ofstream *posCoverRegionLog=NULL;
     posCoverRegionLog=new std::ofstream(params.resultPrefix + logPosfix);
 
@@ -1511,7 +1510,7 @@ void readHpDistriLog::writePosCoverRegionLog(HaplotagParameters &params, std::st
     posCoverRegionLog = nullptr;
 }
 
-void readHpDistriLog::writeTagReadCoverRegionLog(HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength){
+void ReadHpDistriLog::writeTagReadCoverRegionLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength){
     std::ofstream *tagReadCoverRegionLog=NULL;
     tagReadCoverRegionLog=new std::ofstream(params.resultPrefix + logPosfix);
 
@@ -1619,7 +1618,7 @@ void readHpDistriLog::writeTagReadCoverRegionLog(HaplotagParameters &params, std
 }
 
 
-void readHpDistriLog::removeNotDeriveByH1andH2pos(const std::vector<std::string> &chrVec){
+void ReadHpDistriLog::removeNotDeriveByH1andH2pos(const std::vector<std::string> &chrVec){
     for (const auto& chr : chrVec) {
         auto& chrResult = chrVarReadHpResult[chr];
         for (auto it = chrResult.begin(); it != chrResult.end(); ) {
@@ -1689,8 +1688,8 @@ BamFileRAII::~BamFileRAII(){
 SomaticVarCaller::SomaticVarCaller(){
     chrPosSomaticInfo = new std::map<std::string, std::map<int, HP3_Info>>();
     chrVarReadHpResult = new std::map<std::string, std::map<int, ReadHpResult>>();
-    callerReadHpDistri = new readHpDistriLog();
-    denseTumorSnpInterval = new std::map<std::string, std::map<int, std::pair<int, denseSnpInterval>>>();
+    callerReadHpDistri = new ReadHpDistriLog();
+    denseTumorSnpInterval = new std::map<std::string, std::map<int, std::pair<int, DenseSnpInterval>>>();
     chrReadHpResultSet = new std::map<std::string, std::map<std::string, ReadVarHpCount>>();
     chrTumorPosReadCorrBaseHP = new std::map<std::string, std::map<int, std::map<std::string, int>>>();
 }
@@ -1708,7 +1707,7 @@ void SomaticVarCaller::releaseMemory(){
     delete chrTumorPosReadCorrBaseHP;
 }
 
-void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat,const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, HaplotagParameters &params, VCF_Info *vcfSet, BamBaseCounter &NorBase){
+void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat,const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, const HaplotagParameters &params, VCF_Info *vcfSet, BamBaseCounter &NorBase){
     std::cerr << "collecting data for the tumor sample... ";
     std::time_t begin = time(NULL);
 
@@ -1725,7 +1724,7 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
     for(auto chr : chrVec){
         (*chrPosSomaticInfo)[chr] = std::map<int, HP3_Info>();
         (*chrVarReadHpResult)[chr] = std::map<int, ReadHpResult>();
-        (*denseTumorSnpInterval)[chr] = std::map<int, std::pair<int, denseSnpInterval>>();
+        (*denseTumorSnpInterval)[chr] = std::map<int, std::pair<int, DenseSnpInterval>>();
         (*chrReadHpResultSet)[chr] = std::map<std::string, ReadVarHpCount>();
         (*chrTumorPosReadCorrBaseHP)[chr] = std::map<int, std::map<std::string, int>>();
     }
@@ -1847,7 +1846,10 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
     hts_tpool_destroy(threadPool.pool);
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 
-    double tumorPurity = predictTumorPurity(params, chrVec, NorBase);
+    TumorPurityPredictor* tumorPurityPredictor = new TumorPurityPredictor(params, chrVec, NorBase, *chrPosSomaticInfo);
+    double tumorPurity = tumorPurityPredictor->predictTumorPurity();
+    delete tumorPurityPredictor;
+    // double tumorPurity = predictTumorPurity(params, chrVec, NorBase);
 
     // set filter params with tumor purity
     // std::cerr << "[Debug] Setting tumorPurity = 1.0" << std::endl;
@@ -1866,7 +1868,7 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
         std::map<int, ReadHpResult> *localCallerReadHpDistri = nullptr;
         
         // pos, (endPos, denseSnpInterval)
-        std::map<int, std::pair<int, denseSnpInterval>> *localDenseTumorSnpInterval = nullptr;
+        std::map<int, std::pair<int, DenseSnpInterval>> *localDenseTumorSnpInterval = nullptr;
 
         // read ID, SNP HP count 
         std::map<std::string, ReadVarHpCount> *readHpResultSet = nullptr;
@@ -1886,13 +1888,6 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
             tumorPosReadCorrBaseHP = &((*chrTumorPosReadCorrBaseHP)[chr]);
             currentChrVariants = mergedChrVarinat[chr];
         }
-
-        // since each read is sorted based on the start coordinates, to save time, 
-        // firstVariantIter keeps track of the first variant that each read needs to check.
-        std::map<int, RefAltSet>::iterator firstVariantIter = currentChrVariants.begin();
-        // get the coordinates of the last variant
-        // the tagging process will not be perform if the read's start coordinate are over than last variant.
-        std::map<int, RefAltSet>::reverse_iterator lastVariant = currentChrVariants.rbegin();
 
         //get close somatic SNP interval
         getDenseTumorSnpInterval(*somaticPosInfo, *readHpResultSet, *tumorPosReadCorrBaseHP, *localDenseTumorSnpInterval);
@@ -1967,16 +1962,16 @@ void SomaticVarCaller::InitialSomaticFilterParams(SomaticFilterParaemter &somati
     somaticParams.LowMpqRatioThreshold = 0.1;
 
     somaticParams.MessyReadRatioThreshold = 1.0;
-    somaticParams.MessyReadCountThreshold = 3;
+    somaticParams.ReadCount_minThr = 3;
 
-    somaticParams.HapConsistency_ReadCount_Thr = 10;
-    somaticParams.HapConsistency_VAF_Thr = 0.2;
+    somaticParams.HapConsistency_ReadCount_maxThr = 10;
+    somaticParams.HapConsistency_VAF_maxThr = 0.2;
 
-    somaticParams.IntervalSnpCount_ReadCount_Thr = 10;
-    somaticParams.IntervalSnpCount_VAF_Thr = 0.15;
+    somaticParams.IntervalSnpCount_ReadCount_maxThr = 10;
+    somaticParams.IntervalSnpCount_VAF_maxThr = 0.15;
 }
 
-void SomaticVarCaller::StatisticTumorVariantData(const  bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, HaplotagParameters &params, BamBaseCounter *NorBase, VCF_Info *vcfSet, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, RefAltSet> &currentChrVariants, std::map<int, RefAltSet>::iterator &firstVariantIter, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP, std::string &ref_string){
+void SomaticVarCaller::StatisticTumorVariantData(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, const HaplotagParameters &params, BamBaseCounter *NorBase, VCF_Info *vcfSet, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, RefAltSet> &currentChrVariants, std::map<int, RefAltSet>::iterator &firstVariantIter, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP, std::string &ref_string){
     
     std::map<int, int> hpCount;
     hpCount[1] = 0; 
@@ -2262,283 +2257,6 @@ void SomaticVarCaller::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curP
     }
 }
 
-double SomaticVarCaller::predictTumorPurity(const HaplotagParameters &params, const std::vector<std::string> &chrVec, BamBaseCounter &NorBase){
-    std::cerr << "predicting tumor purity... ";
-    std::time_t begin = time(NULL);
-
-    int filter_consistencyRatioInNorBam_count = 0;
-    int filter_consistencyRatioInNorBam_over_thr_count = 0;
-    int filter_consistencyRatio_count = 0;
-    int filter_readHpCountInNorBam_count = 0;
-    int filter_percentageOfGermlineHpInNorBam_count = 0;
-
-    // median, iqr
-    std::vector<double> purityFeatureValueVec;
-    std::vector<std::pair<std::string, int>> valueIndexVec;
-
-    size_t initial_data_size = 0;
-    for(auto chr : chrVec){
-        std::map<int, HP3_Info>::iterator somaticPosIter = (*chrPosSomaticInfo)[chr].begin();
-        while(somaticPosIter != (*chrPosSomaticInfo)[chr].end()){
-            int H1readCount = (*somaticPosIter).second.allReadHpCount[ReadHP::H1];
-            int H2readCount = (*somaticPosIter).second.allReadHpCount[ReadHP::H2];
-            int tumDepth = (*somaticPosIter).second.base.depth;
-            initial_data_size++;
-
-            // the ratio of the read count of H1 and H2
-            int germlineReadHpCount = H1readCount + H2readCount;
-            double germlineReadHpConsistencyRatio = 0.0;
-            if(H1readCount > 0 && H2readCount > 0){
-                germlineReadHpConsistencyRatio = (H1readCount > H2readCount) ? ((double)H1readCount / (double)(H1readCount + H2readCount)) : ((double)H2readCount / (double)(H1readCount + H2readCount));
-            }else if(H1readCount == 0 && H2readCount == 0){
-                germlineReadHpConsistencyRatio = 0.0;
-            }
-            else{
-                germlineReadHpConsistencyRatio = 1.0;
-            }
-
-            // the ratio of the germlineHP based on depth
-            double percentageOfGermlineHp = 0.0;
-            if(tumDepth > 0 && germlineReadHpCount > 0){
-                percentageOfGermlineHp = (double)germlineReadHpCount / (double)tumDepth;            
-            }
-
-
-            //read hp count in the normal bam
-            int norDepth = NorBase.getDepth(chr, (*somaticPosIter).first);
-            int H1readCountInNorBam = NorBase.getReadHpCountInNorBam(chr, (*somaticPosIter).first, ReadHP::H1);
-            int H2readCountInNorBam = NorBase.getReadHpCountInNorBam(chr, (*somaticPosIter).first, ReadHP::H2);
-            int germlineReadHpCountInNorBam = H1readCountInNorBam + H2readCountInNorBam;
-
-            double germlineReadHpConsistencyRatioInNorBam = 0.0;
-            if(H1readCountInNorBam > 0 && H2readCountInNorBam > 0){
-                germlineReadHpConsistencyRatioInNorBam = (H1readCountInNorBam > H2readCountInNorBam) ? ((double)H1readCountInNorBam / (double)germlineReadHpCountInNorBam) : ((double)H2readCountInNorBam / (double)germlineReadHpCountInNorBam);
-            }else if(H1readCountInNorBam == 0 && H2readCountInNorBam == 0){
-                germlineReadHpConsistencyRatioInNorBam = 0.0;
-            }
-            else{
-                germlineReadHpConsistencyRatioInNorBam = 1.0;
-            }
-
-            double percentageOfGermlineHpInNorBam = 0.0;
-            if(norDepth > 0 && germlineReadHpCountInNorBam > 0){
-                percentageOfGermlineHpInNorBam = (double)germlineReadHpCountInNorBam / (double)norDepth;
-            }
-
-            bool includeInStatistics = true;
-            // if(   germlineReadHpConsistencyRatioInNorBam == 0.0 
-            //    || germlineReadHpConsistencyRatioInNorBam >= 0.7
-            //    || germlineReadHpCountInNorBam <= 5
-            //    || percentageOfGermlineHpInNorBam <= 0.6
-            //    || germlineReadHpConsistencyRatio == 0.0
-            // ){
-            //     includeInStatistics = false;
-            // }
-
-            if(germlineReadHpConsistencyRatioInNorBam == 0.0){
-                includeInStatistics = false;
-                filter_consistencyRatioInNorBam_count++;
-            }else if(germlineReadHpConsistencyRatio == 0.0){
-                includeInStatistics = false;
-                filter_consistencyRatio_count++;
-            }else if(germlineReadHpConsistencyRatioInNorBam >= 0.7){
-                includeInStatistics = false;
-                filter_consistencyRatioInNorBam_over_thr_count++;
-            }else if(germlineReadHpCountInNorBam <= 5){
-                includeInStatistics = false;
-                filter_readHpCountInNorBam_count++;
-            }else if(percentageOfGermlineHpInNorBam <= 0.6){
-                includeInStatistics = false;
-                filter_percentageOfGermlineHpInNorBam_count++;
-            }else if(includeInStatistics){
-                purityFeatureValueVec.push_back(germlineReadHpConsistencyRatio);
-                valueIndexVec.push_back(std::make_pair(chr, (*somaticPosIter).first));
-                (*somaticPosIter).second.statisticPurity = true;
-            }
-
-            somaticPosIter++;
-        }
-    }
-    std::cerr << "initial data size: " << initial_data_size << std::endl;
-
-
-    std::cerr << "\n==========first filter==========" << std::endl;
-    std::cerr << "[INFO] Data count: " << purityFeatureValueVec.size() << std::endl;
-    std::cerr << "[INFO] consistencyRatioInNorBam == 0.0: " << filter_consistencyRatioInNorBam_count << std::endl;
-    std::cerr << "[INFO] consistencyRatio == 0.0: " << filter_consistencyRatio_count << std::endl;
-    std::cerr << "[INFO] consistencyRatioInNorBam <= 0.7: " << filter_consistencyRatioInNorBam_over_thr_count << std::endl;
-    std::cerr << "[INFO] readHpCountInNorBam <= 5: " << filter_readHpCountInNorBam_count << std::endl;
-    std::cerr << "[INFO] percentageOfGermlineHpInNorBam: " << filter_percentageOfGermlineHpInNorBam_count << std::endl;
-
-    BoxPlotValue plotValue = statisticPurityData(purityFeatureValueVec);
-
-    double median = plotValue.median;
-    double iqr = plotValue.iqr;
-
-    //purity prediction model
-    double purity;
-
-    //remove outliers for reduce noise 
-    size_t test_outliers = 0;
-    int iteration_times = 3;
-    for(int i = 0; i < iteration_times; i++){
-        std::printf("==========iteration %d==========\n", i+1);
-        std::vector<double>::iterator vecIter = purityFeatureValueVec.begin();
-        std::vector<std::pair<std::string, int>>::iterator valueIndexIter = valueIndexVec.begin();
-
-        if(purityFeatureValueVec.size() != valueIndexVec.size()) {
-            std::cerr << "Error: Vector sizes don't match!" << std::endl;
-            exit(1);
-        }
-
-        while(vecIter != purityFeatureValueVec.end()){
-            if(*vecIter < plotValue.lowerWhisker || *vecIter > plotValue.upperWhisker){
-                //remove outliers for reduce noise
-                vecIter = purityFeatureValueVec.erase(vecIter);
-
-                //remove ouliers index
-                std::string chr = valueIndexIter->first;
-                int pos = valueIndexIter->second;
-                (*chrPosSomaticInfo)[chr][pos].statisticPurity = false;
-                valueIndexIter = valueIndexVec.erase(valueIndexIter);
-                test_outliers++;
-            }else{
-                vecIter++;
-                valueIndexIter++;
-            }
-        }
-
-        plotValue = statisticPurityData(purityFeatureValueVec);
-        std::printf("[INFO] wisker : lower = %f, upper = %f\n", plotValue.lowerWhisker, plotValue.upperWhisker);
-        std::printf("[INFO] after remove outliers: %ld, data size: %ld\n", test_outliers, plotValue.data_size);
-    }
-
-
-    median = plotValue.median;
-    iqr = plotValue.iqr;
-
-    // purity prediction model
-    // purity = -2.1031 * median + 13.1080 * iqr + 3.1823 * median * median + -11.9640 * median * iqr + -4.8450 * iqr * iqr + -0.0921;
-    // purity = -2.5622 * median + 13.3930 * iqr + 3.4934 * median * median + -12.2045 * median * iqr + -4.9453 * iqr * iqr + 0.0548; //iteration = 2
-    purity = -2.7106 * median + 13.6299 * iqr + 3.6107 * median * median + -12.5210 * median * iqr + -4.9128 * iqr * iqr + 0.0978; // iteration = 3
-
-    if(purity > 1.15){
-        std::cerr << "[ERROR] The value of purity exceeds the model's prediction : " << purity << std::endl;
-        exit(1);
-    }else if(purity > 1.0){
-        purity = 1.0;
-    }else if(purity < 0.0){
-        std::cerr << "[ERROR] The value of purity exceeds the model's prediction : " << purity << std::endl;
-        exit(1);
-    }
-
-    std::cerr<< difftime(time(NULL), begin) << "s\n";
-    std::cerr << "[INFO] ===== tumor purity ===== : " << purity << std::endl;
-    std::cerr << "[INFO] median: " << plotValue.median << std::endl;
-    std::cerr << "[INFO] iqr: " << plotValue.iqr << std::endl;
-    std::cerr << "[INFO] q1: " << plotValue.q1 << std::endl;
-    std::cerr << "[INFO] q3: " << plotValue.q3 << std::endl;
-    std::cerr << "[INFO] lowerWhisker: " << plotValue.lowerWhisker << std::endl;
-    std::cerr << "[INFO] upperWhisker: " << plotValue.upperWhisker << std::endl;
-    std::cerr << "[INFO] outliers: " << plotValue.outliers << std::endl;
-    
-    std::ofstream *purityLog = new std::ofstream(params.resultPrefix+"_purity.out");
-
-    if(!purityLog->is_open()){
-        std::cerr<< "Fail to open write file: " << params.resultPrefix+"_purity.out" << "\n";
-        exit(1);
-    }
-
-    (*purityLog) << "#Initial data size: " << initial_data_size << std::endl;
-    (*purityLog) << "#==========initial filter==========" << std::endl;
-    (*purityLog) << "#consistencyRatioInNorBam: " << filter_consistencyRatioInNorBam_count << std::endl;
-    (*purityLog) << "#consistencyRatio: " << filter_consistencyRatio_count << std::endl;
-    (*purityLog) << "#consistencyRatioInNorBam_over_thr: " << filter_consistencyRatioInNorBam_over_thr_count << std::endl;
-    (*purityLog) << "#readHpCountInNorBam: " << filter_readHpCountInNorBam_count << std::endl;
-    (*purityLog) << "#percentageOfGermlineHpInNorBam: " << filter_percentageOfGermlineHpInNorBam_count << std::endl;
-    (*purityLog) << "#==========wisker filter===========" << std::endl;
-    (*purityLog) << "#iteration times: " << iteration_times << std::endl;
-    (*purityLog) << "#remove outliers: " << test_outliers << std::endl;
-    (*purityLog) << "#==========purity prediction===========" << std::endl;
-    (*purityLog) << "Tumor purity: " << purity << std::endl;
-    (*purityLog) << "Data size: " << plotValue.data_size << std::endl;
-    (*purityLog) << "Group:" << std::endl;
-    (*purityLog) << "Median: " << median << std::endl;
-    (*purityLog) << "Q1: " << plotValue.q1 << std::endl;
-    (*purityLog) << "Q3: " << plotValue.q3 << std::endl;
-    (*purityLog) << "IQR: " << plotValue.iqr << std::endl;
-    (*purityLog) << "Whiskers: " << plotValue.lowerWhisker << " to " << plotValue.upperWhisker << std::endl;
-    (*purityLog) << "Outliers: " << plotValue.outliers << std::endl;
-
-    (*purityLog).close();
-    delete purityLog;
-    purityLog = nullptr;
-
-    return purity;
-}
-
-BoxPlotValue SomaticVarCaller::statisticPurityData(std::vector<double> &purityFeatureValueVec){
-    BoxPlotValue plotValue;
-    plotValue.data_size = purityFeatureValueVec.size();
-    
-    // Handle empty data case
-    if (plotValue.data_size == 0) {
-        plotValue.median = plotValue.q1 = plotValue.q3 = 0.0;
-        plotValue.iqr = plotValue.lowerWhisker = plotValue.upperWhisker = 0.0;
-        plotValue.outliers = 0;
-        std::cerr << "[ERROR] (statisticPurityData) The data size is 0" << std::endl;
-        return plotValue;
-    }
-
-    // Sort the original data
-    std::sort(purityFeatureValueVec.begin(), purityFeatureValueVec.end());
-
-    // Define percentile calculation function using linear interpolation
-    auto percentile = [&](double p) -> double {
-        if (p < 0.0 || p > 1.0) {
-            throw std::invalid_argument("Percentile must be between 0 and 1");
-        }
-        
-        double pos = p * (plotValue.data_size - 1);
-        size_t idx = static_cast<size_t>(pos);
-        double frac = pos - idx;
-        
-        if (idx + 1 >= plotValue.data_size) {
-            return purityFeatureValueVec[plotValue.data_size - 1];
-        }
-        
-        return purityFeatureValueVec[idx] * (1.0 - frac) + 
-               purityFeatureValueVec[idx + 1] * frac;
-    };
-
-    try {
-        // Calculate quartiles and median
-        plotValue.q1 = percentile(0.25);      // First quartile
-        plotValue.median = percentile(0.5);    // Median
-        plotValue.q3 = percentile(0.75);      // Third quartile
-        plotValue.iqr = plotValue.q3 - plotValue.q1;  // Interquartile range
-        
-        // Calculate whiskers (1.5 * IQR rule)
-        plotValue.lowerWhisker = std::max(0.0, plotValue.q1 - 1.5 * plotValue.iqr);
-        plotValue.upperWhisker = plotValue.q3 + 1.5 * plotValue.iqr;
-        
-        // Count outliers (points beyond whiskers)
-        plotValue.outliers = 0;
-        for (const auto& value : purityFeatureValueVec) {
-            if (value < plotValue.lowerWhisker || value > plotValue.upperWhisker) {
-                plotValue.outliers++;
-            }
-        }
-            
-    } catch (const std::exception& e) {
-        std::cerr << "[ERROR] Error in statistical calculations: " << e.what() << std::endl;
-        exit(1);
-        // Handle error case
-    }
-
-    return plotValue;
-}
-
 void SomaticVarCaller::ClassifyReadsByCase(std::vector<int> &tumorAllelePosVec, std::map<int, int> &NorCountPS, std::map<int, int> &hpCount, const HaplotagParameters &params, std::map<int, HP3_Info> &somaticPosInfo){
     
     //decide whether to tag the read or not
@@ -2606,54 +2324,115 @@ void SomaticVarCaller::SetFilterParamsWithPurity(SomaticFilterParaemter &somatic
 
     somaticParams.tumorPurity = tumorPurity;
 
-    if (tumorPurity >= 0.9 && tumorPurity <= 1.0) {
-        somaticParams.HapConsistency_ReadCount_Thr = 10;
-        somaticParams.HapConsistency_VAF_Thr = 0.2;
+    // tumor purity 1.0
+    if (tumorPurity >= 0.9 && tumorPurity <= 1.0) 
+    {
+        somaticParams.norVAF_maxThr = 0.084;
+        somaticParams.norDepth_minThr = 1;
 
-        somaticParams.IntervalSnpCount_ReadCount_Thr = 10;
-        somaticParams.IntervalSnpCount_VAF_Thr = 0.15;
-    } else if (tumorPurity >= 0.7 && tumorPurity < 0.9) {
-        somaticParams.HapConsistency_ReadCount_Thr = 10;
-        somaticParams.HapConsistency_VAF_Thr = 0.15;
+        somaticParams.MessyReadRatioThreshold = 1.0;    
+        somaticParams.ReadCount_minThr = 4.0;
 
-        somaticParams.IntervalSnpCount_ReadCount_Thr = 10;
-        somaticParams.IntervalSnpCount_VAF_Thr = 0.12;
-    } else if (tumorPurity >= 0.5 && tumorPurity < 0.7) {
-        somaticParams.HapConsistency_ReadCount_Thr = 10;
-        somaticParams.HapConsistency_VAF_Thr = 0.1;
+        somaticParams.HapConsistency_ReadCount_maxThr = 12.0;
+        somaticParams.HapConsistency_VAF_maxThr = 0.238;
+        somaticParams.HapConsistency_somaticRead_minThr = 1.0;
 
-        somaticParams.IntervalSnpCount_ReadCount_Thr = 8;
-        somaticParams.IntervalSnpCount_VAF_Thr = 0.1;
-    } else if (tumorPurity >= 0.3 && tumorPurity < 0.5) {
-        somaticParams.HapConsistency_ReadCount_Thr = 6;
-        somaticParams.HapConsistency_VAF_Thr = 0.08;
+        somaticParams.IntervalSnpCount_ReadCount_maxThr = 12.0;
+        somaticParams.IntervalSnpCount_VAF_maxThr = 0.286;
+        somaticParams.IntervalSnpCount_minThr = 4.0;
+        somaticParams.zScore_maxThr = 4.621;
+    } 
+    // tumor purity 0.8
+    else if (tumorPurity >= 0.7 && tumorPurity < 0.9) 
+    {
+        somaticParams.norVAF_maxThr = 0.095;
+        somaticParams.norDepth_minThr = 1;
 
-        somaticParams.IntervalSnpCount_ReadCount_Thr = 6;
-        somaticParams.IntervalSnpCount_VAF_Thr = 0.08;
-    } else if (tumorPurity >= 0.1 && tumorPurity < 0.3) {
-        somaticParams.HapConsistency_ReadCount_Thr = 6;
-        somaticParams.HapConsistency_VAF_Thr = 0.06;
+        somaticParams.MessyReadRatioThreshold = 1.0;    
+        somaticParams.ReadCount_minThr = 3.0;
 
-        //not used interval snp count filter 
-        somaticParams.IntervalSnpCount_ReadCount_Thr = 1;
-        somaticParams.IntervalSnpCount_VAF_Thr = 0.00;
-    } else if (tumorPurity > 0.0 && tumorPurity < 0.1) {
-        somaticParams.HapConsistency_ReadCount_Thr = 5;
-        somaticParams.HapConsistency_VAF_Thr = 0.04;
+        somaticParams.HapConsistency_ReadCount_maxThr = 10.0;
+        somaticParams.HapConsistency_VAF_maxThr = 0.130;
+        somaticParams.HapConsistency_somaticRead_minThr = 1.0;
 
-        //not used interval snp count filter 
-        somaticParams.IntervalSnpCount_ReadCount_Thr = 1;
-        somaticParams.IntervalSnpCount_VAF_Thr = 0.00;
-    } else {
-        std::cerr << "[Error] tumor purity is not in the range of 0.0 to 1.0: " << tumorPurity << std::endl;
-        exit(1);
+        somaticParams.IntervalSnpCount_ReadCount_maxThr = 10.0;
+        somaticParams.IntervalSnpCount_VAF_maxThr = 0.133;
+        somaticParams.IntervalSnpCount_minThr = 4.0;
+        somaticParams.zScore_maxThr = 2.676;
+    } 
+    // tumor purity 0.6
+    else if (tumorPurity >= 0.5 && tumorPurity < 0.7) 
+    {
+        somaticParams.norVAF_maxThr = 0.105;
+        somaticParams.norDepth_minThr = 1;
+
+        somaticParams.MessyReadRatioThreshold = 1.0;    
+        somaticParams.ReadCount_minThr = 1.0;
+
+        somaticParams.HapConsistency_ReadCount_maxThr = 10.0;
+        somaticParams.HapConsistency_VAF_maxThr = 0.071;
+        somaticParams.HapConsistency_somaticRead_minThr = 0.0;
+
+        somaticParams.IntervalSnpCount_ReadCount_maxThr = 10.0;
+        somaticParams.IntervalSnpCount_VAF_maxThr = 0.105;
+        somaticParams.IntervalSnpCount_minThr = 4.0;
+        somaticParams.zScore_maxThr = 5.683;
     }
+    // tumor purity 0.4 
+    else if (tumorPurity >= 0.3 && tumorPurity < 0.5) 
+    {
+        somaticParams.norVAF_maxThr = 0.117;
+        somaticParams.norDepth_minThr = 1;
 
-    //messy read count threshold
-    if ( 0.4 < tumorPurity && tumorPurity <= 1.0) {
-        somaticParams.MessyReadCountThreshold = 3;
-    }else{
-        somaticParams.MessyReadCountThreshold = 2;
+        somaticParams.MessyReadRatioThreshold = 1.0;    
+        somaticParams.ReadCount_minThr = 1.0;
+
+        somaticParams.HapConsistency_ReadCount_maxThr = 8.0;
+        somaticParams.HapConsistency_VAF_maxThr = 0.035;
+        somaticParams.HapConsistency_somaticRead_minThr = 1.0;
+
+        somaticParams.IntervalSnpCount_ReadCount_maxThr = 8.0;
+        somaticParams.IntervalSnpCount_VAF_maxThr = 0.049;
+        somaticParams.IntervalSnpCount_minThr = 4.0;
+        somaticParams.zScore_maxThr = 3.043;
+    }
+    // tumor purity 0.2
+    else if (tumorPurity > 0 && tumorPurity < 0.3) 
+    {
+        somaticParams.norVAF_maxThr = 0.130;
+        somaticParams.norDepth_minThr = 1;
+
+        somaticParams.MessyReadRatioThreshold = 1.0;    
+        somaticParams.ReadCount_minThr = 1.0;
+
+        somaticParams.HapConsistency_ReadCount_maxThr = 8.0;
+        somaticParams.HapConsistency_VAF_maxThr = 0.020;
+        somaticParams.HapConsistency_somaticRead_minThr = 1.0;
+
+        somaticParams.IntervalSnpCount_ReadCount_maxThr = 8.0;
+        somaticParams.IntervalSnpCount_VAF_maxThr = 0.025;
+        somaticParams.IntervalSnpCount_minThr = 8.0;
+        somaticParams.zScore_maxThr = 1.953;
+    } 
+    else 
+    {
+        std::cerr << "[Warning] tumor purity is not in the range of 0.0 to 1.0: " << tumorPurity << std::endl;
+        std::cerr << "[Warning] setting default parameters" << std::endl;
+        // default parameters (tumor purity = 0.2)
+        somaticParams.norVAF_maxThr = 0.130;
+        somaticParams.norDepth_minThr = 1;
+
+        somaticParams.MessyReadRatioThreshold = 1.0;    
+        somaticParams.ReadCount_minThr = 1.0;
+
+        somaticParams.HapConsistency_ReadCount_maxThr = 8.0;
+        somaticParams.HapConsistency_VAF_maxThr = 0.020;
+        somaticParams.HapConsistency_somaticRead_minThr = 1.0;
+
+        somaticParams.IntervalSnpCount_ReadCount_maxThr = 8.0;
+        somaticParams.IntervalSnpCount_VAF_maxThr = 0.025;
+        somaticParams.IntervalSnpCount_minThr = 8.0;
+        somaticParams.zScore_maxThr = 1.953;
     }
 }
 
@@ -2759,33 +2538,24 @@ void SomaticVarCaller::SomaticFeatureFilter(const SomaticFilterParaemter &somati
         int somaticReadH1_1 = (*chrPosSomaticInfo)[chr][(*somaticVarIter).first].somaticReadHpCount[ReadHP::H1_1];
         int somaticReadH2_1 = (*chrPosSomaticInfo)[chr][(*somaticVarIter).first].somaticReadHpCount[ReadHP::H2_1];
 
-        //filter threshold 
-        // float OnlyHP3ReadRatioThreshold = 0.0;
-        // float VAF_upper_threshold = 1.0;
-        // float VAF_lower_threshold = 0.0;
-        // float tumDeletionRatioThreshold = 1.0;
-        // float tumLowMpqRatioThreshold = 1.0;
+        //normal VAF filter parameter
+        float norVAF_maxThr = somaticParams.norVAF_maxThr;
+        int norDepth_minThr = somaticParams.norDepth_minThr;
 
         //messy read filter parameter
-        float messyReadRatioThreshold = 1.0;
-        int readCountThreshold = 3;
+        float messyReadRatioThreshold = somaticParams.MessyReadRatioThreshold;
+        int readCountThreshold = somaticParams.ReadCount_minThr;
 
         //haplotype consistency filter parameter
-        float HapConsistency_VAF_Thr=0.2;
-        int HapConsistency_ReadCount_Thr=10;
+        float HapConsistency_VAF_maxThr=somaticParams.HapConsistency_VAF_maxThr;
+        int HapConsistency_ReadCount_maxThr=somaticParams.HapConsistency_ReadCount_maxThr;
+        int HapConsistency_somaticRead_minThr=somaticParams.HapConsistency_somaticRead_minThr;
 
         //interval snp count filter parameter
-        float IntervalSnpCount_VAF_Thr=0.15;
-        int IntervalSnpCount_ReadCount_Thr=10;
-
-        messyReadRatioThreshold = somaticParams.MessyReadRatioThreshold;
-        readCountThreshold = somaticParams.MessyReadCountThreshold;
-
-        HapConsistency_VAF_Thr = somaticParams.HapConsistency_VAF_Thr;
-        HapConsistency_ReadCount_Thr = somaticParams.HapConsistency_ReadCount_Thr;
-
-        IntervalSnpCount_VAF_Thr = somaticParams.IntervalSnpCount_VAF_Thr;
-        IntervalSnpCount_ReadCount_Thr = somaticParams.IntervalSnpCount_ReadCount_Thr;
+        float IntervalSnpCount_VAF_maxThr=somaticParams.IntervalSnpCount_VAF_maxThr;
+        int IntervalSnpCount_ReadCount_maxThr=somaticParams.IntervalSnpCount_ReadCount_maxThr;
+        int IntervalSnpCount_minThr=somaticParams.IntervalSnpCount_minThr;
+        float zScore_maxThr = somaticParams.zScore_maxThr;
 
         //Stage 1 filter
         // if((*somaticVarIter).second.isNormalPosLowVAF == false && somaticParams.applyFilter){
@@ -2838,7 +2608,7 @@ void SomaticVarCaller::SomaticFeatureFilter(const SomaticFilterParaemter &somati
         float norDepth = NorBase.getDepth(chr, (*somaticVarIter).first);
         
         //stage 1 filter
-        if (!(*somaticVarIter).second.isNormalPosLowVAF || !(norVAF <= 0.1 && norDepth > 1)) {
+        if (!(*somaticVarIter).second.isNormalPosLowVAF || !(norVAF <= norVAF_maxThr && norDepth > norDepth_minThr)) {
             stage1_filtered = true;
         }
 
@@ -2852,21 +2622,22 @@ void SomaticVarCaller::SomaticFeatureFilter(const SomaticFilterParaemter &somati
         
         // Haplotype consistency filter check
         bool haplotype_filtered = false;
-        if ((*somaticVarIter).second.CaseReadCount <= HapConsistency_ReadCount_Thr && 
-            (*somaticVarIter).second.base.VAF <= HapConsistency_VAF_Thr) {
-            if (somaticReadH1_1 > 0 && somaticReadH2_1 > 0) {
+        if ((*somaticVarIter).second.CaseReadCount <= HapConsistency_ReadCount_maxThr && 
+            (*somaticVarIter).second.base.VAF <= HapConsistency_VAF_maxThr) {
+            if (somaticReadH1_1 > HapConsistency_somaticRead_minThr && 
+                somaticReadH2_1 > HapConsistency_somaticRead_minThr) {
                 haplotype_filtered = true;
             }
         }
         
         // interval snp count filter check
         bool zscore_filtered = false;
-        if ((*somaticVarIter).second.CaseReadCount <= IntervalSnpCount_ReadCount_Thr && 
-            (*somaticVarIter).second.base.VAF <= IntervalSnpCount_VAF_Thr) {
+        if ((*somaticVarIter).second.CaseReadCount <= IntervalSnpCount_ReadCount_maxThr && 
+            (*somaticVarIter).second.base.VAF <= IntervalSnpCount_VAF_maxThr) {
 
             int intervalSnpCount = (*somaticVarIter).second.intervalSnpCount;
             float zScore = (*somaticVarIter).second.zScore;
-            if (intervalSnpCount > 4 && zScore <= 2.0 && zScore >= 0.0) {
+            if (intervalSnpCount > IntervalSnpCount_minThr && zScore <= zScore_maxThr && zScore >= 0.0) {
                 zscore_filtered = true;
             }
         }
@@ -3017,7 +2788,7 @@ void SomaticVarCaller::calculateZScores(const std::map<int, double>& data, doubl
     }
 }
 
-void SomaticVarCaller::calculateIntervalZScore(bool &isStartPos, int &startPos, int &endPos, int &snpCount, denseSnpInterval &denseSnp, std::map<int, std::pair<int, denseSnpInterval>> &localDenseTumorSnpInterval){
+void SomaticVarCaller::calculateIntervalZScore(bool &isStartPos, int &startPos, int &endPos, int &snpCount, DenseSnpInterval &denseSnp, std::map<int, std::pair<int, DenseSnpInterval>> &localDenseTumorSnpInterval){
     double mean = calculateMean(denseSnp.snpAltMean);
     double stdDev = calculateStandardDeviation(denseSnp.snpAltMean, mean);
     calculateZScores(denseSnp.snpAltMean, mean, stdDev, denseSnp.snpZscore);
@@ -3035,7 +2806,7 @@ void SomaticVarCaller::calculateIntervalZScore(bool &isStartPos, int &startPos, 
     denseSnp.snpZscore.clear();
 }
 
-void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, HP3_Info> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP, std::map<int, std::pair<int, denseSnpInterval>> &localDenseTumorSnpInterval){
+void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, HP3_Info> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP, std::map<int, std::pair<int, DenseSnpInterval>> &localDenseTumorSnpInterval){
     //calculate the mean of HP3 reads at each tumor SNP position
     for(auto somaticPosIter = tumorPosReadCorrBaseHP.begin(); somaticPosIter != tumorPosReadCorrBaseHP.end(); somaticPosIter++){
         float readCount = 0.0;
@@ -3079,7 +2850,7 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, HP3_Info> &somatic
     int startPos = 0;
     int snpCount = 0;
     int dense_distance = 5000;
-    denseSnpInterval denseSnp;
+    DenseSnpInterval denseSnp;
 
     while (somaticPosIter != somaticPosInfo.end()){
         int curPos = somaticPosIter->first;
@@ -3410,12 +3181,17 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                  << "##Enable filter : " << somaticParams.applyFilter << "\n"
                  << "##Calling mapping quality :" << params.somaticCallingMpqThreshold << "\n"
                  << "##Tumor purity : " << somaticParams.tumorPurity << "\n"
+                 << "##Normal VAF maximum threshold : " << somaticParams.norVAF_maxThr << "\n"
+                 << "##Normal depth minimum threshold : " << somaticParams.norDepth_minThr << "\n"
                  << "##Messy read ratio threshold : " << somaticParams.MessyReadRatioThreshold << "\n"
-                 << "##Messy read count threshold : " << somaticParams.MessyReadCountThreshold << "\n"
-                 << "##Haplotag consistency filter threshold : " << somaticParams.HapConsistency_VAF_Thr << "\n"
-                 << "##Haplotag consistency filter read count threshold : " << somaticParams.HapConsistency_ReadCount_Thr << "\n"
-                 << "##Interval SNP count filter threshold : " << somaticParams.IntervalSnpCount_VAF_Thr << "\n"
-                 << "##Interval SNP count filter read count threshold : " << somaticParams.IntervalSnpCount_ReadCount_Thr << "\n"
+                 << "##Somatic read count minimum threshold : " << somaticParams.ReadCount_minThr << "\n"
+                 << "##Haplotag consistency filter VAF threshold : " << somaticParams.HapConsistency_VAF_maxThr << "\n"
+                 << "##Haplotag consistency filter read count threshold : " << somaticParams.HapConsistency_ReadCount_maxThr << "\n"
+                 << "##Haplotag consistency somatic read count minimum threshold : " << somaticParams.HapConsistency_somaticRead_minThr << "\n"
+                 << "##Interval SNP count filter threshold : " << somaticParams.IntervalSnpCount_VAF_maxThr << "\n"
+                 << "##Interval SNP count filter read count threshold : " << somaticParams.IntervalSnpCount_ReadCount_maxThr << "\n"
+                 << "##Interval SNP count minimum threshold : " << somaticParams.IntervalSnpCount_minThr << "\n"
+                 << "##Z-score maximum threshold : " << somaticParams.zScore_maxThr << "\n"
                  //<< "##Low mapping quality read ratio threshold : " << somaticParams.LowMpqRatioThreshold << "\n"
                  << "##==================================== \n"
                  << "##\n"
@@ -3949,6 +3725,929 @@ std::map<std::string, std::map<int, HP3_Info>> SomaticVarCaller::getSomaticChrPo
     return (*chrPosSomaticInfo);
 }
 
+TumorPurityPredictor::TumorPurityPredictor(
+    const HaplotagParameters& params,
+    const std::vector<std::string>& chrVec,
+    BamBaseCounter& norBase,
+    std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo
+) : params(params), chrVec(chrVec), norBase(norBase), chrPosSomaticInfo(chrPosSomaticInfo), initial_data_size(0){}
+
+TumorPurityPredictor::~TumorPurityPredictor(){}
+
+double TumorPurityPredictor::predictTumorPurity(){
+   std::cerr << "predicting tumor purity... ";
+    std::time_t begin = time(NULL);
+
+    // median, iqr
+    std::vector<PurityData> purityFeatureValueVec;
+    double purity = 0.0;
+
+    try{
+        // build the feature value vector with first stage filter
+        buildPurityFeatureValueVec(purityFeatureValueVec);
+
+        std::cerr << "initial data size: " << initial_data_size << std::endl;
+        std::cerr << "\n==========first filter==========" << std::endl;
+        std::cerr << "[INFO] Data count: " << purityFeatureValueVec.size() << std::endl;
+        std::cerr << "[INFO] consistencyRatioInNorBam == 0.0: " << filterCounts.consistencyRatioInNorBam << std::endl;
+        std::cerr << "[INFO] consistencyRatio == 0.0: " << filterCounts.consistencyRatio << std::endl;
+        std::cerr << "[INFO] consistencyRatioInNorBam <= 0.7: " << filterCounts.consistencyRatioInNorBamMaxThr << std::endl;
+        std::cerr << "[INFO] readHpCountInNorBam <= 5: " << filterCounts.readHpCountInNorBam << std::endl;
+        std::cerr << "[INFO] percentageOfGermlineHpInNorBam: >= 0.7 " << filterCounts.percentageOfGermlineHp << std::endl;
+
+        // find the threshold of germlineReadHpCount for peak valley filter
+        int germlineReadHpCountThreshold = findPeakValleythreshold(params, purityFeatureValueVec);
+
+        // peak valley filter
+        peakValleyFilter(purityFeatureValueVec, germlineReadHpCountThreshold);
+
+        std::cerr << "\n==========second filter==========" << std::endl;
+        std::cerr << "[INFO] germlineReadHpCountThreshold: " << germlineReadHpCountThreshold << std::endl;
+        std::cerr << "[INFO] filter peakValley count: " << filterCounts.peakValley << std::endl;
+        std::cerr << "[INFO] Data count: " << purityFeatureValueVec.size() << std::endl;
+
+        BoxPlotValue plotValue = statisticPurityData(purityFeatureValueVec);
+
+        //remove outliers for reduce noise 
+        size_t iteration_times = 1;
+        for(size_t i = 0; i < iteration_times; i++){
+            std::printf("[INFO]==========iteration %ld==========\n", i+1);
+            // remove outliers for reduce noise
+            removeOutliers(purityFeatureValueVec, plotValue);
+            // statistic the data
+            plotValue = statisticPurityData(purityFeatureValueVec);
+            std::printf("[INFO] wisker : lower = %f, upper = %f\n", plotValue.lowerWhisker, plotValue.upperWhisker);
+            std::printf("[INFO] after remove outliers: %ld, data size: %ld\n", filterCounts.outliers, plotValue.data_size);
+        }
+
+
+        double median = plotValue.median;
+        double iqr = plotValue.iqr;
+
+        // purity prediction model
+        purity = -3.3454 * median + 14.7747 * iqr + 4.0344 * median * median + -13.7777 * median * iqr + -5.2434 * iqr * iqr + 0.3058;
+
+        if(purity > 1.0){
+            purity = 1.0;
+        }else if(purity < 0.0){
+            throw std::runtime_error("The value of purity exceeds the model's prediction range: " + std::to_string(purity));
+        }
+
+        std::cerr<< difftime(time(NULL), begin) << "s\n";
+        std::cerr << "[INFO] ===== tumor purity ===== : " << purity << std::endl;
+        std::cerr << "[INFO] median: " << plotValue.median << std::endl;
+        std::cerr << "[INFO] iqr: " << plotValue.iqr << std::endl;
+        std::cerr << "[INFO] q1: " << plotValue.q1 << std::endl;
+        std::cerr << "[INFO] q3: " << plotValue.q3 << std::endl;
+        std::cerr << "[INFO] lowerWhisker: " << plotValue.lowerWhisker << std::endl;
+        std::cerr << "[INFO] upperWhisker: " << plotValue.upperWhisker << std::endl;
+        std::cerr << "[INFO] outliers: " << plotValue.outliers << std::endl;
+        
+        // write purity log
+        writePurityLog(params, purity, plotValue, iteration_times, germlineReadHpCountThreshold);
+    }catch(const std::exception& e){
+        std::cerr << "[ERROR] " << e.what() << std::endl;
+        std::cerr << "[ERROR] Failed to predict tumor purity, set purity to 0.0" << std::endl;
+        purity = 0.0;
+    }
+
+    return purity;
+}
+
+void TumorPurityPredictor::buildPurityFeatureValueVec(std::vector<PurityData> &purityFeatureValueVec){
+    for(auto chr : chrVec){
+        std::map<int, HP3_Info>::iterator somaticPosIter = chrPosSomaticInfo[chr].begin();
+        while(somaticPosIter != chrPosSomaticInfo[chr].end()){
+            int H1readCount = (*somaticPosIter).second.allReadHpCount[ReadHP::H1];
+            int H2readCount = (*somaticPosIter).second.allReadHpCount[ReadHP::H2];
+            int tumDepth = (*somaticPosIter).second.base.depth;
+            initial_data_size++;
+
+            // the ratio of the read count of H1 and H2
+            int germlineReadHpCount = H1readCount + H2readCount;
+            double germlineReadHpConsistencyRatio = 0.0;
+            if(H1readCount > 0 && H2readCount > 0){
+                germlineReadHpConsistencyRatio = (H1readCount > H2readCount) ? ((double)H1readCount / (double)(H1readCount + H2readCount)) : ((double)H2readCount / (double)(H1readCount + H2readCount));
+            }else if(H1readCount == 0 && H2readCount == 0){
+                germlineReadHpConsistencyRatio = 0.0;
+            }
+            else{
+                germlineReadHpConsistencyRatio = 1.0;
+            }
+
+            // the ratio of the germlineHP based on depth
+            double percentageOfGermlineHp = 0.0;
+            if(tumDepth > 0 && germlineReadHpCount > 0){
+                percentageOfGermlineHp = (double)germlineReadHpCount / (double)tumDepth;            
+            }
+
+
+            //read hp count in the normal bam
+            int norDepth = norBase.getDepth(chr, (*somaticPosIter).first);
+            int H1readCountInNorBam = norBase.getReadHpCountInNorBam(chr, (*somaticPosIter).first, ReadHP::H1);
+            int H2readCountInNorBam = norBase.getReadHpCountInNorBam(chr, (*somaticPosIter).first, ReadHP::H2);
+            int germlineReadHpCountInNorBam = H1readCountInNorBam + H2readCountInNorBam;
+
+            double germlineReadHpConsistencyRatioInNorBam = 0.0;
+            if(H1readCountInNorBam > 0 && H2readCountInNorBam > 0){
+                germlineReadHpConsistencyRatioInNorBam = (H1readCountInNorBam > H2readCountInNorBam) ? ((double)H1readCountInNorBam / (double)germlineReadHpCountInNorBam) : ((double)H2readCountInNorBam / (double)germlineReadHpCountInNorBam);
+            }else if(H1readCountInNorBam == 0 && H2readCountInNorBam == 0){
+                germlineReadHpConsistencyRatioInNorBam = 0.0;
+            }
+            else{
+                germlineReadHpConsistencyRatioInNorBam = 1.0;
+            }
+
+            double percentageOfGermlineHpInNorBam = 0.0;
+            if(norDepth > 0 && germlineReadHpCountInNorBam > 0){
+                percentageOfGermlineHpInNorBam = (double)germlineReadHpCountInNorBam / (double)norDepth;
+            }
+
+            bool includeInStatistics = true;
+
+            // statistic the filter out data
+            if(germlineReadHpConsistencyRatioInNorBam == GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MIN_THR){
+                includeInStatistics = false;
+                filterCounts.consistencyRatioInNorBam++;
+            }else if(germlineReadHpConsistencyRatio == GERMLINE_HP_CONSISTENCY_RATIO_MIN_THR){
+                includeInStatistics = false;
+                filterCounts.consistencyRatio++;
+            }else if(germlineReadHpConsistencyRatioInNorBam >= GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MAX_THR){
+                includeInStatistics = false;
+                filterCounts.consistencyRatioInNorBamMaxThr++;
+            }else if(germlineReadHpCountInNorBam <= GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR){
+                includeInStatistics = false;
+                filterCounts.readHpCountInNorBam++;
+            }else if(percentageOfGermlineHpInNorBam <= GERMLINE_HP_PERCENTAGE_IN_NOR_BAM_MAX_THR){
+                includeInStatistics = false;
+                filterCounts.percentageOfGermlineHp++;
+            }else if(includeInStatistics){
+                purityFeatureValueVec.emplace_back(
+                    PurityData{
+                        .chr = chr,
+                        .pos = (*somaticPosIter).first,
+                        .germlineReadHpConsistencyRatio = germlineReadHpConsistencyRatio,
+                        .germlineReadHpCountInNorBam = germlineReadHpCountInNorBam
+                    }
+                );
+                (*somaticPosIter).second.statisticPurity = true;
+            }
+            somaticPosIter++;
+        }
+    }
+
+    if(purityFeatureValueVec.empty()) {
+        throw std::runtime_error("Failed to build purity feature vector: empty vector");
+    }
+}
+
+
+int TumorPurityPredictor::findPeakValleythreshold(const HaplotagParameters& params, const std::vector<PurityData> &purityFeatureValueVec){
+    
+    std::cerr << "[INFO] peak valley filter ..." << std::endl;
+    int threshold = 0;
+
+    try{
+        Histogram histogram;
+        // build histogram
+        histogram.buildHistogram(purityFeatureValueVec);
+        // calculate the percentage of data and resize the histogram
+        histogram.calculateStatistics();
+
+        PeakSet peakSet;
+
+        double min_peak_ratio = 0.05;
+        int min_distance = 2;
+
+        size_t max_height = histogram.getMaxHeight();
+        size_t total_snp_count = histogram.getTotalSnpCount();
+        std::pair<size_t, size_t> data_range = histogram.getDataRange();
+
+        size_t peak_threshold = std::max(
+            static_cast<size_t>((double)max_height * min_peak_ratio), 
+            static_cast<size_t>(1)
+        );
+
+        //find the peaks with the threshold
+        peakSet.findPeaks(histogram.getHistogram(), peak_threshold);
+
+        //remove close peak with min_distance
+        peakSet.removeClosePeaks(min_distance);
+        //determine the trend of the peak
+        peakSet.determineTrends();
+        //find the main peak
+        peakSet.findMainPeakCandidates();
+
+        //set the threshold by the lowest valley
+        peakSet.SetThresholdByValley(histogram.getHistogram());
+
+        threshold = peakSet.getThreshold();
+
+        // print the exec_log
+        for(const auto& log : peakSet.exec_log){
+            std::cout << log << std::endl;
+        }
+
+        //write histogram to file
+        if(params.writeReadLog){
+            peakSet.writePeakValleyLog(params, 
+                                histogram.getHistogram(),  
+                                total_snp_count, 
+                                data_range, 
+                                max_height, 
+                                min_peak_ratio, 
+                                peak_threshold);
+        }
+
+    }catch(const std::exception& e){
+        std::cerr << "[ERROR] " << e.what() << std::endl;
+        std::cerr << "[ERROR] Failed to find peak valley threshold, set threshold to 0" << std::endl;
+        threshold = 0;
+    }
+    
+    return threshold;
+}
+
+void TumorPurityPredictor::peakValleyFilter(std::vector<PurityData> &purityFeatureValueVec, int &germlineReadHpCountThreshold){
+    std::vector<PurityData>::iterator vecFeatureIter = purityFeatureValueVec.begin();
+    while(vecFeatureIter != purityFeatureValueVec.end()){
+        if((*vecFeatureIter).germlineReadHpCountInNorBam < germlineReadHpCountThreshold){
+            filterCounts.peakValley++;
+            // flag the position as not used for purity prediction
+            chrPosSomaticInfo[(*vecFeatureIter).chr][(*vecFeatureIter).pos].statisticPurity = false;
+            vecFeatureIter = purityFeatureValueVec.erase(vecFeatureIter);
+        }else{
+            vecFeatureIter++;
+        }
+    }
+}
+
+void TumorPurityPredictor::removeOutliers(std::vector<PurityData> &purityFeatureValueVec, BoxPlotValue &plotValue){
+     std::vector<PurityData>::iterator vecIter = purityFeatureValueVec.begin();
+
+    while(vecIter != purityFeatureValueVec.end()){
+        if((*vecIter).germlineReadHpConsistencyRatio < plotValue.lowerWhisker || (*vecIter).germlineReadHpConsistencyRatio > plotValue.upperWhisker){
+            //remove outliers for reduce noise
+            std::string chr = (*vecIter).chr;
+            int pos = (*vecIter).pos;
+            //flag the position as not used for purity prediction
+            chrPosSomaticInfo[chr][pos].statisticPurity = false;
+            vecIter = purityFeatureValueVec.erase(vecIter);
+            filterCounts.outliers++;
+        }else{
+            vecIter++;
+        }
+    }
+}
+BoxPlotValue TumorPurityPredictor::statisticPurityData(std::vector<PurityData> &purityFeatureValueVec){
+    BoxPlotValue plotValue;
+    plotValue.data_size = purityFeatureValueVec.size();
+    
+    try{
+        // Handle empty data case
+        if (plotValue.data_size == 0) {
+            throw std::runtime_error("the data size is 0");
+        }
+
+        // Sort the original data
+        std::sort(purityFeatureValueVec.begin(), purityFeatureValueVec.end(), PurityData::compareByGermlineReadHpConsisRatio);
+
+        // Define percentile calculation function using linear interpolation
+        auto percentile = [&](double p) -> double {
+            if (p < 0.0 || p > 1.0) {
+                throw std::invalid_argument("Percentile must be between 0 and 1, p = " + std::to_string(p));
+            }
+            
+            double pos = p * (plotValue.data_size - 1);
+            size_t idx = static_cast<size_t>(pos);
+            double frac = pos - idx;
+            
+            //check index 
+            if (idx + 1 >= plotValue.data_size) {
+                return purityFeatureValueVec[plotValue.data_size - 1].germlineReadHpConsistencyRatio;
+            }
+
+            // //element is the last data
+            if (idx == plotValue.data_size - 1) {
+                return purityFeatureValueVec[idx].germlineReadHpConsistencyRatio;
+            }
+            
+            // return linear interplolation
+            return purityFeatureValueVec[idx].germlineReadHpConsistencyRatio * (1.0 - frac) + 
+                purityFeatureValueVec[idx + 1].germlineReadHpConsistencyRatio * frac;
+        };
+
+        // Calculate quartiles and median
+        plotValue.q1 = percentile(0.25);      // First quartile
+        plotValue.median = percentile(0.5);    // Median
+        plotValue.q3 = percentile(0.75);      // Third quartile
+        plotValue.iqr = plotValue.q3 - plotValue.q1;  // Interquartile range
+        
+        // Calculate whiskers (1.5 * IQR rule)
+        plotValue.lowerWhisker = std::max(0.0, plotValue.q1 - 1.5 * plotValue.iqr);
+        plotValue.upperWhisker = plotValue.q3 + 1.5 * plotValue.iqr;
+        
+        // Count outliers (points beyond whiskers)
+        plotValue.outliers = 0;
+        for (const auto& value : purityFeatureValueVec) {
+            if (value.germlineReadHpConsistencyRatio < plotValue.lowerWhisker || value.germlineReadHpConsistencyRatio > plotValue.upperWhisker) {
+                plotValue.outliers++;
+            }
+        }
+            
+    } catch (const std::invalid_argument& e) {
+        throw std::runtime_error("Invalid argument in statistics calculation: " + std::string(e.what()));
+    } catch (const std::exception& e) {
+        throw std::runtime_error("Failed to statistic purity data: " + std::string(e.what()));
+    }
+
+    return plotValue;
+}
+
+void TumorPurityPredictor::writePurityLog(const HaplotagParameters &params, double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold){
+    try{
+        std::ofstream purityLog = std::ofstream(params.resultPrefix+"_purity.out");
+
+        if(!purityLog.is_open()){
+            throw std::runtime_error("Failed to open purity log file: " + params.resultPrefix+"_purity.out");
+        }
+
+        purityLog << "#Initial data size: " << initial_data_size << std::endl;
+        purityLog << "#==========filter parameters==========" << std::endl;
+        purityLog << "#GERMLINE_HP_CONSISTENCY_RATIO_MIN_THR: " << GERMLINE_HP_CONSISTENCY_RATIO_MIN_THR << std::endl;
+        purityLog << "#GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MIN_THR: " << GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MIN_THR << std::endl;
+        purityLog << "#GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MAX_THR: " << GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MAX_THR << std::endl;
+        purityLog << "#GERMLINE_HP_PERCENTAGE_IN_NOR_BAM_MAX_THR: " << GERMLINE_HP_PERCENTAGE_IN_NOR_BAM_MAX_THR << std::endl;
+        purityLog << "#GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR: " << GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR << std::endl;
+        purityLog << "#GERMLINE_HP_READ_COUNT_IN_NOR_BAM_DYNAMIC_THR: " << germlineReadHpCountThreshold << std::endl;
+
+        purityLog << "#==========initial filter out data count==========" << std::endl;
+        purityLog << "#consistencyRatioInNorBam: " << filterCounts.consistencyRatioInNorBam << std::endl;
+        purityLog << "#consistencyRatio: " << filterCounts.consistencyRatio << std::endl;
+        purityLog << "#consistencyRatioInNorBam_over_thr: " << filterCounts.consistencyRatioInNorBamMaxThr << std::endl;
+        purityLog << "#readHpCountInNorBam: " << filterCounts.readHpCountInNorBam << std::endl;
+        purityLog << "#percentageOfGermlineHpInNorBam: " << filterCounts.percentageOfGermlineHp << std::endl;
+
+        purityLog << "#==========second filter out data count==========" << std::endl;
+        purityLog << "#peakValley count: " << filterCounts.peakValley << std::endl;
+
+        purityLog << "#==========wisker filter out data count==========" << std::endl;
+        purityLog << "#iteration times: " << iteration_times << std::endl;
+        purityLog << "#remove outliers: " << filterCounts.outliers << std::endl;
+        purityLog << "#==========purity prediction===========" << std::endl;
+        purityLog << "Tumor purity: " << purity << std::endl;
+        purityLog << "Data size: " << plotValue.data_size << std::endl;
+        purityLog << "Median: " << plotValue.median << std::endl;
+        purityLog << "Q1: " << plotValue.q1 << std::endl;
+        purityLog << "Q3: " << plotValue.q3 << std::endl;
+        purityLog << "IQR: " << plotValue.iqr << std::endl;
+        purityLog << "Whiskers: " << plotValue.lowerWhisker << " to " << plotValue.upperWhisker << std::endl;
+        purityLog << "Outliers: " << plotValue.outliers << std::endl;
+
+        purityLog.close();
+    }catch(const std::exception& e){
+        std::cerr << "[ERROR] :" << e.what() << std::endl;
+        std::cerr << "[ERROR] : Failed to write purity log" << std::endl;
+    }
+}
+
+Histogram::Histogram(){
+    histogram = std::vector<HistogramData>(1000, HistogramData(0, 0.0));
+    total_snp_count = 0;
+    max_height = 0;
+    data_range = std::make_pair(0, 0);
+}
+
+Histogram::~Histogram(){
+
+}
+
+void Histogram::buildHistogram(const std::vector<PurityData>& purityFeatureValueVec){
+    try{
+        if(purityFeatureValueVec.empty()){
+            throw std::invalid_argument("Purity feature value vector is empty");
+        }
+        total_snp_count = purityFeatureValueVec.size();
+
+        // build histogram
+        for(const auto& data : purityFeatureValueVec){
+            size_t readCount = data.germlineReadHpCountInNorBam;
+            if(readCount >= histogram.size()){
+                size_t new_size = histogram.size() * 2;
+                if(new_size >= MAX_HISTOGRAM_SIZE){
+                    throw std::overflow_error("Read count " + std::to_string(readCount) + " exceeds maximum histogram size");
+                }
+                histogram.resize(new_size, HistogramData(0, 0.0));
+            }
+            histogram[readCount].count++;
+        }
+
+        if(histogram.empty()){
+            throw std::runtime_error("Histogram is empty after building");
+        }
+
+    } catch (const std::exception& e) {
+        histogram.clear();
+        throw std::runtime_error("Failed to build histogram: " + std::string(e.what()));
+    }
+}
+
+void Histogram::calculateStatistics(){
+    // calculate the percentage of data
+    try{
+        double total_percentage = 0.0;
+        bool load_first_non_zero_data = false;
+
+        for(size_t i = 0; i < histogram.size(); i++){
+            double tmp = (double)histogram[i].count / (double)total_snp_count;
+            total_percentage += tmp;
+            
+            histogram[i].percentage = total_percentage;
+
+            //update the max height
+            if(histogram[i].count > max_height){
+                max_height = histogram[i].count;
+            }
+
+            //find the first non-zero data
+            if(load_first_non_zero_data == false && histogram[i].count > 0){
+                data_range.first = i;
+                load_first_non_zero_data = true;
+            }
+            // update the position of the last non-zero value
+            if(histogram[i].count > 0){
+                data_range.second = i;  
+            }
+        }
+
+        if(max_height == 0){
+            throw std::runtime_error("max_height is 0 in histogram");
+        }
+
+        //resize the histogram
+        histogram.resize(data_range.second + 1);
+        histogram.shrink_to_fit();
+    }catch(const std::exception& e){
+        throw std::runtime_error("Failed to calculate statistics: " + std::string(e.what()));
+    }
+}
+
+PeakSet::PeakSet(){
+    mainPeakCount = 0;
+    mainPeak = MainPeakInfo();
+    saddlePoint = SaddlePointInfo();
+}
+
+PeakSet::~PeakSet(){
+
+}
+
+void PeakSet::findPeaks(const std::vector<HistogramData>& histogram, const size_t min_peak_height){
+    try{
+        if(histogram.empty()){
+            throw std::invalid_argument("Histogram is empty");
+        }
+        // find peak value and its index
+        for(size_t i = 0; i < histogram.size(); i++){
+
+            bool is_peak = false;
+            //skip the data which is less than min_peak_count
+            if(histogram[i].count < min_peak_height){
+                continue;
+            }
+            //first element
+            else if(i == 0 && i != histogram.size() - 1){
+                if(histogram[i].count > histogram[i+1].count){
+                    is_peak = true;
+                }
+            }
+            //last element
+            else if(i == histogram.size() - 1 && i != 0){
+                if(histogram[i].count > histogram[i-1].count){
+                    is_peak = true;
+                }
+            }
+            else if( histogram[i].count > histogram[i-1].count && histogram[i].count > histogram[i+1].count){
+                is_peak = true;
+            }
+
+            if(is_peak){
+                peaksVec.emplace_back(Peak{i, histogram[i].count});
+            }
+        }
+
+        //write the peak info to the exec_log
+        for(size_t i = 0; i < peaksVec.size(); i++){
+            exec_log.push_back("[INFO] Peak " + std::to_string(i) + ": " + std::to_string(peaksVec[i].histo_index) + ", " + std::to_string(peaksVec[i].height));
+        }
+    }catch(const std::exception& e){
+        throw std::runtime_error("Failed to find peaks: " + std::string(e.what()));
+    }
+}
+
+void PeakSet::removeClosePeaks(size_t minDistance) {
+    try{
+        if (peaksVec.empty()) {
+            throw std::runtime_error("No peaks found in peaksVec");
+        }else if(peaksVec.size() >= 2){
+            //remove close peak with min_distance
+            for(size_t i = 0; i < peaksVec.size() - 1;) {
+                if(peaksVec[i+1].histo_index - peaksVec[i].histo_index < minDistance) {
+                    if(peaksVec[i].height >= peaksVec[i+1].height) {
+                        exec_log.push_back("[INFO] remove the peak " + std::to_string(peaksVec[i+1].histo_index) + "(" + std::to_string(peaksVec[i+1].height) + ")" + " because it is too close to the peak " + std::to_string(peaksVec[i].histo_index) + "(" + std::to_string(peaksVec[i].height) + ")");
+                        peaksVec.erase(peaksVec.begin() + i + 1);
+                    } else {
+                        exec_log.push_back("[INFO] remove the peak " + std::to_string(peaksVec[i].histo_index) + "(" + std::to_string(peaksVec[i].height) + ")" + " because it is too close to the peak " + std::to_string(peaksVec[i+1].histo_index) + "(" + std::to_string(peaksVec[i+1].height) + ")");
+                        peaksVec.erase(peaksVec.begin() + i);
+                    }
+                } else {
+                    ++i;
+                }
+            }
+        }
+    }catch(const std::exception& e){
+        throw std::runtime_error("Failed to remove close peaks: " + std::string(e.what()));
+    }
+}
+
+void PeakSet::determineTrends() {
+    try{
+        if(peaksVec.empty()){
+            throw std::runtime_error("No peaks found in peaksVec");
+        }
+        //determine the trend of the peak
+        if(peaksVec.size() >= 2){
+            for(size_t i = 0; i < peaksVec.size() - 1; i++) {
+                if(peaksVec[i].height < peaksVec[i+1].height) {
+                    peaksVec[i].right_trend = PeakTrend::UP;
+                    peaksVec[i+1].left_trend = PeakTrend::UP;
+                } else if(peaksVec[i].height > peaksVec[i+1].height) {
+                    peaksVec[i].right_trend = PeakTrend::DOWN;
+                    peaksVec[i+1].left_trend = PeakTrend::DOWN;
+                } else {
+                    peaksVec[i].right_trend = PeakTrend::FLAG;
+                    peaksVec[i+1].left_trend = PeakTrend::FLAG;
+                }
+            }
+        }
+    }catch(const std::exception& e){
+        throw std::runtime_error("Failed to determine trends: " + std::string(e.what()));
+    }
+}
+
+void PeakSet::findMainPeakCandidates() {
+    try{
+        //find the main peak
+        if(peaksVec.empty()){
+            throw std::runtime_error("No peaks found in peaksVec");
+        }else if(peaksVec.size() == 1){
+            exec_log.push_back("[INFO] Only one peak found");
+            peaksVec[0].is_main_peak = true;
+            mainPeakCount = 1;
+        }else{
+            for(size_t index = 0; index < peaksVec.size(); index++) {
+                bool is_main_peak = false;
+                //first peak
+                if(index == 0) {
+                if(peaksVec[index].right_trend == PeakTrend::DOWN) {
+                    is_main_peak = true;
+                }
+                //last peak
+                } else if(index == peaksVec.size() - 1) {
+                    if(peaksVec[index].left_trend == PeakTrend::UP) {
+                        is_main_peak = true;
+                    }
+                //middle peak
+                } else if(peaksVec[index].left_trend == PeakTrend::UP && peaksVec[index].right_trend == PeakTrend::DOWN) {
+                    is_main_peak = true;
+                }
+                if(is_main_peak) {
+                    peaksVec[index].is_main_peak = true;
+                        mainPeakCount++;
+                }
+            }
+        }
+    }catch(const std::exception& e) {
+        throw std::runtime_error("Failed to find main peak candidates: " + std::string(e.what()));
+    }
+}
+
+bool PeakSet::findFirstPriorityMainPeak() {
+
+    bool found_first_main_peak = false;
+    try{
+        std::vector<Peak> mainPeakVec;
+
+        for(auto& peak : peaksVec) {
+            if(peak.is_main_peak) {
+                mainPeakVec.push_back(peak);
+            }
+        }
+
+        if(mainPeakVec.empty()) {
+            throw std::runtime_error("No main peaks found in peaksVec");
+        }
+
+        // only one main peak
+        if(mainPeakVec.size() == 1) {
+            mainPeak.index =  mainPeakVec[0].histo_index;
+            found_first_main_peak = true;
+        }else{
+            //sort the main peak candidates by height in descending order
+            std::sort(mainPeakVec.begin(), mainPeakVec.end(), Peak::compareByHight);
+            //get the first and second higher peak
+            //seclect higher index peak as the first main peak from the two higher peaks
+            if(mainPeakVec[0].histo_index > mainPeakVec[1].histo_index){
+                mainPeak.index =  mainPeakVec[0].histo_index;
+            }else{
+                mainPeak.index =  mainPeakVec[1].histo_index;
+            }
+            found_first_main_peak = true;
+        }
+    }catch(const std::exception& e){
+        throw std::runtime_error("Failed to find first priority main peak: " + std::string(e.what()));
+    }
+
+    return found_first_main_peak;
+}
+
+bool PeakSet::findSaddlePoint() {
+    //find the saddle point
+    bool found_saddle_point = false;
+    try{
+        auto peakVecIter = peaksVec.begin();
+        //if the first main peak is the first peak
+        if (peakVecIter->histo_index == mainPeak.index){
+            saddlePoint.index = -1;
+            exec_log.push_back("[INFO] the first main peak is the first peak");
+        }else{
+            //align the peakVecIter to the first main peak
+            while(peakVecIter->histo_index != mainPeak.index){
+                if(peakVecIter == peaksVec.end()){
+                    throw std::runtime_error("Main peak not found in peaksVec");
+                }
+                peakVecIter++;
+            }
+
+            //align the peakVecIter to the left peak of the first main peak
+            peakVecIter--;
+
+            //if the first main peak is the second peak
+            if(peakVecIter == peaksVec.begin()){
+                saddlePoint.index = peakVecIter->histo_index;
+                found_saddle_point = true;
+            }else{
+                while(peakVecIter != peaksVec.begin()){
+                    //record the valley of the peak or the first peak as the saddle point
+                    if((peakVecIter->left_trend == PeakTrend::DOWN && peakVecIter->right_trend == PeakTrend::UP)){
+                        saddlePoint.index = peakVecIter->histo_index;
+                        found_saddle_point = true;
+                        break;
+                    }
+                    peakVecIter--;
+                }
+                //if no saddle point found, select the first peak as the saddle point
+                if(!found_saddle_point){
+                    exec_log.push_back("[INFO] no saddle point found, select the first peak as the saddle point");
+                    saddlePoint.index = peaksVec.begin()->histo_index;
+                    found_saddle_point = true;
+                }
+            }
+        }
+
+    }catch(const std::exception& e){
+        throw std::runtime_error("Failed to find saddle point: " + std::string(e.what()));
+    }
+
+    return found_saddle_point;
+}
+
+bool PeakSet::findLowestValley(const std::vector<HistogramData>& histogram, size_t start_index, size_t end_index, Valley& result) {
+    // check the index
+    if (start_index >= end_index || end_index > histogram.size()) {
+        exec_log.push_back("[ERROR] (findLowestValley) index out of range: start: " + std::to_string(start_index) + " end: " + std::to_string(end_index) + " histogram.size(): " + std::to_string(histogram.size()));
+        return false;
+    }
+    
+    bool found = false;
+    result.height = INT_MAX;
+    
+    // find the lowest valley
+    for(size_t i = start_index + 1; i < end_index - 1; i++) {
+        if(histogram[i].count < histogram[i-1].count && 
+           histogram[i].count < histogram[i+1].count) {
+            if (!found || histogram[i].count < result.height) {
+                result.index = i;
+                result.height = histogram[i].count;
+                result.percentage = histogram[i].percentage;
+                found = true;
+            }
+        }
+    }
+    
+    return found;
+}
+
+void PeakSet::SetThresholdByValley(const std::vector<HistogramData>& histogram){
+    bool found_first_main_peak = false;
+    mainPeak.peak = Peak();
+    
+    bool found_saddle_point = false;
+    saddlePoint.peak = Peak();
+
+    saddlePoint.next_peak = Peak();
+    saddlePoint.pre_peak = Peak();
+
+    lowestValley = Valley();
+    thresholdPercentage = 0.0;
+    threshold = 0;
+
+    //find the first main peak
+    found_first_main_peak = findFirstPriorityMainPeak();
+
+    if(found_first_main_peak){
+        mainPeak.peak = getPeak(mainPeak.index, 0);
+        exec_log.push_back("[INFO] found the first main peak :" + std::to_string(mainPeak.peak.histo_index));
+        //find the saddle point
+        found_saddle_point = findSaddlePoint();
+        if(found_saddle_point){
+            saddlePoint.peak = getPeak(saddlePoint.index, 0);
+            exec_log.push_back("[INFO] found the saddle point :" + std::to_string(saddlePoint.peak.histo_index));
+            exec_log.push_back("[INFO] check the next peak of the saddle point");
+
+            saddlePoint.next_peak = getPeak(saddlePoint.index, 1);
+            // find the lowest height valley between the saddle point and its next peak
+            bool found_valley = findLowestValley(histogram, saddlePoint.peak.histo_index, saddlePoint.next_peak.histo_index, lowestValley);
+            if(found_valley){
+                exec_log.push_back("[INFO] find the lowest height valley: " + std::to_string(lowestValley.index) + "(" + std::to_string(lowestValley.percentage) + ")");
+                thresholdPercentage = lowestValley.percentage;
+                threshold = lowestValley.index;
+            }else{
+                exec_log.push_back("[INFO] no valley found");
+            }
+
+
+            //threshold >= 0.25, remove the lowest height valley
+            if(thresholdPercentage >= THRESHOLD_PERCENTAGE_LIMIT || !found_valley){
+                // reset the lowest valley
+                lowestValley = Valley();
+                thresholdPercentage = 0.0;
+                threshold = 0;
+                bool found_valley = false;
+
+                exec_log.push_back("[INFO] threshold >= 0.25%, reset threshold to " + std::to_string(threshold) + "(" + std::to_string(thresholdPercentage) + ")");
+                exec_log.push_back("[INFO] check the pre peak of the saddle point");
+                
+                // saddle point is not the first peak
+                if(saddlePoint.peak.histo_index != peaksVec[0].histo_index){
+                    saddlePoint.pre_peak = getPeak(saddlePoint.peak.histo_index, -1);
+                    exec_log.push_back("[INFO] saddle point have a pre peak " + std::to_string(saddlePoint.pre_peak.histo_index) + "->" + std::to_string(saddlePoint.peak.histo_index));
+                    //find the lowest height valley between the saddle point and its pre peak
+                    found_valley = findLowestValley(histogram, saddlePoint.pre_peak.histo_index, saddlePoint.peak.histo_index, lowestValley);
+                    if(found_valley){
+                        exec_log.push_back("[INFO] find the lowest height valley : " + std::to_string(lowestValley.index) + "(" + std::to_string(lowestValley.percentage) + ")");
+                        thresholdPercentage = lowestValley.percentage;
+                        threshold = lowestValley.index;
+                    }else{
+                        exec_log.push_back("[INFO] no valley found between the saddle point and its pre peak");
+                    }
+                }else{
+                    exec_log.push_back("[INFO] no pre peak found");
+                }
+            }
+        }else{
+            exec_log.push_back("[INFO] no saddle point found");
+        }
+    }
+
+    // Final check threshold
+    if(thresholdPercentage >= THRESHOLD_PERCENTAGE_LIMIT){
+        exec_log.push_back("[INFO] Final threshold over 0.25%, set to 0: "+ std::to_string(threshold) + "(" + std::to_string(thresholdPercentage) + ")");
+        thresholdPercentage = 0.0;
+        threshold = 0;
+    }
+    exec_log.push_back("[INFO] Final threshold: " + std::to_string(threshold) + "(" + std::to_string(thresholdPercentage) + ")");
+
+}
+
+Peak PeakSet::getPeak(size_t histo_index, int offset){
+    try{
+        for(size_t i = 0; i < peaksVec.size(); i++){
+            if(peaksVec[i].histo_index == histo_index){
+                if(i + offset < peaksVec.size() || i + offset >= 0){
+                    return peaksVec[i + offset];
+                }else{
+                    throw std::runtime_error("Peak index out of range: peaksVec.size(): " + std::to_string(peaksVec.size()) + " index: " + std::to_string(i) + " offset: " + std::to_string(offset));
+                }
+            }
+        }
+        throw std::runtime_error("Peak not found: histo_index: " + std::to_string(histo_index) + " offset: " + std::to_string(offset));
+    }catch(const std::exception& e){
+        throw std::runtime_error("Failed to get peak: " + std::string(e.what()));
+    }
+}
+
+int PeakSet::getThreshold(){
+    return threshold;
+}
+
+std::string PeakSet::transformTrend(const PeakTrend &trend) {
+    switch(trend) {
+        case PeakTrend::NONE: return "NONE";
+        case PeakTrend::UP: return "UP";
+        case PeakTrend::DOWN: return "DOWN";
+        case PeakTrend::FLAG: return "FLAG";
+        default: return "UNKNOWN";
+    }
+}
+
+void PeakSet::writePeakValleyLog(
+    const HaplotagParameters &params,
+    const std::vector<HistogramData>& histogram,
+    size_t &total_snp_count,
+    const std::pair<size_t, size_t>& data_range,
+    size_t &max_height,
+    double &min_peak_ratio,
+    size_t &peak_threshold) {
+
+    std::string postfix = "_germlineReadHpCountInNorBam_histogram.out";
+    std::ofstream histogramFile(params.resultPrefix + postfix);
+    if(!histogramFile.is_open()){
+        std::cerr << "[WARNING] Failed to open histogram log file: " << params.resultPrefix + postfix << std::endl;        
+        return;
+    }
+
+    histogramFile << "#total snp count: " << total_snp_count << std::endl;
+    histogramFile << "#data range: " << data_range.first << " to " << data_range.second << std::endl;
+    histogramFile << "#max height: " << max_height << std::endl;
+    histogramFile << "#min peak ratio: " << min_peak_ratio << std::endl;
+    histogramFile << "#peak threshold: " << peak_threshold << std::endl;
+
+    //write exec log to file
+    histogramFile << "#========Execution Log==========" << std::endl;
+    for(const auto& log : exec_log){
+        histogramFile << "#" << log << std::endl;
+    }
+    histogramFile << "#========Histogram==========" << std::endl;
+    histogramFile << "#index (germline Hp read count in normal bam), height (snp count), percentage" << std::endl;
+    //write histogram to file
+    for(size_t i = 0; i < histogram.size(); i++){
+        histogramFile << i << "\t" << histogram[i].count << "\t" << histogram[i].percentage << std::endl;
+    }
+
+    histogramFile << "\n#==========Peak Trend Analysis==========" << std::endl;
+    histogramFile << "#peak count: " << peaksVec.size() << std::endl;
+    histogramFile << "#Peak " << "\t" 
+                  << std::left << std::setw(10) << "Position" << "\t"
+                  << std::left << std::setw(10) << "Height" << "\t"
+                  << std::left << std::setw(10) << "Left_Trend" << "\t"
+                  << std::left << std::setw(10) << "Right_Trend" << std::endl;    
+    for(size_t i = 0; i < peaksVec.size(); i++){
+        std::string left_trend = transformTrend(peaksVec[i].left_trend);
+        std::string right_trend = transformTrend(peaksVec[i].right_trend);
+        histogramFile << i+1 << "\t" 
+                    << std::left << std::setw(10) << peaksVec[i].histo_index << "\t" 
+                    << std::left << std::setw(10) << peaksVec[i].height << "\t" 
+                    << std::left << std::setw(10) << left_trend << "\t" 
+                    << std::left << std::setw(10) << right_trend << std::endl;
+    }
+    
+    histogramFile << "\n#==========Main Peak Analysis==========" << std::endl;
+    if(mainPeakCount == 0){
+        histogramFile << "#main peak count: 0" << std::endl;
+    }else{
+        histogramFile << "#main peak count: " << mainPeakCount << std::endl;
+        histogramFile << "#Peak " << "\t" 
+                      << std::left << std::setw(10) << "Position" << "\t"
+                      << std::left << std::setw(10) << "Height" << "\t"
+                      << std::left << std::setw(10) << "Left_Trend" << "\t"
+                      << std::left << std::setw(10) << "Right_Trend" << std::endl;
+        auto peakVecIter = peaksVec.begin();
+        int i = 1;
+        while(peakVecIter != peaksVec.end()){
+            if(peakVecIter->is_main_peak){
+                histogramFile << i << "\t" 
+                              << std::left << std::setw(10) << peakVecIter->histo_index << "\t" 
+                              << std::left << std::setw(10) << peakVecIter->height << "\t" 
+                              << std::left << std::setw(10) << transformTrend(peakVecIter->left_trend) << "\t" 
+                              << std::left << std::setw(10) << transformTrend(peakVecIter->right_trend) << std::endl;
+            }
+            i++;
+            peakVecIter++;
+        } 
+    }
+
+    histogramFile << "\n#==========Selected Peak & Valley==========" << std::endl;
+    histogramFile << "#first main peak       : " << mainPeak.peak.histo_index << "\t" << mainPeak.peak.height << "\t" << transformTrend(mainPeak.peak.left_trend) << "\t" << transformTrend(mainPeak.peak.right_trend) << std::endl;
+    histogramFile << "#saddle point          : " << saddlePoint.peak.histo_index << "\t" << saddlePoint.peak.height << "\t" << transformTrend(saddlePoint.peak.left_trend) << "\t" << transformTrend(saddlePoint.peak.right_trend) << std::endl;
+    histogramFile << "#saddle point next peak: " << saddlePoint.next_peak.histo_index << "\t" << saddlePoint.next_peak.height << "\t" << transformTrend(saddlePoint.next_peak.left_trend) << "\t" << transformTrend(saddlePoint.next_peak.right_trend) << std::endl;
+    histogramFile << "#saddle point pre peak : " << saddlePoint.pre_peak.histo_index << "\t" << saddlePoint.pre_peak.height << "\t" << transformTrend(saddlePoint.pre_peak.left_trend) << "\t" << transformTrend(saddlePoint.pre_peak.right_trend) << std::endl;
+    histogramFile << "#lowest height valley  : " << lowestValley.index << "\t" << lowestValley.percentage << std::endl;
+    histogramFile << "#threshold percentage: " << thresholdPercentage << std::endl;
+    histogramFile << "#threshold: " << threshold << std::endl;
+    histogramFile.close();  
+}
+
 VcfParser::VcfParser(bool tagTumorMode){
     this->tagTumorMode = tagTumorMode;
     reset();
@@ -4318,24 +5017,24 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
     }
 }
 
-highConBenchmark::highConBenchmark(){
+HighConBenchmark::HighConBenchmark(){
     setParseSnpFile(true);
     openTestingFunc = false;
 }
-highConBenchmark::~highConBenchmark(){
+HighConBenchmark::~HighConBenchmark(){
 
 }
 
-void highConBenchmark::setTestingFunc(bool openTestingFunc){
+void HighConBenchmark::setTestingFunc(bool openTestingFunc){
     this->openTestingFunc = openTestingFunc;
 }
 
-void highConBenchmark::loadHighConSomatic(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
+void HighConBenchmark::loadHighConSomatic(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
     if(!openTestingFunc) return;
     variantParser(input, Info, mergedChrVarinat);
 }
 
-void highConBenchmark::parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
+void HighConBenchmark::parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
     if(!openTestingFunc) return;
     
     if( input.substr(0, 2) == "##" && getParseSnpFile()){
@@ -4374,7 +5073,7 @@ void highConBenchmark::parserProcess(std::string &input, VCF_Info &Info, std::ma
     }
 }
 
-void highConBenchmark::recordDelReadCount(const std::string &chr, std::map<int, RefAltSet>::iterator &currentVariantIter){
+void HighConBenchmark::recordDelReadCount(const std::string &chr, std::map<int, RefAltSet>::iterator &currentVariantIter){
     if(!openTestingFunc) return;
     
     if(currentVariantIter->second.isExistHighConSomatic){
@@ -4386,7 +5085,7 @@ void highConBenchmark::recordDelReadCount(const std::string &chr, std::map<int, 
     }
 }
 
-void highConBenchmark::recordRefAltAlleleCount(const std::string &chr, std::string &base, std::map<int, RefAltSet>::iterator &currentVariantIter){
+void HighConBenchmark::recordRefAltAlleleCount(const std::string &chr, std::string &base, std::map<int, RefAltSet>::iterator &currentVariantIter){
     if(!openTestingFunc) return;
 
     if(currentVariantIter->second.isExistHighConSomatic){
@@ -4407,8 +5106,8 @@ void highConBenchmark::recordRefAltAlleleCount(const std::string &chr, std::stri
     }
 }
 
-somaticReadLog highConBenchmark::createBasicSomaticReadLog(const std::string &chr, std::string &readID, std::string &hpResult, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, int> &hpCount){
-    somaticReadLog tmp;
+SomaticReadLog HighConBenchmark::createBasicSomaticReadLog(const std::string &chr, std::string &readID, std::string &hpResult, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, int> &hpCount){
+    SomaticReadLog tmp;
     tmp.chr = chr;
     tmp.readID = readID;
     tmp.hpResult = hpResult;
@@ -4420,11 +5119,11 @@ somaticReadLog highConBenchmark::createBasicSomaticReadLog(const std::string &ch
     return tmp;
 }
 
-void highConBenchmark::recordCrossingHighConSnpRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, RefAltSet> &currentChrVariants){
+void HighConBenchmark::recordCrossingHighConSnpRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, RefAltSet> &currentChrVariants){
     // if not open testing function, return
     if(!openTestingFunc) return;
 
-    somaticReadLog tmp = createBasicSomaticReadLog(chr, readID, hpResult, norHPsimilarity, deriveByHpSimilarity, hpCount);
+    SomaticReadLog tmp = createBasicSomaticReadLog(chr, readID, hpResult, norHPsimilarity, deriveByHpSimilarity, hpCount);
 
     bool isCrossHighConSomatic = false;
     bool existHighConVaraints = false;
@@ -4476,11 +5175,11 @@ void highConBenchmark::recordCrossingHighConSnpRead(const std::string &chr, std:
     }
 }
 
-void highConBenchmark::recordTaggedSomaticRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, RefAltSet> &currentChrVariants){
+void HighConBenchmark::recordTaggedSomaticRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, RefAltSet> &currentChrVariants){
     // if not open testing function, return
     if(!openTestingFunc) return;
 
-    somaticReadLog tmp = createBasicSomaticReadLog(chr, readID, hpResult, norHPsimilarity, deriveByHpSimilarity, hpCount);
+    SomaticReadLog tmp = createBasicSomaticReadLog(chr, readID, hpResult, norHPsimilarity, deriveByHpSimilarity, hpCount);
 
     bool readExistHighConSomatic = false;
 
@@ -4502,12 +5201,12 @@ void highConBenchmark::recordTaggedSomaticRead(const std::string &chr, std::stri
     }
 }
 
-void highConBenchmark::recordTaggedRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, RefAltSet> &currentChrVariants){
+void HighConBenchmark::recordTaggedRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, RefAltSet> &currentChrVariants){
     // if not open testing function, return
     if(!openTestingFunc) return;
     
     if(hpResult != "."){
-        somaticReadLog tmp = createBasicSomaticReadLog(chr, readID, hpResult, norHPsimilarity, deriveByHpSimilarity, hpCount);
+        SomaticReadLog tmp = createBasicSomaticReadLog(chr, readID, hpResult, norHPsimilarity, deriveByHpSimilarity, hpCount);
 
         auto varIter = variantsHP.begin();
         while(varIter != variantsHP.end()){
@@ -4525,7 +5224,7 @@ void highConBenchmark::recordTaggedRead(const std::string &chr, std::string &rea
     }
 }
 
-void highConBenchmark::writePosAlleleCountLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
+void HighConBenchmark::writePosAlleleCountLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
     // if not open testing function, return
     if(!openTestingFunc) return;
 
@@ -4573,24 +5272,24 @@ void highConBenchmark::writePosAlleleCountLog(std::vector<std::string> &chrVec, 
     refAltCountLog = nullptr;
 }
 
-void highConBenchmark::writeTaggedReadLog(HaplotagParameters &params, std::string logPosfix){
+void HighConBenchmark::writeTaggedReadLog(HaplotagParameters &params, std::string logPosfix){
     // if not open testing function, return
     if(!openTestingFunc) return;
     writeReadLog(params, logPosfix, totalReadVec);
 }
-void highConBenchmark::writeTaggedSomaticReadLog(HaplotagParameters &params, std::string logPosfix){
+void HighConBenchmark::writeTaggedSomaticReadLog(HaplotagParameters &params, std::string logPosfix){
     // if not open testing function, return
     if(!openTestingFunc) return;
     writeReadLog(params, logPosfix, taggedSomaticReadVec);
 }
 
-void highConBenchmark::writeCrossHighConSnpReadLog(HaplotagParameters &params, std::string logPosfix){
+void HighConBenchmark::writeCrossHighConSnpReadLog(HaplotagParameters &params, std::string logPosfix){
     // if not open testing function, return
     if(!openTestingFunc) return;
     writeReadLog(params, logPosfix, readsCrossingHighConSnpVec);
 }
 
-void highConBenchmark::writeReadLog(HaplotagParameters &params, std::string logPosfix, std::vector<somaticReadLog> &somaticReadVec){
+void HighConBenchmark::writeReadLog(HaplotagParameters &params, std::string logPosfix, std::vector<SomaticReadLog> &somaticReadVec){
     // if not open testing function, return
     if(!openTestingFunc) return;
 
@@ -4656,7 +5355,7 @@ void highConBenchmark::writeReadLog(HaplotagParameters &params, std::string logP
     somaticReadLog = nullptr;
 }
 
-void highConBenchmark::displaySomaticVarCount(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
+void HighConBenchmark::displaySomaticVarCount(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
     if(!openTestingFunc) return;
     int totalVariantCount = 0;
     
@@ -4839,7 +5538,7 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const int geneType){
                 int haplotype = ReadHP::unTag;
 
                 if(tagTumorMode){
-                    haplotype = SomaticJudgeHaplotype(*bamHdr, *aln, chr, params.percentageThreshold, tagResult, pqValue, psValue, geneType, chr_reference);
+                    haplotype = somaticJudgeHaplotype(*bamHdr, *aln, chr, params.percentageThreshold, tagResult, pqValue, psValue, geneType, chr_reference);
                 }else{
                     haplotype = judgeHaplotype(*bamHdr, *aln, chr, params.percentageThreshold, tagResult, pqValue, psValue, geneType, chr_reference);
                 }
@@ -5036,7 +5735,7 @@ int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, s
     return hpResult;
 }
 
-int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chrName, double percentageThreshold, std::ofstream *tagResult, int &pqValue, int &psValue, const int tagGeneType, std::string &ref_string){
+int HaplotagProcess::somaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chrName, double percentageThreshold, std::ofstream *tagResult, int &pqValue, int &psValue, const int tagGeneType, std::string &ref_string){
 
     std::map<int, int> hpCount;
     hpCount[1] = 0;
@@ -5159,10 +5858,10 @@ int HaplotagProcess::SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
     }
 
     //In the current version, only normal SVs are considered, without inclusion of tumor samples
-    auto readIter = vcfSet[tagGeneType].readSVHapCount.find(bam_get_qname(&aln));
-    if( readIter != vcfSet[tagGeneType].readSVHapCount.end() ){
-        hpCount[1] += vcfSet[tagGeneType].readSVHapCount[bam_get_qname(&aln)][0];
-        hpCount[2] += vcfSet[tagGeneType].readSVHapCount[bam_get_qname(&aln)][1];
+    auto readIter = vcfSet[Genome::NORMAL].readSVHapCount.find(bam_get_qname(&aln));
+    if( readIter != vcfSet[Genome::NORMAL].readSVHapCount.end() ){
+        hpCount[1] += vcfSet[Genome::NORMAL].readSVHapCount[bam_get_qname(&aln)][0];
+        hpCount[2] += vcfSet[Genome::NORMAL].readSVHapCount[bam_get_qname(&aln)][1];
     }
 
     int startPos = aln.core.pos + 1;
@@ -5448,8 +6147,8 @@ totalAlignment(0),totalSupplementary(0),totalSecondary(0),totalUnmapped(0),total
     beforeCorrReadHpResult = new std::map<std::string, std::map<int, ReadHpResult>>();
     afterCorrReadHpResult = new std::map<std::string, std::map<int, ReadHpResult>>();
 
-    hpBeforeInheritance = new readHpDistriLog();
-    hpAfterInheritance = new readHpDistriLog();
+    hpBeforeInheritance = new ReadHpDistriLog();
+    hpAfterInheritance = new ReadHpDistriLog();
 
     //verification variable
     totalLowerQuality = 0;
@@ -5499,7 +6198,7 @@ HaplotagProcess::~HaplotagProcess(){
 };
 
 
-void HaplotagProcess::TaggingProcess(HaplotagParameters &params)
+void HaplotagProcess::taggingProcess(HaplotagParameters &params)
 {
     std::cerr<< "phased SNP file:       " << params.snpFile             << "\n";
     if(params.tagTumorSnp) 

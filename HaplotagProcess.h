@@ -48,20 +48,27 @@ struct SomaticFilterParaemter
     // Tumor purity
     float tumorPurity;
 
-    // Below the mapping quality read ratio threshold
-    float LowMpqRatioThreshold; 
+    // Maximum normal VAF threshold
+    float norVAF_maxThr;
+    int norDepth_minThr;
 
     // Messy read ratio threshold
     float MessyReadRatioThreshold;
-    int MessyReadCountThreshold;
+    int ReadCount_minThr;
 
     // Haplotag consistency filter threshold
-    float HapConsistency_VAF_Thr;
-    int HapConsistency_ReadCount_Thr;
+    float HapConsistency_VAF_maxThr;
+    int HapConsistency_ReadCount_maxThr;
+    int HapConsistency_somaticRead_minThr;
 
     // Interval SNP count filter threshold
-    float IntervalSnpCount_VAF_Thr;
-    int IntervalSnpCount_ReadCount_Thr;
+    float IntervalSnpCount_VAF_maxThr;
+    int IntervalSnpCount_ReadCount_maxThr;
+    int IntervalSnpCount_minThr;
+    float zScore_maxThr;
+
+    // Below the mapping quality read ratio threshold
+    float LowMpqRatioThreshold; 
 };
 
 enum Genome
@@ -101,6 +108,13 @@ enum ReadHP
     H1_2 = 6,
     H2_1 = 7,
     H2_2 = 8,
+};
+
+enum PeakTrend{
+    NONE = 0,
+    UP = 1,
+    DOWN = 2,
+    FLAG = 3
 };
 
 // record the variants from the normal and tumor VCF files (normal:0, tumor:1, seqcHighCon:2)
@@ -193,6 +207,7 @@ struct ReadHpResult{
     ReadHpResult(): somaticSnpH3count(0), existDeriveByH1andH2(false), deriveHP(0), coverRegionStartPos(INT_MAX), coverRegionEndPos(INT_MIN){}
 };
 
+
 struct BoxPlotValue {
     size_t data_size;
     double median;
@@ -203,6 +218,17 @@ struct BoxPlotValue {
     double upperWhisker;
     int outliers;
     BoxPlotValue(): data_size(0), median(0.0), q1(0.0), q3(0.0), iqr(0.0), lowerWhisker(0.0), upperWhisker(0.0), outliers(0){}
+};
+
+struct PurityData{
+    std:: string chr;
+    int pos;
+    double germlineReadHpConsistencyRatio;
+    int germlineReadHpCountInNorBam;
+
+    static bool compareByGermlineReadHpConsisRatio(const PurityData& a, const PurityData& b){
+        return a.germlineReadHpConsistencyRatio < b.germlineReadHpConsistencyRatio;
+    }
 };
 
 struct ReadVarHpCount{
@@ -222,24 +248,17 @@ struct ReadVarHpCount{
     ReadVarHpCount(): HP1(0), HP2(0), HP3(0), HP4(0), readIDcount(0), hpResult(0), startPos(0), endPos(0), readLength(0){}
 };
 
-struct coverRegionInfo{
-    int startPos;
-    int endPos;
-    int length;
 
-    coverRegionInfo(): startPos(0), endPos(0), length(0){}
-};
-
-struct denseSnpInterval{
+struct DenseSnpInterval{
     int snpCount;
     std::map<int, double> snpAltMean;
     std::map<int, double> snpZscore;
     double totalAltMean;
     double StdDev;
-    denseSnpInterval(): snpCount(0), totalAltMean(0.0), StdDev(0.0){}
+    DenseSnpInterval(): snpCount(0), totalAltMean(0.0), StdDev(0.0){}
 };
 
-struct somaticReadLog{
+struct SomaticReadLog{
     std::string chr;
     std::string readID;
     std::string hpResult;
@@ -249,7 +268,7 @@ struct somaticReadLog{
     float deriveByHpSimilarity;
     int germlineSnpCount;
     int tumorSnpCount;
-    somaticReadLog(): chr(""), readID(""), hpResult(""), germlineVarSimilarity(0.0), deriveByHpSimilarity(0.0), germlineSnpCount(0), tumorSnpCount(0){}
+    SomaticReadLog(): chr(""), readID(""), hpResult(""), germlineVarSimilarity(0.0), deriveByHpSimilarity(0.0), germlineSnpCount(0), tumorSnpCount(0){}
 };
 
 struct HP3_Info{
@@ -302,35 +321,156 @@ struct HP3_Info{
              , isFilterOut(false){}
 };
 
-class BamFileRAII {
-public:
-    samFile* in;
-    bam_hdr_t* bamHdr;
-    hts_idx_t* idx;
-    bam1_t* aln;
-
-    BamFileRAII(const std::string& BamFile, const std::string& fastaFile, htsThreadPool &threadPool);
-    ~BamFileRAII();
+struct HistogramData {
+    size_t count;     
+    double percentage; 
+    HistogramData(size_t c = 0, double p = 0.0) : count(c), percentage(p) {}
 };
 
-class readHpDistriLog{
+struct Peak{
+    size_t histo_index;
+    size_t height;
+    PeakTrend left_trend;
+    PeakTrend right_trend;
+
+    bool is_main_peak;
+
+    //sort by index in ascending order
+    static bool compareByIndex(const Peak& a, const Peak& b){
+        return a.histo_index < b.histo_index;
+    }
+    //sort by height in descending order
+    static bool compareByHight(const Peak& a, const Peak& b){
+        return a.height > b.height;
+    }
+
+    Peak(size_t index = 0, size_t height = 0) 
+        : histo_index(index), height(height), 
+          left_trend(PeakTrend::NONE), 
+          right_trend(PeakTrend::NONE),
+          is_main_peak(false){} 
+};
+
+class Histogram {
+    private:
+        const size_t MAX_HISTOGRAM_SIZE = 1000000;
+
+        std::vector<HistogramData> histogram;
+        size_t total_snp_count;
+        size_t max_height;
+        std::pair<size_t, size_t> data_range;
+    
+    public:
+        Histogram();
+        ~Histogram();
+        void buildHistogram(const std::vector<PurityData>& purity_data);
+        void calculateStatistics();    
+        const std::vector<HistogramData>& getHistogram() const { return histogram; }
+        size_t getTotalSnpCount() const { return total_snp_count; }
+        size_t getMaxHeight() const { return max_height; }
+        const std::pair<size_t, size_t>& getDataRange() const { return data_range; }
+};
+
+
+class PeakSet {
+    private:
+        struct Valley {
+            size_t index;
+            size_t height;
+            double percentage;
+        };
+
+        struct MainPeakInfo {
+            bool found;
+            size_t index;
+            Peak peak;
+            MainPeakInfo() : found(false), index(-1) ,peak() {}
+        };
+
+        struct SaddlePointInfo {
+            bool found;
+            size_t index;
+            Peak peak;
+            Peak next_peak;
+            Peak pre_peak;
+            SaddlePointInfo() : found(false), index(-1) ,peak() ,next_peak() ,pre_peak() {}
+        };
+
+        static constexpr double THRESHOLD_PERCENTAGE_LIMIT = 0.25;
+
+        std::vector<Peak> peaksVec;
+        int mainPeakCount;
+
+        MainPeakInfo mainPeak;
+        SaddlePointInfo saddlePoint;
+
+        Valley lowestValley;
+        int threshold;
+        double thresholdPercentage;
+
+    public:
+        std::vector<std::string> exec_log;
+
+        void findPeaks(const std::vector<HistogramData>& histogram, const size_t min_peak_count);
+        void removeClosePeaks(size_t minDistance);
+        void determineTrends();  
+        void findMainPeakCandidates();
+        bool findFirstPriorityMainPeak();
+        bool findSaddlePoint();
+        bool findLowestValley(const std::vector<HistogramData>& histogram, size_t start_index, size_t end_index, Valley& result);
+        void SetThresholdByValley(const std::vector<HistogramData>& histogram);
+        Peak getPeak(size_t histo_index, int offset);
+        std::string transformTrend(const PeakTrend &trend);
+        int getThreshold();
+
+        void writePeakValleyLog(const HaplotagParameters &params,
+                                const std::vector<HistogramData>& histogram,
+                                size_t &total_snp_count,
+                                const std::pair<size_t, size_t>& data_range,
+                                size_t &max_height,
+                                double &min_peak_ratio,
+                                size_t &peak_threshold);
+
+        PeakSet();
+        ~PeakSet();
+};
+
+class BamFileRAII {
+    public:
+        samFile* in;
+        bam_hdr_t* bamHdr;
+        hts_idx_t* idx;
+        bam1_t* aln;
+
+        BamFileRAII(const std::string& BamFile, const std::string& fastaFile, htsThreadPool &threadPool);
+        ~BamFileRAII();
+};
+
+class ReadHpDistriLog{
     private :
+        struct coverRegionInfo{
+            int startPos;
+            int endPos;
+            int length;
+
+            coverRegionInfo(): startPos(0), endPos(0), length(0){}
+        };
         // chr, variant position (0-base), reads HP 
         std::map<std::string, std::map<int, ReadHpResult>> chrVarReadHpResult;
     protected:
 
     public:
-        readHpDistriLog();
-        ~readHpDistriLog();
+        ReadHpDistriLog();
+        ~ReadHpDistriLog();
         //use for multi-thread SomaticVarCaller
         void mergeLocalReadHp(const std::string &chr, std::map<int, ReadHpResult> &localReadHpResult);
-        void writeReadHpDistriLog(HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec);
-        void writePosCoverRegionLog(HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec);
-        void writeTagReadCoverRegionLog(HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength);
+        void writeReadHpDistriLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec);
+        void writePosCoverRegionLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec);
+        void writeTagReadCoverRegionLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength);
         void removeNotDeriveByH1andH2pos(const std::vector<std::string> &chrVec);
 };
 
-class germlineJudgeBase{
+class GermlineJudgeBase{
     private:
 
     protected:
@@ -346,7 +486,7 @@ class germlineJudgeBase{
 };
 
 
-class BamBaseCounter : public germlineJudgeBase{
+class BamBaseCounter : public GermlineJudgeBase{
     private:
         // chr, variant position (0-base), base count & depth
         std::map<std::string, std::map<int, PosBase>> *ChrVariantBase;
@@ -386,6 +526,49 @@ class BamBaseCounter : public germlineJudgeBase{
         void displayPosInfo(std::string chr, int pos);
 };
 
+class TumorPurityPredictor{
+    private:
+        struct FilterCounts {
+            int consistencyRatioInNorBam = 0;
+            int consistencyRatioInNorBamMaxThr = 0;
+            int consistencyRatio = 0;
+            int readHpCountInNorBam = 0;
+            int percentageOfGermlineHp = 0;
+            int peakValley = 0;
+            size_t outliers = 0;
+        };
+
+        static constexpr float GERMLINE_HP_CONSISTENCY_RATIO_MIN_THR = 0.0;
+        static constexpr float GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MIN_THR = 0.0;
+        static constexpr float GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MAX_THR = 0.7;
+        static constexpr float GERMLINE_HP_PERCENTAGE_IN_NOR_BAM_MAX_THR = 0.7;
+        static const int GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR = 5;
+
+        const HaplotagParameters& params;    
+        const std::vector<std::string>& chrVec;    
+        BamBaseCounter& norBase;
+        std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo;
+        size_t initial_data_size;
+
+
+        FilterCounts filterCounts;
+    public:
+        TumorPurityPredictor(
+            const HaplotagParameters& params,
+            const std::vector<std::string>& chrVec,
+            BamBaseCounter& norBase,
+            std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo); 
+
+        ~TumorPurityPredictor();
+        double predictTumorPurity();
+        void buildPurityFeatureValueVec(std::vector<PurityData> &purityFeatureValueVec);
+        int findPeakValleythreshold(const HaplotagParameters& params, const std::vector<PurityData> &purityFeatureValueVec);
+        void peakValleyFilter(std::vector<PurityData> &purityFeatureValueVec, int &germlineReadHpCountThreshold);
+        BoxPlotValue statisticPurityData(std::vector<PurityData> &purityFeatureValueVec);
+        void removeOutliers(std::vector<PurityData> &purityFeatureValueVec, BoxPlotValue &plotValue);
+        void writePurityLog(const HaplotagParameters &params, double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold);
+};
+
 class SomaticJudgeBase{
     private :
 
@@ -414,10 +597,10 @@ class SomaticVarCaller: public SomaticJudgeBase{
         // chr, variant position (0-base), reads HP 
         std::map<std::string, std::map<int, ReadHpResult>> *chrVarReadHpResult;
         
-        readHpDistriLog *callerReadHpDistri;
+        ReadHpDistriLog *callerReadHpDistri;
 
         //  chr, startPos, endPos
-        std::map<std::string, std::map<int, std::pair<int, denseSnpInterval>>> *denseTumorSnpInterval;
+        std::map<std::string, std::map<int, std::pair<int, DenseSnpInterval>>> *denseTumorSnpInterval;
 
         // chr, read ID, SNP,read HP
         std::map<std::string, std::map<std::string, ReadVarHpCount>> *chrReadHpResultSet;
@@ -428,18 +611,15 @@ class SomaticVarCaller: public SomaticJudgeBase{
 
         void SetFilterParamsWithPurity(SomaticFilterParaemter &somaticParams, double &tumorPurity);
     
-        void StatisticTumorVariantData(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, HaplotagParameters &params, BamBaseCounter *NorBase, VCF_Info *vcfSet
+        void StatisticTumorVariantData(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, const HaplotagParameters &params, BamBaseCounter *NorBase, VCF_Info *vcfSet
                                    , std::map<int, HP3_Info> &posReadCase, std::map<int, RefAltSet> &currentChrVariants, std::map<int, RefAltSet>::iterator &firstVariantIter
                                    , std::map<std::string, ReadVarHpCount> &readTotalHPcount, std::map<int, std::map<std::string, int>> &somaticPosReadID, std::string &ref_string);
         void ClassifyReadsByCase(std::vector<int> &readPosHP3, std::map<int, int> &NorCountPS, std::map<int, int> &hpCount, const HaplotagParameters &params, std::map<int, HP3_Info> &somaticPosInfo);
 
-        double predictTumorPurity(const HaplotagParameters &params, const std::vector<std::string> &chrVec, BamBaseCounter &NorBase);
-        BoxPlotValue statisticPurityData(std::vector<double> &purityFeatureValueVec);
-
         double calculateStandardDeviation(const std::map<int, double>& data, double mean);
         void calculateZScores(const std::map<int, double>& data, double mean, double stdDev, std::map<int, double> &zScores);
-        void calculateIntervalZScore(bool &isStartPos, int &startPos, int &pos, int &snpCount, denseSnpInterval &denseSnp, std::map<int, std::pair<int, denseSnpInterval>> &localDenseTumorSnpInterval);
-        void getDenseTumorSnpInterval(std::map<int, HP3_Info> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, std::map<int, std::pair<int, denseSnpInterval>> &closeSomaticSnpInterval);
+        void calculateIntervalZScore(bool &isStartPos, int &startPos, int &pos, int &snpCount, DenseSnpInterval &denseSnp, std::map<int, std::pair<int, DenseSnpInterval>> &localDenseTumorSnpInterval);
+        void getDenseTumorSnpInterval(std::map<int, HP3_Info> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, std::map<int, std::pair<int, DenseSnpInterval>> &closeSomaticSnpInterval);
 
         void SomaticFeatureFilter(const SomaticFilterParaemter &somaticParams, std::map<int, RefAltSet> &currentChrVariants,const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo, BamBaseCounter &NorBase, double& tumorPurity);
         
@@ -468,7 +648,7 @@ class SomaticVarCaller: public SomaticJudgeBase{
         SomaticVarCaller();
         virtual ~SomaticVarCaller();
 
-        void VariantCalling(const std::string BamFile, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat,const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, HaplotagParameters &params, VCF_Info *vcfSet, BamBaseCounter &NorBase);
+        void VariantCalling(const std::string BamFile, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat,const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength,const HaplotagParameters &params, VCF_Info *vcfSet, BamBaseCounter &NorBase);
         std::map<std::string, std::map<int, HP3_Info>> getSomaticChrPosInfo();
 
 
@@ -505,21 +685,21 @@ struct RefAltDelCount{
     int delCount;
 };
 
-class highConBenchmark: public VcfParser{
+class HighConBenchmark: public VcfParser{
     private:
         bool openTestingFunc;
 
         // store data
         std::map<std::string, std::map<int, RefAltDelCount>> posAltRefDelCount;
         std::vector<std::pair<int, int>> highConSomaticPos;
-        std::vector<somaticReadLog> totalReadVec;
-        std::vector<somaticReadLog> readsCrossingHighConSnpVec;
-        std::vector<somaticReadLog> taggedSomaticReadVec;
+        std::vector<SomaticReadLog> totalReadVec;
+        std::vector<SomaticReadLog> readsCrossingHighConSnpVec;
+        std::vector<SomaticReadLog> taggedSomaticReadVec;
         void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
     public:
 
-        highConBenchmark();
-        ~highConBenchmark();
+        HighConBenchmark();
+        ~HighConBenchmark();
         void setTestingFunc(bool openTestingFunc);
         void loadHighConSomatic(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
         
@@ -529,18 +709,18 @@ class highConBenchmark: public VcfParser{
         void recordTaggedSomaticRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, RefAltSet> &currentChrVariants);
         void recordTaggedRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, RefAltSet> &currentChrVariants);
 
-        somaticReadLog createBasicSomaticReadLog(const std::string &chr, std::string &readID, std::string &hpResult, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, int> &hpCount);
+        SomaticReadLog createBasicSomaticReadLog(const std::string &chr, std::string &readID, std::string &hpResult, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, int> &hpCount);
         
         void writePosAlleleCountLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
         void writeTaggedSomaticReadLog(HaplotagParameters &params, std::string logPosfix);
         void writeCrossHighConSnpReadLog(HaplotagParameters &params, std::string logPosfix);
         void writeTaggedReadLog(HaplotagParameters &params, std::string logPosfix);
-        void writeReadLog(HaplotagParameters &params, std::string logPosfix, std::vector<somaticReadLog> &somaticReadVec);
+        void writeReadLog(HaplotagParameters &params, std::string logPosfix, std::vector<SomaticReadLog> &somaticReadVec);
         
         void displaySomaticVarCount(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
 };
 
-class HaplotagProcess: public SomaticJudgeBase, public germlineJudgeBase
+class HaplotagProcess: public SomaticJudgeBase, public GermlineJudgeBase
 {
     private:
         std::vector<std::string> *chrVec;
@@ -564,7 +744,7 @@ class HaplotagProcess: public SomaticJudgeBase, public germlineJudgeBase
         void initFlag(bam1_t *aln, std::string flag);
         
         int judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, std::string chrName, double percentageThreshold, std::ofstream *tagResult, int &pqValue, int &psValue, const int tagGeneType, std::string &ref_string);
-        int SomaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln,const std::string &chrName, double percentageThreshold, std::ofstream *tagResult, int &pqValue, int &psValue, const int tagGeneType, std::string &ref_string);
+        int somaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln,const std::string &chrName, double percentageThreshold, std::ofstream *tagResult, int &pqValue, int &psValue, const int tagGeneType, std::string &ref_string);
         std::string convertHpResultToString(int hpResult);
         
         int totalAlignment;
@@ -593,10 +773,10 @@ class HaplotagProcess: public SomaticJudgeBase, public germlineJudgeBase
         std::map<std::string, std::map<int, ReadHpResult>> *beforeCorrReadHpResult;
         std::map<std::string, std::map<int, ReadHpResult>> *afterCorrReadHpResult;
 
-        readHpDistriLog *hpBeforeInheritance;
-        readHpDistriLog *hpAfterInheritance;
+        ReadHpDistriLog *hpBeforeInheritance;
+        ReadHpDistriLog *hpAfterInheritance;
         
-        highConBenchmark highConSomaticData;
+        HighConBenchmark highConSomaticData;
         //---------------------------------------------------------------
         
         std::time_t processBegin;
@@ -604,7 +784,7 @@ class HaplotagProcess: public SomaticJudgeBase, public germlineJudgeBase
         void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, RefAltSet &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos);
     public:
         HaplotagProcess();
-        void TaggingProcess(HaplotagParameters &params);
+        void taggingProcess(HaplotagParameters &params);
         virtual ~HaplotagProcess();
 
 };
