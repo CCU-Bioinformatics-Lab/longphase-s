@@ -1849,11 +1849,8 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
     TumorPurityPredictor* tumorPurityPredictor = new TumorPurityPredictor(params, chrVec, NorBase, *chrPosSomaticInfo);
     double tumorPurity = tumorPurityPredictor->predictTumorPurity();
     delete tumorPurityPredictor;
-    // double tumorPurity = predictTumorPurity(params, chrVec, NorBase);
 
     // set filter params with tumor purity
-    // std::cerr << "[Debug] Setting tumorPurity = 1.0" << std::endl;
-    // tumorPurity = 1.0;
     SetFilterParamsWithPurity(somaticParams, tumorPurity);
     
     std::cerr<< "calling somatic variants ... ";
@@ -3944,7 +3941,7 @@ int TumorPurityPredictor::findPeakValleythreshold(const HaplotagParameters& para
         //find the main peak
         peakSet.findMainPeakCandidates();
         //set the threshold by the lowest valley
-        peakSet.SetThresholdByValley(smoothedHistogram.getHistogram());
+        peakSet.SetThresholdByValley(smoothedHistogram.getHistogram(), smoothedHistogram.getMaxHeight());
 
         threshold = peakSet.getThreshold();
 
@@ -4549,7 +4546,7 @@ bool PeakProcessor::findLowestValley(const std::vector<HistogramData>& histogram
     return found;
 }
 
-void PeakProcessor::SetThresholdByValley(const std::vector<HistogramData>& histogram){
+void PeakProcessor::SetThresholdByValley(const std::vector<HistogramData>& histogram, const double &max_height){
     bool found_first_main_peak = false;
     mainPeak.peak = Peak();
     
@@ -4619,6 +4616,13 @@ void PeakProcessor::SetThresholdByValley(const std::vector<HistogramData>& histo
         }else{
             exec_log.push_back("[INFO] no saddle point found");
         }
+    }
+    //check valley height 
+    //valley may not be able to separate the two distributions
+    if(lowestValley.height > max_height * 0.7){
+        exec_log.push_back("[INFO] valley height is too high, set the threshold to 0: valley height: " + std::to_string(lowestValley.height) + " max height: " + std::to_string(max_height));
+        thresholdPercentage = 0.0;
+        threshold = 0;
     }
 
     // Final check threshold

@@ -428,7 +428,7 @@ class PeakProcessor {
         bool findFirstPriorityMainPeak();
         bool findSaddlePoint();
         bool findLowestValley(const std::vector<HistogramData>& histogram, size_t start_index, size_t end_index, Valley& result);
-        void SetThresholdByValley(const std::vector<HistogramData>& histogram);
+        void SetThresholdByValley(const std::vector<HistogramData>& histogram, const double &max_height);
         Peak getPeak(size_t histo_index, int offset);
         std::string transformTrend(const PeakTrend &trend);
         int getThreshold();
@@ -695,14 +695,15 @@ class VcfParser{
         void variantParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
 };
 
-struct RefAltDelCount{
-    int refCount;
-    int altCount;
-    int delCount;
-};
 
 class HighConBenchmark: public VcfParser{
     private:
+        struct RefAltDelCount{
+            int refCount;
+            int altCount;
+            int delCount;
+        };
+        
         bool openTestingFunc;
 
         // store data
