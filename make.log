@@ -1,0 +1,12 @@
+make	-C	./jemalloc
+make[1]: Entering directory '/bip8_disk/mingen112/longphase-somatic-v1.73/jemalloc'
+make[1]: Leaving directory '/bip8_disk/mingen112/longphase-somatic-v1.73/jemalloc'
+make	-C	./htslib
+make[1]: Entering directory '/bip8_disk/mingen112/longphase-somatic-v1.73/htslib'
+make[1]: Leaving directory '/bip8_disk/mingen112/longphase-somatic-v1.73/htslib'
+make	longphase
+make[1]: Entering directory '/bip8_disk/mingen112/longphase-somatic-v1.73'
+g++ -I. -std=c++11 -g -Wall -O3 -fopenmp -Ihtslib -Ijemalloc -o Haplotag.o -c Haplotag.cpp
+g++ -I. -std=c++11 -g -Wall -O3 -fopenmp -Ihtslib -Ijemalloc -o HaplotagProcess.o -c HaplotagProcess.cpp
+g++ -I. -std=c++11 -g -Wall -O3 -fopenmp -Ihtslib -Ijemalloc -o SomaticVarCaller.o -c SomaticVarCaller.cpp
+make[1]: Leaving directory '/bip8_disk/mingen112/longphase-somatic-v1.73'
