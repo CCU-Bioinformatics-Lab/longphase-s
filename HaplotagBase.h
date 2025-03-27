@@ -301,7 +301,7 @@ class GermlineJudgeBase{
         void germlineJudgeDeletionHap(const std::string& chrName, const std::string& ref_string, int& ref_pos, int& length, int& query_pos, std::map<int, MultiGenomeVar>::iterator &currentVariantIter, VCF_Info* vcfSet, const bam1_t* aln, int& hp1Count, int& hp2Count, std::map<int, int>& variantsHP, std::map<int, int>& countPS);
         void germlineJudgeSVHap(const bam1_t &aln, VCF_Info* vcfSet, int& hp1Count, int& hp2Count, const int& tagGeneType);
         int germlineDetermineReadHap(int& hp1Count, int& hp2Count, double& min, double& max, double& percentageThreshold, int& pqValue, int& psValue, std::map<int, int>& countPS, int* totalHighSimilarity, int* totalWithOutVaraint);
-        void germlineGetRefLastVarPos(std::vector<int>& last_pos, const std::vector<std::string>& chrVec, VCF_Info* vcfSet, int geneType);
+        void germlineGetRefLastVarPos(std::vector<int>& last_pos, const std::vector<std::string>& chrVec, VCF_Info* vcfSet, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, const Genome& geneType);
         void writeGermlineTagLog(std::ofstream& tagResult, const bam1_t& aln, const bam_hdr_t& bamHdr, int& hpResult, double& max, double& min, int& hp1Count, int& hp2Count, int& pqValue, const std::map<int, int>& variantsHP, const std::map<int, int>& countPS);
     public:
 };
@@ -324,7 +324,13 @@ class BamBaseCounter : public GermlineJudgeBase{
         BamBaseCounter(bool enableFilter);
         ~BamBaseCounter();
 
-        void CountingBamBase(const std::string &BamFile, const HaplotagParameters &params, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, VCF_Info *vcfSet, int genmoeType);
+        void CountingBamBase(const std::string &BamFile, 
+                             const HaplotagParameters &params, 
+                             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
+                             std::vector<std::string> &chrVec, 
+                             std::map<std::string, int> &chrLength, 
+                             VCF_Info *vcfSet, 
+                             const Genome& genmoeType);
 
         bool isHighRefAllelleFreq(std::string chr, int pos);
         std::string getMaxFreqBase(std::string chr, int pos);

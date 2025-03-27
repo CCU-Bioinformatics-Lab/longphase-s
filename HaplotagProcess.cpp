@@ -1,7 +1,7 @@
 #include "HaplotagProcess.h"
 
 
-void HaplotagProcess::tagRead(HaplotagParameters &params, const int geneType){
+void HaplotagProcess::tagRead(HaplotagParameters &params, const Genome& geneType){
 
     // input file management
     std::string openBamFile = params.bamFile;
@@ -43,7 +43,7 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const int geneType){
 
     std::vector<int> last_pos;
     // record reference last variant pos
-    germlineGetRefLastVarPos(last_pos, *chrVec, vcfSet, geneType);
+    germlineGetRefLastVarPos(last_pos, *chrVec, vcfSet, *mergedChrVarinat, geneType);
     // reference fasta parser
     FastaParser fastaParser(params.fastaFile, *chrVec, last_pos, params.numThreads);
 
@@ -753,7 +753,8 @@ void HaplotagProcess::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPo
             }
 
             if(curVar.Variant[TUMOR].is_phased_hetero){
-                if(tumCountPS != nullptr) (*tumCountPS)[vcfSet[TUMOR].chrVariantPS[chrName][curPos]]++;
+                // if(tumCountPS != nullptr) (*tumCountPS)[vcfSet[TUMOR].chrVariantPS[chrName][curPos]]++;
+                if(tumCountPS != nullptr) (*tumCountPS)[curVar[TUMOR].PhasedSet]++;
             }
         }
     }
@@ -855,7 +856,7 @@ void HaplotagProcess::taggingProcess(HaplotagParameters &params)
     
     tagTumorMode=params.tagTumorSnp;
     // decide on the type of tagging for VCF and BAM files
-    int tagGeneType;
+    Genome tagGeneType;
 
     if(tagTumorMode){
         tagGeneType = TUMOR;
@@ -926,9 +927,9 @@ void HaplotagProcess::taggingProcess(HaplotagParameters &params)
     }else{
 
         //check normal & tumor chr & length
-        for(auto& chrIter : vcfSet[TUMOR].chrLength){
-            if(vcfSet[NORMAL].chrLength.find(chrIter.first) != vcfSet[NORMAL].chrLength.end()){
-                if(chrIter.second != vcfSet[NORMAL].chrLength[chrIter.first]){
+        for(auto& chrIter : vcfSet[Genome::TUMOR].chrLength){
+            if(vcfSet[Genome::NORMAL].chrLength.find(chrIter.first) != vcfSet[Genome::NORMAL].chrLength.end()){
+                if(chrIter.second != vcfSet[Genome::NORMAL].chrLength[chrIter.first]){
                     std::cerr << "tumor & normal VCFs chromosome length are not the same" << std::endl;
                     std::cerr << "chr: " << chrIter.first << " length: " << chrIter.second << std::endl;
                     return ;
@@ -1000,7 +1001,7 @@ void HaplotagProcess::taggingProcess(HaplotagParameters &params)
         delete SomaticVar;
         NorBase = nullptr;
         SomaticVar = nullptr;
-        return;
+        // return;
     }
 
     // tag read

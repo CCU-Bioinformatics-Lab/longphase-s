@@ -26,7 +26,7 @@ class HaplotagProcess: public SomaticJudgeBase, public GermlineJudgeBase
         // record the VCF files of the normal and tumor datasets (normal:0, tumor:1, seqcHighCon:2)
         VCF_Info vcfSet[3];
 
-        void tagRead(HaplotagParameters &params, const int geneType);
+        void tagRead(HaplotagParameters &params, const Genome& geneType);
 
         void initFlag(bam1_t *aln, std::string flag);
         

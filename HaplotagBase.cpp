@@ -16,7 +16,7 @@ void BamBaseCounter::CountingBamBase(
     std::vector<std::string> &chrVec, 
     std::map<std::string, int> &chrLength, 
     VCF_Info *vcfSet, 
-    int genmoeType
+    const Genome& genmoeType
 ){
     std::cerr<< "collecting data for the normal sample... ";
     std::time_t begin = time(NULL);
@@ -37,7 +37,7 @@ void BamBaseCounter::CountingBamBase(
     
     std::vector<int> last_pos;
     // get the last variant position of the reference
-    germlineGetRefLastVarPos(last_pos, chrVec, vcfSet, genmoeType);
+    germlineGetRefLastVarPos(last_pos, chrVec, vcfSet,mergedChrVarinat, genmoeType);
     // reference fasta parser
     FastaParser fastaParser(params.fastaFile, chrVec, last_pos, params.numThreads);
 
@@ -641,14 +641,27 @@ void GermlineJudgeBase::germlineGetRefLastVarPos(
     std::vector<int>& last_pos, 
     const std::vector<std::string>& chrVec, 
     VCF_Info* vcfSet, 
-    int geneType
+    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
+    const Genome& genmoeType
 ){
     for( auto chr : chrVec ){
-        auto lastVariantIter = vcfSet[geneType].chrVariantPS[chr].rbegin();
-        if( lastVariantIter != vcfSet[geneType].chrVariantPS[chr].rend() ){
-            last_pos.push_back(lastVariantIter->second);
+        bool existLastPos = false;
+
+        for (auto lastVariantIter = mergedChrVarinat[chr].rbegin(); lastVariantIter != mergedChrVarinat[chr].rend(); ++lastVariantIter) {
+            switch(genmoeType) {
+                case NORMAL:
+                    if ((*lastVariantIter).second.isExists(NORMAL) && (*lastVariantIter).second.Variant[NORMAL].isExistPhasedSet()) {
+                        last_pos.push_back((*lastVariantIter).first);
+                        existLastPos = true;
+                        break;
+                    }
+                    break;
+                case TUMOR:
+                    break;
+            }
         }
-        else{
+        
+        if(!existLastPos){
             last_pos.push_back(0);
         }
     }
@@ -1882,15 +1895,10 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                 varData.allele.Ref = fields[3];
                 varData.allele.Alt = fields[4];
                 varData.is_phased_hetero = true;
-
-                if(Info.gene_type == NORMAL){
-                    mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;
-                }else if(Info.gene_type == TUMOR){
-                    mergedChrVarinat[chr][pos].Variant[TUMOR] = varData;
-                }
                 
                 if(integerPS){
                     Info.chrVariantPS[chr][pos]=std::stoi(psValue);
+                    varData.PhasedSet = std::stoi(psValue);
                 }
                 else{
                     std::map<std::string, int>::iterator psIter = Info.psIndex.find(psValue);
@@ -1899,16 +1907,23 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                         Info.psIndex[psValue] = Info.psIndex.size();
                     }
                     Info.chrVariantPS[chr][pos]=Info.psIndex[psValue];
+                    varData.PhasedSet = Info.psIndex[psValue];
                 }
                 
                 // record haplotype allele
                 if( fields[9][modifu_start] == '0' && fields[9][modifu_start+2] == '1' ){
-                    mergedChrVarinat[chr][pos].Variant[Info.gene_type].HP1 = fields[3];
-                    mergedChrVarinat[chr][pos].Variant[Info.gene_type].HP2 = fields[4];
+                    varData.HP1 = fields[3];
+                    varData.HP2 = fields[4];
                 }
                 else if( fields[9][modifu_start] == '1' && fields[9][modifu_start+2] == '0' ){
-                    mergedChrVarinat[chr][pos].Variant[Info.gene_type].HP1 = fields[4];
-                    mergedChrVarinat[chr][pos].Variant[Info.gene_type].HP2 = fields[3];
+                    varData.HP1 = fields[4];
+                    varData.HP2 = fields[3];
+                }
+
+                if(Info.gene_type == NORMAL){
+                    mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;
+                }else if(Info.gene_type == TUMOR){
+                    mergedChrVarinat[chr][pos].Variant[TUMOR] = varData;
                 }
             }
             // sv file
