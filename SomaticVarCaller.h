@@ -89,7 +89,7 @@ class SomaticVarCaller: public SomaticJudgeBase{
 
         void SetFilterParamsWithPurity(SomaticFilterParaemter &somaticParams, double &tumorPurity);
     
-        void extractTumorVariantData(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, const HaplotagParameters &params, BamBaseCounter *NorBase, VCF_Info *vcfSet
+        void extractTumorVariantData(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, const HaplotagParameters &params, BamBaseCounter *NorBase
                                    , std::map<int, HP3_Info> &posReadCase, std::map<int, MultiGenomeVar> &currentChrVariants, std::map<int, MultiGenomeVar>::iterator &firstVariantIter
                                    , std::map<std::string, ReadVarHpCount> &readTotalHPcount, std::map<int, std::map<std::string, int>> &somaticPosReadID, std::string &ref_string);
         
@@ -122,12 +122,12 @@ class SomaticVarCaller: public SomaticJudgeBase{
         void releaseMemory();
 
     protected:
-        void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos);
+        void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos);
     public:
         SomaticVarCaller();
         virtual ~SomaticVarCaller();
 
-        void VariantCalling(const std::string BamFile, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength,const HaplotagParameters &params, VCF_Info *vcfSet, BamBaseCounter &NorBase);
+        void VariantCalling(const std::string BamFile, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength,const HaplotagParameters &params, BamBaseCounter &NorBase);
         std::map<std::string, std::map<int, HP3_Info>> getSomaticChrPosInfo();
 
 

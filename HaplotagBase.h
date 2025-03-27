@@ -289,13 +289,13 @@ class GermlineJudgeBase{
     private:
 
     protected:
-        void germlineJudgeSnpHap(const std::string& chrName, VCF_Info* vcfSet, VarData& norVar, const std::string& base, int& ref_pos, int& length, int& i, int& aln_core_n_cigar
+        void germlineJudgeSnpHap(const std::string& chrName, VarData& norVar, const std::string& base, int& ref_pos, int& length, int& i, int& aln_core_n_cigar
         ,uint32_t* cigar, std::map<int, MultiGenomeVar>::iterator& currentVariantIter, int& hp1Count, int& hp2Count, std::map<int, int>& variantsHP, std::map<int, int>& countPS);
 
-        void germlineJudgeDeletionHap(const std::string& chrName, const std::string& ref_string, int& ref_pos, int& length, int& query_pos, std::map<int, MultiGenomeVar>::iterator &currentVariantIter, VCF_Info* vcfSet, const bam1_t* aln, int& hp1Count, int& hp2Count, std::map<int, int>& variantsHP, std::map<int, int>& countPS);
+        void germlineJudgeDeletionHap(const std::string& chrName, const std::string& ref_string, int& ref_pos, int& length, int& query_pos, std::map<int, MultiGenomeVar>::iterator &currentVariantIter, const bam1_t* aln, int& hp1Count, int& hp2Count, std::map<int, int>& variantsHP, std::map<int, int>& countPS);
         void germlineJudgeSVHap(const bam1_t &aln, VCF_Info* vcfSet, int& hp1Count, int& hp2Count, const int& tagGeneType);
         int germlineDetermineReadHap(int& hp1Count, int& hp2Count, double& min, double& max, double& percentageThreshold, int& pqValue, int& psValue, std::map<int, int>& countPS, int* totalHighSimilarity, int* totalWithOutVaraint);
-        void germlineGetRefLastVarPos(std::vector<int>& last_pos, const std::vector<std::string>& chrVec, VCF_Info* vcfSet, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, const Genome& geneType);
+        void germlineGetRefLastVarPos(std::vector<int>& last_pos, const std::vector<std::string>& chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, const Genome& geneType);
         void writeGermlineTagLog(std::ofstream& tagResult, const bam1_t& aln, const bam_hdr_t& bamHdr, int& hpResult, double& max, double& min, int& hp1Count, int& hp2Count, int& pqValue, const std::map<int, int>& variantsHP, const std::map<int, int>& countPS);
     public:
 };
@@ -351,11 +351,11 @@ class SomaticJudgeBase{
     private :
 
     protected:
-        void SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, VCF_Info *vcfSet, std::string chrName, std::string base, std::map<int, int> &hpCount
+        void SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount
         , std::map<int, int> &NorCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP
         , std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos);
 
-        virtual void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos)=0;
+        virtual void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos)=0;
         int determineReadHP(std::map<int, int> &hpCount, int &pqValue,std::map<int, int> &norCountPS, double &norHPsimilarity, double &tumHPsimilarity,  double percentageThreshold, int *totalHighSimilarity, int *totalCrossTwoBlock, int *totalWithOutVaraint);
 
         int convertStrNucToInt(std::string &base);

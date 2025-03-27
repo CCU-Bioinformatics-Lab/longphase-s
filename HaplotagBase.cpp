@@ -37,7 +37,7 @@ void BamBaseCounter::CountingBamBase(
     
     std::vector<int> last_pos;
     // get the last variant position of the reference
-    germlineGetRefLastVarPos(last_pos, chrVec, vcfSet,mergedChrVarinat, genmoeType);
+    germlineGetRefLastVarPos(last_pos, chrVec,mergedChrVarinat, genmoeType);
     // reference fasta parser
     FastaParser fastaParser(params.fastaFile, chrVec, last_pos, params.numThreads);
 
@@ -249,7 +249,7 @@ void BamBaseCounter::StatisticBaseInfo(
                         // only judge the heterozygous SNP
                         if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
                             auto norVar = (*currentVariantIter).second.Variant[NORMAL];
-                            germlineJudgeSnpHap(chrName, vcfSet, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, hp1Count, hp2Count, variantsHP, countPS);
+                            germlineJudgeSnpHap(chrName, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, hp1Count, hp2Count, variantsHP, countPS);
                         }
                     }
                 }
@@ -295,7 +295,7 @@ void BamBaseCounter::StatisticBaseInfo(
                         // longphase v1.73 only execute once
                         alreadyJudgeDel = true;
                         auto norVar = (*currentVariantIter).second.Variant[NORMAL];
-                        germlineJudgeDeletionHap(chrName, ref_string, ref_pos, length, query_pos, currentVariantIter, vcfSet, &aln, hp1Count, hp2Count, variantsHP, countPS);
+                        germlineJudgeDeletionHap(chrName, ref_string, ref_pos, length, query_pos, currentVariantIter, &aln, hp1Count, hp2Count, variantsHP, countPS);
                     }
                 }
                 
@@ -640,7 +640,6 @@ void BamBaseCounter::displayPosInfo(std::string chr, int pos){
 void GermlineJudgeBase::germlineGetRefLastVarPos(
     std::vector<int>& last_pos, 
     const std::vector<std::string>& chrVec, 
-    VCF_Info* vcfSet, 
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
     const Genome& genmoeType
 ){
@@ -670,7 +669,6 @@ void GermlineJudgeBase::germlineGetRefLastVarPos(
 
 void GermlineJudgeBase::germlineJudgeSnpHap(
     const std::string& chrName,
-    VCF_Info* vcfSet,
     VarData& norVar,
     const std::string& base,
     int& ref_pos,
@@ -790,7 +788,6 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
     int& length,
     int& query_pos,
     std::map<int, MultiGenomeVar>::iterator &currentVariantIter,
-    VCF_Info* vcfSet,
     const bam1_t* aln,
     int& hp1Count,
     int& hp2Count,
@@ -955,7 +952,7 @@ void GermlineJudgeBase::writeGermlineTagLog(std::ofstream& tagResult, const bam1
     (tagResult) << "\n";
 }
 
-void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, VCF_Info *vcfSet, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
+void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
     int curPos = (*currentVariantIter).first;
     auto& curVar = (*currentVariantIter).second;
 
@@ -1092,24 +1089,24 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator
                              << curVar.Variant[TUMOR].allele.Alt << "\n";
                     exit(EXIT_SUCCESS);
                 }else{
-                    OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, vcfSet, hpCount, &tumCountPS, variantsHP, tumorAllelePosVec, NorBase, SomaticPos);
+                    OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, &tumCountPS, variantsHP, tumorAllelePosVec, NorBase, SomaticPos);
                 }
             }
         //the tumor SNP GT is unphased heterozygous
         }else if(curVar.Variant[TUMOR].is_unphased_hetero == true){
             if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
-                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, vcfSet, hpCount, nullptr, variantsHP, tumorAllelePosVec, NorBase, SomaticPos);
+                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec, NorBase, SomaticPos);
             }           
         //the tumor SNP GT is homozygous
         }else if(curVar.Variant[TUMOR].is_homozygous == true){
             if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
-                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, vcfSet, hpCount, nullptr, variantsHP, tumorAllelePosVec, NorBase, SomaticPos);
+                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec, NorBase, SomaticPos);
             }
         }
     }
 }
 
-void SomaticJudgeBase::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
+void SomaticJudgeBase::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
 
 }
 
@@ -1982,8 +1979,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                     VarData varData;
                     varData.allele.Ref = fields[3];
                     varData.allele.Alt = fields[4];
-
-                    varData.is_unphased_hetero = false;
+                    varData.is_homozygous = true;
 
                     if(Info.gene_type == NORMAL){
                         mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;

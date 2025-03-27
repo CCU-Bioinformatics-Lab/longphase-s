@@ -22,7 +22,7 @@ void SomaticVarCaller::releaseMemory(){
     delete chrTumorPosReadCorrBaseHP;
 }
 
-void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, const HaplotagParameters &params, VCF_Info *vcfSet, BamBaseCounter &NorBase){
+void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, const HaplotagParameters &params, BamBaseCounter &NorBase){
     std::cerr << "collecting data for the tumor sample... ";
     std::time_t begin = time(NULL);
 
@@ -153,7 +153,7 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
             }
             else if(int(bam.aln->core.pos) <= (*lastVariant).first){
                 //statistics for tumor SNP base count and depth, and classify cases
-                extractTumorVariantData(*bam.bamHdr, *bam.aln, chr, params, &NorBase, vcfSet, *somaticPosInfo, currentChrVariants, firstVariantIter, *readHpResultSet, *tumorPosReadCorrBaseHP, ref_string);
+                extractTumorVariantData(*bam.bamHdr, *bam.aln, chr, params, &NorBase, *somaticPosInfo, currentChrVariants, firstVariantIter, *readHpResultSet, *tumorPosReadCorrBaseHP, ref_string);
             }
         }
         hts_itr_destroy(Iter);
@@ -287,7 +287,7 @@ void SomaticVarCaller::InitialSomaticFilterParams(SomaticFilterParaemter &somati
     somaticParams.IntervalSnpCount_VAF_maxThr = 0.15;
 }
 
-void SomaticVarCaller::extractTumorVariantData(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, const HaplotagParameters &params, BamBaseCounter *NorBase, VCF_Info *vcfSet, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants, std::map<int, MultiGenomeVar>::iterator &firstVariantIter, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP, std::string &ref_string){
+void SomaticVarCaller::extractTumorVariantData(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, const HaplotagParameters &params, BamBaseCounter *NorBase, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants, std::map<int, MultiGenomeVar>::iterator &firstVariantIter, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP, std::string &ref_string){
     
     std::map<int, int> hpCount;
     hpCount[1] = 0; 
@@ -355,7 +355,7 @@ void SomaticVarCaller::extractTumorVariantData(const bam_hdr_t &bamHdr,const bam
 
                     //waring : using ref length to split SNP and indel that will be effect case ratio result 
                     if ( aln.core.qual >= params.somaticCallingMpqThreshold ){
-                        SomaticJudgeSnpHP(currentVariantIter, vcfSet , chr, base, hpCount, NorCountPS, TumCountPS, &variantsHP, &tumorAllelePosVec, NorBase, &somaticPosInfo);
+                        SomaticJudgeSnpHP(currentVariantIter, chr, base, hpCount, NorCountPS, TumCountPS, &variantsHP, &tumorAllelePosVec, NorBase, &somaticPosInfo);
                         if((*currentVariantIter).second.isExists(TUMOR)){
                             tumorSnpPosVec.push_back((*currentVariantIter).first);
                         }
@@ -524,7 +524,7 @@ void SomaticVarCaller::extractTumorVariantData(const bam_hdr_t &bamHdr,const bam
     }
 }
 
-void SomaticVarCaller::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
+void SomaticVarCaller::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
     //the tumor SNP GT is phased heterozygous
     //all bases of the same type at the current position in normal.bam
 

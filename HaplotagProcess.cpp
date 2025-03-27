@@ -43,7 +43,7 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const Genome& geneType
 
     std::vector<int> last_pos;
     // record reference last variant pos
-    germlineGetRefLastVarPos(last_pos, *chrVec, vcfSet, *mergedChrVarinat, geneType);
+    germlineGetRefLastVarPos(last_pos, *chrVec, *mergedChrVarinat, geneType);
     // reference fasta parser
     FastaParser fastaParser(params.fastaFile, *chrVec, last_pos, params.numThreads);
 
@@ -310,7 +310,7 @@ int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, s
                     char base_chr = seq_nt16_str[bam_seqi(q,query_pos + offset)];
                     std::string base(1, base_chr);
 
-                    germlineJudgeSnpHap(chrName, vcfSet, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, hp1Count, hp2Count, variantsHP, countPS);
+                    germlineJudgeSnpHap(chrName, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, hp1Count, hp2Count, variantsHP, countPS);
 
                 }
                 currentVariantIter++;
@@ -325,7 +325,7 @@ int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, s
             // 2: deletion from the reference
         else if( cigar_op == 2 ){
 
-            germlineJudgeDeletionHap(chrName, ref_string, ref_pos, length, query_pos, currentVariantIter, vcfSet, &aln, hp1Count, hp2Count, variantsHP, countPS);
+            germlineJudgeDeletionHap(chrName, ref_string, ref_pos, length, query_pos, currentVariantIter, &aln, hp1Count, hp2Count, variantsHP, countPS);
             ref_pos += length;
         }
             // 3: skipped region from the reference
@@ -428,7 +428,7 @@ int HaplotagProcess::somaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
                     std::string base(1, base_chr);
 
                     //std::cout << "flag 1" << std::endl;
-                    SomaticJudgeSnpHP(currentVariantIter, vcfSet , chrName, base, hpCount, norCountPS, tumCountPS, &variantsHP, nullptr, nullptr, &((*chrPosReadCase)[chrName]));
+                    SomaticJudgeSnpHP(currentVariantIter, chrName, base, hpCount, norCountPS, tumCountPS, &variantsHP, nullptr, nullptr, &((*chrPosReadCase)[chrName]));
                     if((*chrPosReadCase)[chrName].find((*currentVariantIter).first) != (*chrPosReadCase)[chrName].end()){
 
                         //record the somatic snp derive by which germline hp in this read
@@ -729,7 +729,7 @@ std::string HaplotagProcess::convertHpResultToString(int hpResult){
     }
 }
 
-void HaplotagProcess::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
+void HaplotagProcess::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
 
     if(SomaticPos == nullptr){
         std::cerr << "ERROR (SomaticTaggingJudgeHP) => SomaticPos pointer cannot be nullptr"<< std::endl;
@@ -993,7 +993,7 @@ void HaplotagProcess::taggingProcess(HaplotagParameters &params)
 
         //record the HP3 confidence of each read
         SomaticVarCaller *SomaticVar = new SomaticVarCaller();
-        SomaticVar->VariantCalling(params.tumorBamFile, (*mergedChrVarinat), *chrVec, *chrLength, params, vcfSet, *NorBase);
+        SomaticVar->VariantCalling(params.tumorBamFile, (*mergedChrVarinat), *chrVec, *chrLength, params, *NorBase);
         (*chrPosReadCase) = SomaticVar->getSomaticChrPosInfo();
 
         delete NorBase;
