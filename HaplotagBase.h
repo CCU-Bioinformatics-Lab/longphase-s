@@ -88,14 +88,52 @@ class BamFileRAII {
         ~BamFileRAII();
 };
 
-// record the variants from the normal and tumor VCF files (normal:0, tumor:1, seqcHighCon:2)
-struct RefAltSet{
-    RefAlt Variant[3];
-    bool isExistNormal;
-    bool isExistTumor;
-    bool isExistHighConSomatic;
-    RefAltSet(): isExistNormal(false), isExistTumor(false), isExistHighConSomatic(false){}
+
+struct VarData{
+    RefAlt allele;
+    //phased set (-1 means no phase set)
+    int PhasedSet;
+
+    //haplotype
+    std::string HP1;
+    std::string HP2;
+
+    bool is_phased_hetero;
+    bool is_homozygous;
+    bool is_unphased_hetero;
+
+    bool isExistPhasedSet(){
+        return PhasedSet != -1;
+    }
+
+    VarData(): PhasedSet(-1), HP1(""), HP2(""), is_phased_hetero(false), is_homozygous(false), is_unphased_hetero(false){}
 };
+
+struct MultiGenomeVar{
+    // record the variants from the normal and tumor VCF files (normal:0, tumor:1, HighCon:2)
+    std::map<Genome, VarData> Variant;
+
+    bool isExists(Genome type){
+        return Variant.find(type) != Variant.end();
+    }
+
+    VarData& operator[](Genome type){
+        return Variant[type];
+    }
+};
+
+// struct CoreStruct{
+//     std::map<std::string, std::map<int, MultiGenomeVar>> mergedChrVariant;
+
+//     // The number of SVs occurring on different haplotypes in a read
+//     //chr, genome, read, haplotype
+//     std::map<Genome, std::map<std::string, std::map<int, int>>> readSVHapCount;
+//     std::map<Genome, std::map<std::string, int>> psIndex;
+
+//     std::map<Genome, std::vector<std::string>> chrVec;
+//     std::map<Genome, std::map<std::string, int>> chrLength;
+// };
+
 
 //record each type of base in specific position
 struct PosBase{
@@ -212,7 +250,7 @@ struct VCF_Info
     // // The number of SVs occurring on different haplotypes in a read
     std::map<std::string, std::map<int, int>> readSVHapCount;
 
-    int gene_type;
+    Genome gene_type;
 };
 
 
@@ -260,9 +298,9 @@ class GermlineJudgeBase{
 
     protected:
         void germlineJudgeSnpHap(const std::string& chrName, VCF_Info* vcfSet, RefAlt& norVar, const std::string& base, int& ref_pos, int& length, int& i, int& aln_core_n_cigar
-        ,uint32_t* cigar, std::map<int, RefAltSet>::iterator& currentVariantIter, int& hp1Count, int& hp2Count, std::map<int, int>& variantsHP, std::map<int, int>& countPS);
+        ,uint32_t* cigar, std::map<int, MultiGenomeVar>::iterator& currentVariantIter, int& hp1Count, int& hp2Count, std::map<int, int>& variantsHP, std::map<int, int>& countPS);
 
-        void germlineJudgeDeletionHap(const std::string& chrName, const std::string& ref_string, int& ref_pos, int& length, int& query_pos, std::map<int, RefAltSet>::iterator &currentVariantIter, VCF_Info* vcfSet, const bam1_t* aln, int& hp1Count, int& hp2Count, std::map<int, int>& variantsHP, std::map<int, int>& countPS);
+        void germlineJudgeDeletionHap(const std::string& chrName, const std::string& ref_string, int& ref_pos, int& length, int& query_pos, std::map<int, MultiGenomeVar>::iterator &currentVariantIter, VCF_Info* vcfSet, const bam1_t* aln, int& hp1Count, int& hp2Count, std::map<int, int>& variantsHP, std::map<int, int>& countPS);
         void germlineJudgeSVHap(const bam1_t &aln, VCF_Info* vcfSet, int& hp1Count, int& hp2Count, const int& tagGeneType);
         int germlineDetermineReadHap(int& hp1Count, int& hp2Count, double& min, double& max, double& percentageThreshold, int& pqValue, int& psValue, std::map<int, int>& countPS, int* totalHighSimilarity, int* totalWithOutVaraint);
         void germlineGetRefLastVarPos(std::vector<int>& last_pos, const std::vector<std::string>& chrVec, VCF_Info* vcfSet, int geneType);
@@ -281,14 +319,14 @@ class BamBaseCounter : public GermlineJudgeBase{
         std::ofstream *tagResult;
 
         void StatisticBaseInfo(const bam1_t &aln, const bam_hdr_t &bamHdr, const std::string &chrName, const HaplotagParameters &params, int genmoeType
-                         , std::map<int, PosBase> &VariantBase, std::map<int, RefAltSet> &currentVariants ,std::map<int, RefAltSet>::iterator &firstVariantIter, VCF_Info *vcfSet, const std::string &ref_string);
-        void CalculateBaseInfo(const std::string &chr, std::map<int, PosBase> &VariantBase, std::map<int, RefAltSet> &currentVariants);
+                         , std::map<int, PosBase> &VariantBase, std::map<int, MultiGenomeVar> &currentVariants ,std::map<int, MultiGenomeVar>::iterator &firstVariantIter, VCF_Info *vcfSet, const std::string &ref_string);
+        void CalculateBaseInfo(const std::string &chr, std::map<int, PosBase> &VariantBase, std::map<int, MultiGenomeVar> &currentVariants);
 
     public:
         BamBaseCounter(bool enableFilter);
         ~BamBaseCounter();
 
-        void CountingBamBase(const std::string &BamFile, const HaplotagParameters &params, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat, std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, VCF_Info *vcfSet, int genmoeType);
+        void CountingBamBase(const std::string &BamFile, const HaplotagParameters &params, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength, VCF_Info *vcfSet, int genmoeType);
 
         bool isHighRefAllelleFreq(std::string chr, int pos);
         std::string getMaxFreqBase(std::string chr, int pos);
@@ -315,11 +353,11 @@ class SomaticJudgeBase{
     private :
 
     protected:
-        void SomaticJudgeSnpHP(std::map<int, RefAltSet>::iterator &currentVariantIter, VCF_Info *vcfSet, std::string chrName, std::string base, std::map<int, int> &hpCount
+        void SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, VCF_Info *vcfSet, std::string chrName, std::string base, std::map<int, int> &hpCount
         , std::map<int, int> &NorCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP
         , std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos);
 
-        virtual void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, RefAltSet &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos)=0;
+        virtual void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos)=0;
         int determineReadHP(std::map<int, int> &hpCount, int &pqValue,std::map<int, int> &norCountPS, double &norHPsimilarity, double &tumHPsimilarity,  double percentageThreshold, int *totalHighSimilarity, int *totalCrossTwoBlock, int *totalWithOutVaraint);
 
         int convertStrNucToInt(std::string &base);
@@ -336,9 +374,9 @@ class VcfParser{
         bool parseMODFile;
         bool tagTumorMode;
         bool integerPS;
-        void compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
-        void unCompressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
-        virtual void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
+        void compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        void unCompressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        virtual void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
     
     protected:
 
@@ -351,7 +389,7 @@ class VcfParser{
         void setParseMODFile(bool parseMODFile);
         bool getParseSnpFile();
         void reset();
-        void variantParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat);
+        void variantParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
 };
 
 #endif

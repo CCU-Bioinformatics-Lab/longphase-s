@@ -6,9 +6,9 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const int geneType){
     // input file management
     std::string openBamFile = params.bamFile;
 
-    if(geneType == Genome::TUMOR){
+    if(geneType == TUMOR){
         openBamFile = params.tumorBamFile;
-    }else if(geneType == Genome::NORMAL){
+    }else if(geneType == NORMAL){
         openBamFile = params.bamFile;
     }
 
@@ -117,7 +117,7 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const int geneType){
         firstVariantIter = currentChrVariants.begin();
         // get the coordinates of the last variant
         // the tagging process will not be perform if the read's start coordinate are over than last variant.
-        std::map<int, RefAltSet>::reverse_iterator last = currentChrVariants.rbegin();
+        std::map<int, MultiGenomeVar>::reverse_iterator last = currentChrVariants.rbegin();
         
         // fetch chromosome string
         std::string chr_reference = fastaParser.chrString.at(chr);
@@ -277,7 +277,7 @@ int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, s
     // position relative to read
     int query_pos = 0;
     // set variant start for current alignment
-    std::map<int, RefAltSet>::iterator currentVariantIter = firstVariantIter;
+    std::map<int, MultiGenomeVar>::iterator currentVariantIter = firstVariantIter;
 
     // reading cigar to detect snp on this read
     int aln_core_n_cigar = int(aln.core.n_cigar);
@@ -299,7 +299,7 @@ int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, s
 
             while( currentVariantIter != currentChrVariants.end() && (*currentVariantIter).first < ref_pos + length){
 
-                auto norVar = (*currentVariantIter).second.Variant[Genome::NORMAL];
+                auto norVar = (*currentVariantIter).second.Variant[NORMAL].allele;
 
                 int offset = (*currentVariantIter).first - ref_pos;
 
@@ -396,7 +396,7 @@ int HaplotagProcess::somaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
     // position relative to read
     int query_pos = 0;
     // set variant start for current alignment
-    std::map<int, RefAltSet>::iterator currentVariantIter = firstVariantIter;
+    std::map<int, MultiGenomeVar>::iterator currentVariantIter = firstVariantIter;
 
     // reading cigar to detect snp on this read
     int aln_core_n_cigar = int(aln.core.n_cigar);
@@ -435,7 +435,7 @@ int HaplotagProcess::somaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
                         if((*chrPosReadCase)[chrName][(*currentVariantIter).first].isHighConSomaticSNP){
                             int deriveByHp = (*chrPosReadCase)[chrName][(*currentVariantIter).first].somaticReadDeriveByHP;
                             int BaseHp = SnpHP::NONE_SNP;
-                            // if(base == (*currentVariantIter).second.Variant[Genome::TUMOR].Alt){
+                            // if(base == (*currentVariantIter).second.Variant[TUMOR].Alt){
                             //     BaseHp = SnpHP::SOMATIC_H3;
                             // }
                             if(variantsHP.find((*currentVariantIter).first) != variantsHP.end()){
@@ -487,10 +487,10 @@ int HaplotagProcess::somaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
     }
 
     //In the current version, only normal SVs are considered, without inclusion of tumor samples
-    auto readIter = vcfSet[Genome::NORMAL].readSVHapCount.find(bam_get_qname(&aln));
-    if( readIter != vcfSet[Genome::NORMAL].readSVHapCount.end() ){
-        hpCount[1] += vcfSet[Genome::NORMAL].readSVHapCount[bam_get_qname(&aln)][0];
-        hpCount[2] += vcfSet[Genome::NORMAL].readSVHapCount[bam_get_qname(&aln)][1];
+    auto readIter = vcfSet[NORMAL].readSVHapCount.find(bam_get_qname(&aln));
+    if( readIter != vcfSet[NORMAL].readSVHapCount.end() ){
+        hpCount[1] += vcfSet[NORMAL].readSVHapCount[bam_get_qname(&aln)][0];
+        hpCount[2] += vcfSet[NORMAL].readSVHapCount[bam_get_qname(&aln)][1];
     }
 
     int startPos = aln.core.pos + 1;
@@ -729,7 +729,7 @@ std::string HaplotagProcess::convertHpResultToString(int hpResult){
     }
 }
 
-void HaplotagProcess::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, RefAltSet &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
+void HaplotagProcess::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
 
     if(SomaticPos == nullptr){
         std::cerr << "ERROR (SomaticTaggingJudgeHP) => SomaticPos pointer cannot be nullptr"<< std::endl;
@@ -738,8 +738,8 @@ void HaplotagProcess::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPo
 
     if((*SomaticPos).find(curPos) != (*SomaticPos).end()){
         if((*SomaticPos)[curPos].isHighConSomaticSNP){
-            std::string TumorRefBase = curVar.Variant[Genome::TUMOR].Ref;
-            std::string TumorAltBase = curVar.Variant[Genome::TUMOR].Alt; 
+            std::string TumorRefBase = curVar.Variant[TUMOR].allele.Ref;
+            std::string TumorAltBase = curVar.Variant[TUMOR].allele.Alt; 
 
             if(base == TumorAltBase){
                 hpCount[3]++;
@@ -752,8 +752,8 @@ void HaplotagProcess::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPo
                 //std::cerr << "Somatic SNP: " << curPos << " " << base << " -> " << TumorRefBase << "|" << TumorAltBase << std::endl;
             }
 
-            if(curVar.Variant[Genome::TUMOR].is_phased_hetero){
-                if(tumCountPS != nullptr) (*tumCountPS)[vcfSet[Genome::TUMOR].chrVariantPS[chrName][curPos]]++;
+            if(curVar.Variant[TUMOR].is_phased_hetero){
+                if(tumCountPS != nullptr) (*tumCountPS)[vcfSet[TUMOR].chrVariantPS[chrName][curPos]]++;
             }
         }
     }
@@ -767,10 +767,10 @@ totalAlignment(0),totalSupplementary(0),totalSecondary(0),totalUnmapped(0),total
     chrVec = nullptr;
     chrLength = nullptr;
 
-    vcfSet[Genome::NORMAL].gene_type = Genome::NORMAL;
-    vcfSet[Genome::TUMOR].gene_type = Genome::TUMOR;
+    vcfSet[NORMAL].gene_type = NORMAL;
+    vcfSet[TUMOR].gene_type = TUMOR;
 
-    mergedChrVarinat = new std::map<std::string, std::map<int, RefAltSet>>();;
+    mergedChrVarinat = new std::map<std::string, std::map<int, MultiGenomeVar>>();;
     chrPosReadCase = new std::map<std::string, std::map<int, HP3_Info>>();
 
     beforeCorrReadHpResult = new std::map<std::string, std::map<int, ReadHpResult>>();
@@ -858,9 +858,9 @@ void HaplotagProcess::taggingProcess(HaplotagParameters &params)
     int tagGeneType;
 
     if(tagTumorMode){
-        tagGeneType = Genome::TUMOR;
+        tagGeneType = TUMOR;
     }else{
-        tagGeneType = Genome::NORMAL;
+        tagGeneType = NORMAL;
     }
 
     VcfParser vcfParser(tagTumorMode);
@@ -871,16 +871,16 @@ void HaplotagProcess::taggingProcess(HaplotagParameters &params)
             std::time_t begin = time(NULL);
             std::cerr<< "loading high confidence SNP ... ";
             highConSomaticData.setTestingFunc(true);
-            highConSomaticData.loadHighConSomatic(params.benchmarkVcf, vcfSet[Genome::HIGH_CON_SOMATIC], *mergedChrVarinat);
+            highConSomaticData.loadHighConSomatic(params.benchmarkVcf, vcfSet[HIGH_CON_SOMATIC], *mergedChrVarinat);
             std::cerr<< difftime(time(NULL), begin) << "s\n";
-            highConSomaticData.displaySomaticVarCount(vcfSet[Genome::HIGH_CON_SOMATIC].chrVec, *mergedChrVarinat);
+            highConSomaticData.displaySomaticVarCount(vcfSet[HIGH_CON_SOMATIC].chrVec, *mergedChrVarinat);
         }
         //load tumor snp vcf
         if(params.tumorSnpFile != ""){
             std::time_t begin = time(NULL);
             std::cerr<< "parsing tumor SNP VCF ... ";
             vcfParser.setParseSnpFile(true);
-            vcfParser.variantParser(params.tumorSnpFile, vcfSet[Genome::TUMOR], *mergedChrVarinat);
+            vcfParser.variantParser(params.tumorSnpFile, vcfSet[TUMOR], *mergedChrVarinat);
             vcfParser.reset();
             std::cerr<< difftime(time(NULL), begin) << "s\n";
         }
@@ -896,7 +896,7 @@ void HaplotagProcess::taggingProcess(HaplotagParameters &params)
     }
 
     vcfParser.setParseSnpFile(true);
-    vcfParser.variantParser(params.snpFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
+    vcfParser.variantParser(params.snpFile, vcfSet[NORMAL], *mergedChrVarinat);
     vcfParser.reset();
     std::cerr<< difftime(time(NULL), begin) << "s\n";
     // load SV vcf file
@@ -920,15 +920,15 @@ void HaplotagProcess::taggingProcess(HaplotagParameters &params)
     }
 
     //decide which genome type chrVec and chrLength belong to
-    if(tagGeneType == Genome::NORMAL){
-        chrVec = &(vcfSet[Genome::NORMAL].chrVec);
-        chrLength = &(vcfSet[Genome::NORMAL].chrLength); 
+    if(tagGeneType == NORMAL){
+        chrVec = &(vcfSet[NORMAL].chrVec);
+        chrLength = &(vcfSet[NORMAL].chrLength); 
     }else{
 
         //check normal & tumor chr & length
-        for(auto& chrIter : vcfSet[Genome::TUMOR].chrLength){
-            if(vcfSet[Genome::NORMAL].chrLength.find(chrIter.first) != vcfSet[Genome::NORMAL].chrLength.end()){
-                if(chrIter.second != vcfSet[Genome::NORMAL].chrLength[chrIter.first]){
+        for(auto& chrIter : vcfSet[TUMOR].chrLength){
+            if(vcfSet[NORMAL].chrLength.find(chrIter.first) != vcfSet[NORMAL].chrLength.end()){
+                if(chrIter.second != vcfSet[NORMAL].chrLength[chrIter.first]){
                     std::cerr << "tumor & normal VCFs chromosome length are not the same" << std::endl;
                     std::cerr << "chr: " << chrIter.first << " length: " << chrIter.second << std::endl;
                     return ;
@@ -939,8 +939,8 @@ void HaplotagProcess::taggingProcess(HaplotagParameters &params)
             }
         }
 
-        chrVec = &(vcfSet[Genome::TUMOR].chrVec);
-        chrLength = &(vcfSet[Genome::TUMOR].chrLength); 
+        chrVec = &(vcfSet[TUMOR].chrVec);
+        chrLength = &(vcfSet[TUMOR].chrLength); 
     }
 
     // update chromosome processing based on region
@@ -968,13 +968,13 @@ void HaplotagProcess::taggingProcess(HaplotagParameters &params)
     for(auto& chrIter : (*chrVec)){
         auto chrVarIter = (*mergedChrVarinat)[chrIter].begin();
         while(chrVarIter != (*mergedChrVarinat)[chrIter].end()){
-            if((*chrVarIter).second.isExistTumor){
+            if((*chrVarIter).second.isExists(TUMOR)){
                 tumor_snp_count++;
             }
-            if((*chrVarIter).second.isExistNormal){
+            if((*chrVarIter).second.isExists(NORMAL)){
                 normal_snp_count++;
             }
-            if((*chrVarIter).second.isExistTumor && (*chrVarIter).second.isExistNormal){
+            if((*chrVarIter).second.isExists(TUMOR) && (*chrVarIter).second.isExists(NORMAL)){
                 overlap_snp_count++;
             }
             chrVarIter++;
@@ -989,7 +989,7 @@ void HaplotagProcess::taggingProcess(HaplotagParameters &params)
 
         //Count each base numbers at tumor SNP position in the Normal.bam
         BamBaseCounter *NorBase = new BamBaseCounter(params.enableFilter);
-        NorBase->CountingBamBase(params.bamFile, params, (*mergedChrVarinat), *chrVec, *chrLength, vcfSet, Genome::NORMAL);
+        NorBase->CountingBamBase(params.bamFile, params, (*mergedChrVarinat), *chrVec, *chrLength, vcfSet, NORMAL);
 
         //record the HP3 confidence of each read
         SomaticVarCaller *SomaticVar = new SomaticVarCaller();
@@ -1006,7 +1006,7 @@ void HaplotagProcess::taggingProcess(HaplotagParameters &params)
     // tag read
     begin = time(NULL);
 
-    if(tagGeneType == Genome::TUMOR){
+    if(tagGeneType == TUMOR){
         std::cerr<< "somatic tagging start ...\n";
     }else{
         std::cerr<< "tag read start ...\n";

@@ -12,7 +12,7 @@ BamBaseCounter::~BamBaseCounter(){
 void BamBaseCounter::CountingBamBase(
     const std::string &BamFile, 
     const HaplotagParameters &params, 
-    std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat, 
+    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
     std::vector<std::string> &chrVec, 
     std::map<std::string, int> &chrLength, 
     VCF_Info *vcfSet, 
@@ -60,7 +60,7 @@ void BamBaseCounter::CountingBamBase(
         std::map<int, PosBase> *variantBase = nullptr;
 
         // variant position (0-base), allele haplotype set
-        std::map<int, RefAltSet> currentVariants;
+        std::map<int, MultiGenomeVar> currentVariants;
 
         #pragma omp critical
         {
@@ -71,9 +71,9 @@ void BamBaseCounter::CountingBamBase(
         std::string ref_string = fastaParser.chrString.at(chr);
 
         //inintial iterator
-        std::map<int, RefAltSet>::iterator firstVariantIter = currentVariants.begin();
+        std::map<int, MultiGenomeVar>::iterator firstVariantIter = currentVariants.begin();
 
-        std::map<int, RefAltSet>::reverse_iterator last = currentVariants.rbegin();
+        std::map<int, MultiGenomeVar>::reverse_iterator last = currentVariants.rbegin();
 
         std::string region = !params.region.empty() ? params.region : chr + ":1-" + std::to_string(chrLength[chr]);
         hts_itr_t* iter = sam_itr_querys(bam.idx, bam.bamHdr, region.c_str());
@@ -130,8 +130,8 @@ void BamBaseCounter::StatisticBaseInfo(
     const HaplotagParameters &params, 
     int genmoeType, 
     std::map<int, PosBase> &variantBase, 
-    std::map<int, RefAltSet> &currentVariants,
-    std::map<int, RefAltSet>::iterator &firstVariantIter, 
+    std::map<int, MultiGenomeVar> &currentVariants,
+    std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
     VCF_Info *vcfSet, 
     const std::string &ref_string
 ){
@@ -159,7 +159,7 @@ void BamBaseCounter::StatisticBaseInfo(
     // position relative to read
     int query_pos = 0;
     // set variant start for current alignment
-    std::map<int, RefAltSet>::iterator currentVariantIter = firstVariantIter;
+    std::map<int, MultiGenomeVar>::iterator currentVariantIter = firstVariantIter;
 
     // reading cigar to detect snp on this read
     int aln_core_n_cigar = int(aln.core.n_cigar);
@@ -192,13 +192,13 @@ void BamBaseCounter::StatisticBaseInfo(
                     // printf("into match cigar\n");
 
                     //statistically analyze SNP information exclusive to the tumor
-                    if((*currentVariantIter).second.isExistTumor){
+                    if((*currentVariantIter).second.isExists(TUMOR)){
                         int curPos = (*currentVariantIter).first;
                         //std::cout << "curPos :" << curPos << "is tumor "<<(*currentVariantIter).second.isExistTumor  << " isNormal: "<< (*currentVariantIter).second.isExistNormal<< std::endl;
 
                         //detect ref bsae length(temp :tumor SNP)
-                        int tumRefLength = (*currentVariantIter).second.Variant[Genome::TUMOR].Ref.length();
-                        int tumAltLength = (*currentVariantIter).second.Variant[Genome::TUMOR].Alt.length();
+                        int tumRefLength = (*currentVariantIter).second.Variant[TUMOR].allele.Ref.length();
+                        int tumAltLength = (*currentVariantIter).second.Variant[TUMOR].allele.Alt.length();
                         
                         // the variant is SNP
                         if(tumRefLength == 1 && tumAltLength == 1){
@@ -245,10 +245,10 @@ void BamBaseCounter::StatisticBaseInfo(
 
                     }       
 
-                    if ( aln.core.qual >= params.somaticCallingMpqThreshold && (*currentVariantIter).second.isExistNormal){
+                    if ( aln.core.qual >= params.somaticCallingMpqThreshold && (*currentVariantIter).second.isExists(NORMAL)){
                         // only judge the heterozygous SNP
-                        if((*currentVariantIter).second.Variant[Genome::NORMAL].is_phased_hetero){
-                            auto norVar = (*currentVariantIter).second.Variant[Genome::NORMAL];
+                        if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
+                            auto norVar = (*currentVariantIter).second.Variant[NORMAL].allele;
                             germlineJudgeSnpHap(chrName, vcfSet, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, hp1Count, hp2Count, variantsHP, countPS);
                         }
                     }
@@ -267,7 +267,7 @@ void BamBaseCounter::StatisticBaseInfo(
             bool alreadyJudgeDel = false;
             while( currentVariantIter != currentVariants.end() && (*currentVariantIter).first < ref_pos + length){
                 //statistically analyze SNP information exclusive to the tumor
-                if((*currentVariantIter).second.isExistTumor){
+                if((*currentVariantIter).second.isExists(TUMOR)){
 
                     int curPos = (*currentVariantIter).first;
                     
@@ -275,8 +275,8 @@ void BamBaseCounter::StatisticBaseInfo(
                     tumVarPosVec.push_back(curPos);
 
                     //detect ref bsae length(temp :tumor SNP)
-                    int tumRefLength = (*currentVariantIter).second.Variant[Genome::TUMOR].Ref.length();
-                    int tumAltLength = (*currentVariantIter).second.Variant[Genome::TUMOR].Alt.length();
+                    int tumRefLength = (*currentVariantIter).second.Variant[TUMOR].allele.Ref.length();
+                    int tumAltLength = (*currentVariantIter).second.Variant[TUMOR].allele.Alt.length();
 
                     // the variant is SNP
                     if(tumRefLength == 1 && tumAltLength == 1){
@@ -290,11 +290,11 @@ void BamBaseCounter::StatisticBaseInfo(
                 }
 
                 // only execute at the first phased normal snp
-                if ( aln.core.qual >= params.somaticCallingMpqThreshold && (*currentVariantIter).second.isExistNormal && !alreadyJudgeDel){
-                    if((*currentVariantIter).second.Variant[Genome::NORMAL].is_phased_hetero){
+                if ( aln.core.qual >= params.somaticCallingMpqThreshold && (*currentVariantIter).second.isExists(NORMAL) && !alreadyJudgeDel){
+                    if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
                         // longphase v1.73 only execute once
                         alreadyJudgeDel = true;
-                        auto norVar = (*currentVariantIter).second.Variant[Genome::NORMAL];
+                        auto norVar = (*currentVariantIter).second.Variant[NORMAL];
                         germlineJudgeDeletionHap(chrName, ref_string, ref_pos, length, query_pos, currentVariantIter, vcfSet, &aln, hp1Count, hp2Count, variantsHP, countPS);
                     }
                 }
@@ -347,7 +347,7 @@ void BamBaseCounter::StatisticBaseInfo(
 
 }
 
-void BamBaseCounter::CalculateBaseInfo(const std::string &chr, std::map<int, PosBase> &VariantBase, std::map<int, RefAltSet> &currentVariants){
+void BamBaseCounter::CalculateBaseInfo(const std::string &chr, std::map<int, PosBase> &VariantBase, std::map<int, MultiGenomeVar> &currentVariants){
     std::map<int, PosBase>::iterator currentPosIter = VariantBase.begin();
     if(currentPosIter == VariantBase.end()){
         //exit(1);
@@ -439,8 +439,8 @@ void BamBaseCounter::CalculateBaseInfo(const std::string &chr, std::map<int, Pos
         }
 
         // calculate VAF
-        std::string tumRefBase = currentVariants[(*currentPosIter).first].Variant[Genome::TUMOR].Ref;
-        std::string tumAltBase = currentVariants[(*currentPosIter).first].Variant[Genome::TUMOR].Alt;
+        std::string tumRefBase = currentVariants[(*currentPosIter).first].Variant[TUMOR].allele.Ref;
+        std::string tumAltBase = currentVariants[(*currentPosIter).first].Variant[TUMOR].allele.Alt;
 
         int AltCount = 0;
         int filteredMpqAltCount = 0;
@@ -665,7 +665,7 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
     int& i,
     int& aln_core_n_cigar,
     uint32_t* cigar,
-    std::map<int, RefAltSet>::iterator &currentVariantIter,
+    std::map<int, MultiGenomeVar>::iterator &currentVariantIter,
     int& hp1Count,
     int& hp2Count,
     std::map<int, int>& variantsHP,
@@ -681,9 +681,9 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
         if( (base == norVar.Ref) || (base == norVar.Alt) ){
 
 
-            std::map<int, int>::iterator posPSiter = vcfSet[Genome::NORMAL].chrVariantPS[chrName].find((*currentVariantIter).first);
+            std::map<int, int>::iterator posPSiter = vcfSet[NORMAL].chrVariantPS[chrName].find((*currentVariantIter).first);
 
-            if( posPSiter == vcfSet[Genome::NORMAL].chrVariantPS[chrName].end() ){
+            if( posPSiter == vcfSet[NORMAL].chrVariantPS[chrName].end() ){
                 std::cerr << "ERROR (germlineJudgeSnpHap) => can't find the position:" 
                           << " chr: " << chrName << "\t"
                           << " pos: " << curPos << "\t"
@@ -692,15 +692,15 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
                 exit(EXIT_SUCCESS);
             }
             else{
-                if( base == vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos]){
+                if( base == vcfSet[NORMAL].chrVariantHP1[chrName][curPos]){
                     hp1Count++;
                     variantsHP[curPos]=0;
                 }
-                if( base == vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos]){
+                if( base == vcfSet[NORMAL].chrVariantHP2[chrName][curPos]){
                     hp2Count++;
                     variantsHP[curPos]=1;
                 }
-                countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
+                countPS[vcfSet[NORMAL].chrVariantPS[chrName][curPos]]++;
             }
             
         }
@@ -708,8 +708,8 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
     // currentVariant is insertion
     else if( refAlleleLen == 1 && altAlleleLen != 1 && i+1 < aln_core_n_cigar){
         
-        int hp1Length = vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos].length();
-        int hp2Length = vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos].length();
+        int hp1Length = vcfSet[NORMAL].chrVariantHP1[chrName][curPos].length();
+        int hp2Length = vcfSet[NORMAL].chrVariantHP2[chrName][curPos].length();
         
         if ( ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 1 ) {
             // hp1 occur insertion
@@ -735,13 +735,13 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
                 variantsHP[curPos]=0;
             }
         }
-        countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
+        countPS[vcfSet[NORMAL].chrVariantPS[chrName][curPos]]++;
     } 
     // currentVariant is deletion
     else if( refAlleleLen != 1 && altAlleleLen == 1 && i+1 < aln_core_n_cigar) {
 
-        int hp1Length = vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos].length();
-        int hp2Length = vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos].length();
+        int hp1Length = vcfSet[NORMAL].chrVariantHP1[chrName][curPos].length();
+        int hp2Length = vcfSet[NORMAL].chrVariantHP2[chrName][curPos].length();
         
         if ( ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2 ) {
             // hp1 occur deletion
@@ -767,7 +767,7 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
                 variantsHP[curPos]=0;
             }
         }
-        countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
+        countPS[vcfSet[NORMAL].chrVariantPS[chrName][curPos]]++;
     } 
 }
 
@@ -778,7 +778,7 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
     int& ref_pos,
     int& length,
     int& query_pos,
-    std::map<int, RefAltSet>::iterator &currentVariantIter,
+    std::map<int, MultiGenomeVar>::iterator &currentVariantIter,
     VCF_Info* vcfSet,
     const bam1_t* aln,
     int& hp1Count,
@@ -797,9 +797,9 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
             if (homopolymerLength((*currentVariantIter).first, ref_string) >= 3) {
                 
                 int curPos = (*currentVariantIter).first;
-                auto norVar = (*currentVariantIter).second.Variant[Genome::NORMAL];
-                int refAlleleLen = norVar.Ref.length();
-                int altAlleleLen = norVar.Alt.length();
+                auto norVar = (*currentVariantIter).second.Variant[NORMAL];
+                int refAlleleLen = norVar.allele.Ref.length();
+                int altAlleleLen = norVar.allele.Alt.length();
                 
                 // SNP
                 if (refAlleleLen == 1 && altAlleleLen == 1) {
@@ -807,22 +807,22 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
                     char base_chr = seq_nt16_str[bam_seqi(bam_get_seq(aln), query_pos)];
                     std::string base(1, base_chr);
 
-                    if (base == vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos]) {
+                    if (base == vcfSet[NORMAL].chrVariantHP1[chrName][curPos]) {
                         hp1Count++;
                         variantsHP[curPos] = 0;
                     }
-                    if (base == vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos]) {
+                    if (base == vcfSet[NORMAL].chrVariantHP2[chrName][curPos]) {
                         hp2Count++;
                         variantsHP[curPos] = 1;
                     }
-                    countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
+                    countPS[vcfSet[NORMAL].chrVariantPS[chrName][curPos]]++;
                 }
                 
                 // the read deletion contain VCF's deletion
                 else if (refAlleleLen != 1 && altAlleleLen == 1) {
 
-                    int hp1Length = vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos].length();
-                    int hp2Length = vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos].length();
+                    int hp1Length = vcfSet[NORMAL].chrVariantHP1[chrName][curPos].length();
+                    int hp2Length = vcfSet[NORMAL].chrVariantHP2[chrName][curPos].length();
                     // hp1 occur deletion
                     if (hp1Length != 1 && hp2Length == 1) {
                         hp1Count++;
@@ -833,7 +833,7 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
                         hp2Count++;
                         variantsHP[curPos] = 1;
                     }
-                    countPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
+                    countPS[vcfSet[NORMAL].chrVariantPS[chrName][curPos]]++;
                 }
             }
         }
@@ -944,31 +944,31 @@ void GermlineJudgeBase::writeGermlineTagLog(std::ofstream& tagResult, const bam1
     (tagResult) << "\n";
 }
 
-void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, RefAltSet>::iterator &currentVariantIter, VCF_Info *vcfSet, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
+void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, VCF_Info *vcfSet, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
     int curPos = (*currentVariantIter).first;
     auto curVar = (*currentVariantIter).second;
 
     // normal & tumor SNP at the current position (base on normal phased SNPs)
     // both normal and tumor samples that do not exist in the high-confidence set
-    if(curVar.isExistNormal == true && curVar.isExistTumor == true){
+    if(curVar.isExists(NORMAL) && curVar.isExists(TUMOR)){
 
         // the tumor & normal SNP GT are phased heterozygous 
-        if((curVar.Variant[Genome::NORMAL].is_phased_hetero) && (curVar.Variant[Genome::TUMOR].is_phased_hetero)){   
-            if(curVar.Variant[Genome::NORMAL].Ref == base || curVar.Variant[Genome::NORMAL].Alt == base){
+        if((curVar.Variant[NORMAL].is_phased_hetero) && (curVar.Variant[TUMOR].is_phased_hetero)){   
+            if(curVar.Variant[NORMAL].allele.Ref == base || curVar.Variant[NORMAL].allele.Alt == base){
                 //std::cerr<< "tag tumor normal SNP\n";
-                std::map<int, int>::iterator NorPosPSiter = vcfSet[Genome::NORMAL].chrVariantPS[chrName].find(curPos);
-                if( NorPosPSiter == vcfSet[Genome::NORMAL].chrVariantPS[chrName].end()){
+                std::map<int, int>::iterator NorPosPSiter = vcfSet[NORMAL].chrVariantPS[chrName].find(curPos);
+                if( NorPosPSiter == vcfSet[NORMAL].chrVariantPS[chrName].end()){
                     std::cerr<< "Unable to locate the phase set of the current normal SNP\n"
                              << curPos << "\t"
-                             << curVar.Variant[Genome::NORMAL].Ref << "\t"
-                             << curVar.Variant[Genome::NORMAL].Alt  << "\n";
+                             << curVar.Variant[NORMAL].allele.Ref << "\t"
+                             << curVar.Variant[NORMAL].allele.Alt  << "\n";
                     exit(EXIT_SUCCESS);
                 }
 
-                std::string norHP1 = vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos];
-                std::string norHP2 = vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos];
-                std::string tumHP1 = vcfSet[Genome::TUMOR].chrVariantHP1[chrName][curPos];
-                std::string tumHP2 = vcfSet[Genome::TUMOR].chrVariantHP2[chrName][curPos];
+                std::string norHP1 = vcfSet[NORMAL].chrVariantHP1[chrName][curPos];
+                std::string norHP2 = vcfSet[NORMAL].chrVariantHP2[chrName][curPos];
+                std::string tumHP1 = vcfSet[TUMOR].chrVariantHP1[chrName][curPos];
+                std::string tumHP2 = vcfSet[TUMOR].chrVariantHP2[chrName][curPos];
 
                 if(norHP1 == base){
                     hpCount[1]++;
@@ -983,23 +983,23 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, RefAltSet>::iterator &cur
                     std::cerr<< "ERROR : (phased hetero)normal & (phased hetero)tumor not match base at position => chr:" << chrName << " pos: " << curPos << "\n";
                     exit(1);
                 }
-                norCountPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
+                norCountPS[vcfSet[NORMAL].chrVariantPS[chrName][curPos]]++;
             }
         //the normal SNP GT is phased heterozgous & the tumor SNP GT is unphased heterozgous 
-        }else if((curVar.Variant[Genome::NORMAL].is_phased_hetero) && (curVar.Variant[Genome::TUMOR].is_unphased_hetero)){   
-            if(curVar.Variant[Genome::NORMAL].Ref == base || curVar.Variant[Genome::NORMAL].Alt == base){
+        }else if((curVar.Variant[NORMAL].is_phased_hetero) && (curVar.Variant[TUMOR].is_unphased_hetero)){   
+            if(curVar.Variant[NORMAL].allele.Ref == base || curVar.Variant[NORMAL].allele.Alt == base){
 
-                std::map<int, int>::iterator NorPosPSiter = vcfSet[Genome::NORMAL].chrVariantPS[chrName].find(curPos);
-                if( NorPosPSiter == vcfSet[Genome::NORMAL].chrVariantPS[chrName].end()){
+                std::map<int, int>::iterator NorPosPSiter = vcfSet[NORMAL].chrVariantPS[chrName].find(curPos);
+                if( NorPosPSiter == vcfSet[NORMAL].chrVariantPS[chrName].end()){
                     std::cerr<< "Unable to locate the phase set of the current normal SNP\n"
                              << curPos << "\t"
-                             << curVar.Variant[Genome::NORMAL].Ref << "\t"
-                             << curVar.Variant[Genome::NORMAL].Alt  << "\n";
+                             << curVar.Variant[NORMAL].allele.Ref << "\t"
+                             << curVar.Variant[NORMAL].allele.Alt  << "\n";
                     exit(EXIT_SUCCESS);
                 }
 
-                std::string norHP1 = vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos];
-                std::string norHP2 = vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos];
+                std::string norHP1 = vcfSet[NORMAL].chrVariantHP1[chrName][curPos];
+                std::string norHP2 = vcfSet[NORMAL].chrVariantHP2[chrName][curPos];
 
                 if(norHP1 == base){
                     hpCount[1]++;
@@ -1013,24 +1013,24 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, RefAltSet>::iterator &cur
                     std::cerr<< "ERROR : (phased hetero)normal & (unphased hetero)tumor not match base at position => chr:" << chrName << " pos: " << curPos << "\n";
                     exit(1);
                 }
-                norCountPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
+                norCountPS[vcfSet[NORMAL].chrVariantPS[chrName][curPos]]++;
             }
 
         //the normal SNP GT is phased heterozgous & the tumor SNP GT is homozygous 
-        }else if((curVar.Variant[Genome::NORMAL].is_phased_hetero) && (curVar.Variant[Genome::TUMOR].is_homozygous)){   
-            if(curVar.Variant[Genome::NORMAL].Ref == base || curVar.Variant[Genome::NORMAL].Alt == base){
+        }else if((curVar.Variant[NORMAL].is_phased_hetero) && (curVar.Variant[TUMOR].is_homozygous)){   
+            if(curVar.Variant[NORMAL].allele.Ref == base || curVar.Variant[NORMAL].allele.Alt == base){
 
-                std::map<int, int>::iterator NorPosPSiter = vcfSet[Genome::NORMAL].chrVariantPS[chrName].find(curPos);
-                if( NorPosPSiter == vcfSet[Genome::NORMAL].chrVariantPS[chrName].end()){
+                std::map<int, int>::iterator NorPosPSiter = vcfSet[NORMAL].chrVariantPS[chrName].find(curPos);
+                if( NorPosPSiter == vcfSet[NORMAL].chrVariantPS[chrName].end()){
                     std::cerr<< "Unable to locate the phase set of the current normal SNP\n"
                              << curPos << "\t"
-                             << curVar.Variant[Genome::NORMAL].Ref << "\t"
-                             << curVar.Variant[Genome::NORMAL].Alt  << "\n";
+                             << curVar.Variant[NORMAL].allele.Ref << "\t"
+                             << curVar.Variant[NORMAL].allele.Alt  << "\n";
                     exit(EXIT_SUCCESS);
                 }
 
-                std::string norHP1 = vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos];
-                std::string norHP2 = vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos];
+                std::string norHP1 = vcfSet[NORMAL].chrVariantHP1[chrName][curPos];
+                std::string norHP2 = vcfSet[NORMAL].chrVariantHP2[chrName][curPos];
 
                 if(norHP1 == base){
                     hpCount[1]++;
@@ -1044,26 +1044,26 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, RefAltSet>::iterator &cur
                     std::cerr<< "ERROR : (phased hetero)normal & (Homo)tumor not match base at position => chr:" << chrName << " pos: " << curPos << "\n";
                     exit(1);
                 }
-                norCountPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
+                norCountPS[vcfSet[NORMAL].chrVariantPS[chrName][curPos]]++;
             }
         }
     // only normal SNP at the current position
-    }else if(curVar.isExistNormal == true){
+    }else if(curVar.isExists(NORMAL)){
         // the normal SNP GT is phased heterozgous SNP
-        if((curVar.Variant[Genome::NORMAL].is_phased_hetero)){
-            if(curVar.Variant[Genome::NORMAL].Ref == base || curVar.Variant[Genome::NORMAL].Alt == base){
+        if((curVar.Variant[NORMAL].is_phased_hetero)){
+            if(curVar.Variant[NORMAL].allele.Ref == base || curVar.Variant[NORMAL].allele.Alt == base){
 
-                std::map<int, int>::iterator NorPosPSiter = vcfSet[Genome::NORMAL].chrVariantPS[chrName].find(curPos);
-                if( NorPosPSiter == vcfSet[Genome::NORMAL].chrVariantPS[chrName].end()){
+                std::map<int, int>::iterator NorPosPSiter = vcfSet[NORMAL].chrVariantPS[chrName].find(curPos);
+                if( NorPosPSiter == vcfSet[NORMAL].chrVariantPS[chrName].end()){
                     std::cerr<< "Unable to locate the phase set of the current normal SNP\n"
                              << curPos << "\t"
-                             << curVar.Variant[Genome::NORMAL].Ref << "\t"
-                             << curVar.Variant[Genome::NORMAL].Alt  << "\n";
+                             << curVar.Variant[NORMAL].allele.Ref << "\t"
+                             << curVar.Variant[NORMAL].allele.Alt  << "\n";
                     exit(EXIT_SUCCESS);
                 }
 
-                std::string norHP1 = vcfSet[Genome::NORMAL].chrVariantHP1[chrName][curPos];
-                std::string norHP2 = vcfSet[Genome::NORMAL].chrVariantHP2[chrName][curPos];
+                std::string norHP1 = vcfSet[NORMAL].chrVariantHP1[chrName][curPos];
+                std::string norHP2 = vcfSet[NORMAL].chrVariantHP2[chrName][curPos];
 
                 if( base == norHP1){
                     hpCount[1]++;
@@ -1073,39 +1073,39 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, RefAltSet>::iterator &cur
                     hpCount[2]++;
                     if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::GERMLINE_H2;
                 }
-                norCountPS[vcfSet[Genome::NORMAL].chrVariantPS[chrName][curPos]]++;
+                norCountPS[vcfSet[NORMAL].chrVariantPS[chrName][curPos]]++;
             }
         }
     // only tumor SNP at the current position
-    }else if(curVar.isExistTumor == true){
+    }else if(curVar.isExists(TUMOR)){
         //the tumor SNP GT is phased heterozygous
-        if(curVar.Variant[Genome::TUMOR].is_phased_hetero == true){
-            if(curVar.Variant[Genome::TUMOR].Ref == base || curVar.Variant[Genome::TUMOR].Alt == base){
-                std::map<int, int>::iterator posPSiter = vcfSet[Genome::TUMOR].chrVariantPS[chrName].find(curPos);
-                if( posPSiter == vcfSet[Genome::TUMOR].chrVariantPS[chrName].end() ){
+        if(curVar.Variant[TUMOR].is_phased_hetero == true){
+            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
+                std::map<int, int>::iterator posPSiter = vcfSet[TUMOR].chrVariantPS[chrName].find(curPos);
+                if( posPSiter == vcfSet[TUMOR].chrVariantPS[chrName].end() ){
                     std::cerr<< curPos << "\t"
-                             << curVar.Variant[Genome::TUMOR].Ref << "\t"
-                             << curVar.Variant[Genome::TUMOR].Alt << "\n";
+                             << curVar.Variant[TUMOR].allele.Ref << "\t"
+                             << curVar.Variant[TUMOR].allele.Alt << "\n";
                     exit(EXIT_SUCCESS);
                 }else{
                     OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, vcfSet, hpCount, &tumCountPS, variantsHP, tumorAllelePosVec, NorBase, SomaticPos);
                 }
             }
         //the tumor SNP GT is unphased heterozygous
-        }else if(curVar.Variant[Genome::TUMOR].is_unphased_hetero == true){
-            if(curVar.Variant[Genome::TUMOR].Ref == base || curVar.Variant[Genome::TUMOR].Alt == base){
+        }else if(curVar.Variant[TUMOR].is_unphased_hetero == true){
+            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
                 OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, vcfSet, hpCount, nullptr, variantsHP, tumorAllelePosVec, NorBase, SomaticPos);
             }           
         //the tumor SNP GT is homozygous
-        }else if(curVar.Variant[Genome::TUMOR].is_homozygous == true){
-            if(curVar.Variant[Genome::TUMOR].Ref == base || curVar.Variant[Genome::TUMOR].Alt == base){
+        }else if(curVar.Variant[TUMOR].is_homozygous == true){
+            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
                 OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, vcfSet, hpCount, nullptr, variantsHP, tumorAllelePosVec, NorBase, SomaticPos);
             }
         }
     }
 }
 
-void SomaticJudgeBase::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, RefAltSet &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
+void SomaticJudgeBase::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, VCF_Info *vcfSet, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
 
 }
 
@@ -1673,7 +1673,7 @@ void VcfParser::reset(){
     integerPS = false;
 }
 
-void VcfParser::variantParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
+void VcfParser::variantParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
 
     if( variantFile.find("gz") != std::string::npos ){
         // .vcf.gz 
@@ -1690,7 +1690,7 @@ void VcfParser::variantParser(std::string &variantFile, VCF_Info &Info, std::map
     return;
 }
 
-void VcfParser::compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
+void VcfParser::compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     gzFile file = gzopen(variantFile.c_str(), "rb");
     if(variantFile=="")
         return;
@@ -1744,7 +1744,7 @@ void VcfParser::compressParser(std::string &variantFile, VCF_Info &Info, std::ma
     }    
 }
 
-void VcfParser::unCompressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
+void VcfParser::unCompressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     std::ifstream originVcf(variantFile);
     if(variantFile=="")
         return;
@@ -1777,7 +1777,7 @@ bool VcfParser::getParseSnpFile(){
     return this->parseSnpFile;
 }
 
-void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, RefAltSet>> &mergedChrVarinat){
+void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     if( input.substr(0, 2) == "##" && parseSnpFile){
         if( input.find("contig=")!= std::string::npos ){
             int id_start  = input.find("ID=")+3;
@@ -1880,12 +1880,15 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
 
                 Info.chrVariant[chr][pos]=tmp;
 
-                if(Info.gene_type == Genome::NORMAL){
-                    mergedChrVarinat[chr][pos].Variant[Genome::NORMAL] = tmp;
-                    mergedChrVarinat[chr][pos].isExistNormal = true;    
-                }else if(Info.gene_type == Genome::TUMOR){
-                    mergedChrVarinat[chr][pos].Variant[Genome::TUMOR] = tmp;
-                    mergedChrVarinat[chr][pos].isExistTumor = true; 
+                VarData varData;
+                varData.allele.Ref = fields[3];
+                varData.allele.Alt = fields[4];
+                varData.is_phased_hetero = true;
+
+                if(Info.gene_type == NORMAL){
+                    mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;
+                }else if(Info.gene_type == TUMOR){
+                    mergedChrVarinat[chr][pos].Variant[TUMOR] = varData;
                 }
                 
                 if(integerPS){
@@ -1904,10 +1907,14 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                 if( fields[9][modifu_start] == '0' && fields[9][modifu_start+2] == '1' ){
                     Info.chrVariantHP1[chr][pos]=fields[3];
                     Info.chrVariantHP2[chr][pos]=fields[4];
+                    mergedChrVarinat[chr][pos].Variant[Info.gene_type].HP1 = fields[3];
+                    mergedChrVarinat[chr][pos].Variant[Info.gene_type].HP2 = fields[4];
                 }
                 else if( fields[9][modifu_start] == '1' && fields[9][modifu_start+2] == '0' ){
                     Info.chrVariantHP1[chr][pos]=fields[4];
                     Info.chrVariantHP2[chr][pos]=fields[3];
+                    mergedChrVarinat[chr][pos].Variant[Info.gene_type].HP1 = fields[4];
+                    mergedChrVarinat[chr][pos].Variant[Info.gene_type].HP2 = fields[3];
                 }
             }
             // sv file
@@ -1988,12 +1995,16 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
 
                     Info.chrVariant[chr][pos] = tmp;
 
-                    if(Info.gene_type == Genome::NORMAL){
-                        mergedChrVarinat[chr][pos].Variant[Genome::NORMAL] = tmp;
-                        mergedChrVarinat[chr][pos].isExistNormal = true;    
-                    }else if(Info.gene_type == Genome::TUMOR){
-                        mergedChrVarinat[chr][pos].Variant[Genome::TUMOR] = tmp;
-                        mergedChrVarinat[chr][pos].isExistTumor = true; 
+                    VarData varData;
+                    varData.allele.Ref = fields[3];
+                    varData.allele.Alt = fields[4];
+
+                    varData.is_unphased_hetero = false;
+
+                    if(Info.gene_type == NORMAL){
+                        mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;
+                    }else if(Info.gene_type == TUMOR){
+                        mergedChrVarinat[chr][pos].Variant[TUMOR] = varData;
                     }
                 }
             //unphased heterozygous
@@ -2009,12 +2020,17 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
 
                     Info.chrVariant[chr][pos] = tmp;
 
-                    if(Info.gene_type == Genome::NORMAL){
-                        mergedChrVarinat[chr][pos].Variant[Genome::NORMAL] = tmp;
-                        mergedChrVarinat[chr][pos].isExistNormal = true;    
-                    }else if(Info.gene_type == Genome::TUMOR){
-                        mergedChrVarinat[chr][pos].Variant[Genome::TUMOR] = tmp;
-                        mergedChrVarinat[chr][pos].isExistTumor = true; 
+                    VarData varData;
+                    varData.allele.Ref = fields[3];
+                    varData.allele.Alt = fields[4];
+                    varData.is_phased_hetero = false;
+                    varData.is_unphased_hetero = true;
+                    varData.is_homozygous = false;
+
+                    if(Info.gene_type == NORMAL){
+                        mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;
+                    }else if(Info.gene_type == TUMOR){
+                        mergedChrVarinat[chr][pos].Variant[TUMOR] = varData;
                     }
                 }
             }
