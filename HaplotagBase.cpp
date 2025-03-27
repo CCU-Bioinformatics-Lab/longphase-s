@@ -248,7 +248,7 @@ void BamBaseCounter::StatisticBaseInfo(
                     if ( aln.core.qual >= params.somaticCallingMpqThreshold && (*currentVariantIter).second.isExists(NORMAL)){
                         // only judge the heterozygous SNP
                         if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
-                            auto norVar = (*currentVariantIter).second.Variant[NORMAL].allele;
+                            auto norVar = (*currentVariantIter).second.Variant[NORMAL];
                             germlineJudgeSnpHap(chrName, vcfSet, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, hp1Count, hp2Count, variantsHP, countPS);
                         }
                     }
@@ -658,7 +658,7 @@ void GermlineJudgeBase::germlineGetRefLastVarPos(
 void GermlineJudgeBase::germlineJudgeSnpHap(
     const std::string& chrName,
     VCF_Info* vcfSet,
-    RefAlt& norVar,
+    VarData& norVar,
     const std::string& base,
     int& ref_pos,
     int& length,
@@ -672,13 +672,13 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
     std::map<int, int>& countPS
 ){
     int curPos = (*currentVariantIter).first;
-    int refAlleleLen = norVar.Ref.length();
-    int altAlleleLen = norVar.Alt.length();
+    int refAlleleLen = norVar.allele.Ref.length();
+    int altAlleleLen = norVar.allele.Alt.length();
 
     // currentVariant is SNP
     if( refAlleleLen == 1 && altAlleleLen == 1 ){
         // Detected that the base of the read is either REF or ALT. 
-        if( (base == norVar.Ref) || (base == norVar.Alt) ){
+        if( (base == norVar.allele.Ref) || (base == norVar.allele.Alt) ){
 
 
             std::map<int, int>::iterator posPSiter = vcfSet[NORMAL].chrVariantPS[chrName].find((*currentVariantIter).first);
@@ -687,16 +687,16 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
                 std::cerr << "ERROR (germlineJudgeSnpHap) => can't find the position:" 
                           << " chr: " << chrName << "\t"
                           << " pos: " << curPos << "\t"
-                          << " ref: " << norVar.Ref << "\t"
-                          << " alt: " << norVar.Alt << "\n";
+                          << " ref: " << norVar.allele.Ref << "\t"
+                          << " alt: " << norVar.allele.Alt << "\n";
                 exit(EXIT_SUCCESS);
             }
             else{
-                if( base == vcfSet[NORMAL].chrVariantHP1[chrName][curPos]){
+                if( base == norVar.HP1){
                     hp1Count++;
                     variantsHP[curPos]=0;
                 }
-                if( base == vcfSet[NORMAL].chrVariantHP2[chrName][curPos]){
+                if( base == norVar.HP2){
                     hp2Count++;
                     variantsHP[curPos]=1;
                 }
@@ -708,8 +708,8 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
     // currentVariant is insertion
     else if( refAlleleLen == 1 && altAlleleLen != 1 && i+1 < aln_core_n_cigar){
         
-        int hp1Length = vcfSet[NORMAL].chrVariantHP1[chrName][curPos].length();
-        int hp2Length = vcfSet[NORMAL].chrVariantHP2[chrName][curPos].length();
+        int hp1Length = norVar.HP1.length();
+        int hp2Length = norVar.HP2.length();
         
         if ( ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 1 ) {
             // hp1 occur insertion
@@ -740,8 +740,8 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
     // currentVariant is deletion
     else if( refAlleleLen != 1 && altAlleleLen == 1 && i+1 < aln_core_n_cigar) {
 
-        int hp1Length = vcfSet[NORMAL].chrVariantHP1[chrName][curPos].length();
-        int hp2Length = vcfSet[NORMAL].chrVariantHP2[chrName][curPos].length();
+        int hp1Length = norVar.HP1.length();
+        int hp2Length = norVar.HP2.length();
         
         if ( ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2 ) {
             // hp1 occur deletion
@@ -807,11 +807,11 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
                     char base_chr = seq_nt16_str[bam_seqi(bam_get_seq(aln), query_pos)];
                     std::string base(1, base_chr);
 
-                    if (base == vcfSet[NORMAL].chrVariantHP1[chrName][curPos]) {
+                    if (base == norVar.HP1) {
                         hp1Count++;
                         variantsHP[curPos] = 0;
                     }
-                    if (base == vcfSet[NORMAL].chrVariantHP2[chrName][curPos]) {
+                    if (base == norVar.HP2) {
                         hp2Count++;
                         variantsHP[curPos] = 1;
                     }
@@ -821,8 +821,8 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
                 // the read deletion contain VCF's deletion
                 else if (refAlleleLen != 1 && altAlleleLen == 1) {
 
-                    int hp1Length = vcfSet[NORMAL].chrVariantHP1[chrName][curPos].length();
-                    int hp2Length = vcfSet[NORMAL].chrVariantHP2[chrName][curPos].length();
+                    int hp1Length = norVar.HP1.length();
+                    int hp2Length = norVar.HP2.length();
                     // hp1 occur deletion
                     if (hp1Length != 1 && hp2Length == 1) {
                         hp1Count++;
@@ -946,7 +946,7 @@ void GermlineJudgeBase::writeGermlineTagLog(std::ofstream& tagResult, const bam1
 
 void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, VCF_Info *vcfSet, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
     int curPos = (*currentVariantIter).first;
-    auto curVar = (*currentVariantIter).second;
+    auto& curVar = (*currentVariantIter).second;
 
     // normal & tumor SNP at the current position (base on normal phased SNPs)
     // both normal and tumor samples that do not exist in the high-confidence set
@@ -965,10 +965,8 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator
                     exit(EXIT_SUCCESS);
                 }
 
-                std::string norHP1 = vcfSet[NORMAL].chrVariantHP1[chrName][curPos];
-                std::string norHP2 = vcfSet[NORMAL].chrVariantHP2[chrName][curPos];
-                std::string tumHP1 = vcfSet[TUMOR].chrVariantHP1[chrName][curPos];
-                std::string tumHP2 = vcfSet[TUMOR].chrVariantHP2[chrName][curPos];
+                std::string& norHP1 = curVar.Variant[NORMAL].HP1;
+                std::string& norHP2 = curVar.Variant[NORMAL].HP2;
 
                 if(norHP1 == base){
                     hpCount[1]++;
@@ -998,8 +996,8 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator
                     exit(EXIT_SUCCESS);
                 }
 
-                std::string norHP1 = vcfSet[NORMAL].chrVariantHP1[chrName][curPos];
-                std::string norHP2 = vcfSet[NORMAL].chrVariantHP2[chrName][curPos];
+                std::string& norHP1 = curVar.Variant[NORMAL].HP1;
+                std::string& norHP2 = curVar.Variant[NORMAL].HP2;
 
                 if(norHP1 == base){
                     hpCount[1]++;
@@ -1029,8 +1027,8 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator
                     exit(EXIT_SUCCESS);
                 }
 
-                std::string norHP1 = vcfSet[NORMAL].chrVariantHP1[chrName][curPos];
-                std::string norHP2 = vcfSet[NORMAL].chrVariantHP2[chrName][curPos];
+                std::string& norHP1 = curVar.Variant[NORMAL].HP1;
+                std::string& norHP2 = curVar.Variant[NORMAL].HP2;
 
                 if(norHP1 == base){
                     hpCount[1]++;
@@ -1062,8 +1060,8 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator
                     exit(EXIT_SUCCESS);
                 }
 
-                std::string norHP1 = vcfSet[NORMAL].chrVariantHP1[chrName][curPos];
-                std::string norHP2 = vcfSet[NORMAL].chrVariantHP2[chrName][curPos];
+                std::string& norHP1 = curVar.Variant[NORMAL].HP1;
+                std::string& norHP2 = curVar.Variant[NORMAL].HP2;
 
                 if( base == norHP1){
                     hpCount[1]++;
@@ -1905,14 +1903,10 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                 
                 // record haplotype allele
                 if( fields[9][modifu_start] == '0' && fields[9][modifu_start+2] == '1' ){
-                    Info.chrVariantHP1[chr][pos]=fields[3];
-                    Info.chrVariantHP2[chr][pos]=fields[4];
                     mergedChrVarinat[chr][pos].Variant[Info.gene_type].HP1 = fields[3];
                     mergedChrVarinat[chr][pos].Variant[Info.gene_type].HP2 = fields[4];
                 }
                 else if( fields[9][modifu_start] == '1' && fields[9][modifu_start+2] == '0' ){
-                    Info.chrVariantHP1[chr][pos]=fields[4];
-                    Info.chrVariantHP2[chr][pos]=fields[3];
                     mergedChrVarinat[chr][pos].Variant[Info.gene_type].HP1 = fields[4];
                     mergedChrVarinat[chr][pos].Variant[Info.gene_type].HP2 = fields[3];
                 }

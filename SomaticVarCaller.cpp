@@ -539,8 +539,8 @@ void SomaticVarCaller::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curP
 
     
     if((*NorBase).isHighRefAllelleFreq(chrName, curPos) == true){
-        std::string TumorRefBase = curVar.Variant[TUMOR].allele.Ref;
-        std::string TumorAltBase = curVar.Variant[TUMOR].allele.Alt; 
+        std::string& TumorRefBase = curVar.Variant[TUMOR].allele.Ref;
+        std::string& TumorAltBase = curVar.Variant[TUMOR].allele.Alt; 
 
         //max count base match to refBase in normal.bam
         // if((*NorBase).getMaxFreqBase(chrName, curPos) == TumorRefBase){

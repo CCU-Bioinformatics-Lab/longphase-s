@@ -48,10 +48,6 @@ void SomaticReadVerifier::parserProcess(std::string &input, VCF_Info &Info, std:
         int pos = std::stoi( fields[1] ) - 1;
         std::string chr = fields[0];
 
-        // RefAlt tmp;
-        // tmp.Ref = fields[3]; 
-        // tmp.Alt = fields[4];
-
         VarData varData;
         varData.allele.Ref = fields[3];
         varData.allele.Alt = fields[4];

@@ -244,8 +244,6 @@ struct VCF_Info
     std::map<std::string, std::map<int, int>> chrVariantPS;
     
     // chr, variant position (0-base), haplotype
-    std::map<std::string, std::map<int, std::string>> chrVariantHP1;
-    std::map<std::string, std::map<int, std::string>> chrVariantHP2;
     
     // // The number of SVs occurring on different haplotypes in a read
     std::map<std::string, std::map<int, int>> readSVHapCount;
@@ -297,7 +295,7 @@ class GermlineJudgeBase{
     private:
 
     protected:
-        void germlineJudgeSnpHap(const std::string& chrName, VCF_Info* vcfSet, RefAlt& norVar, const std::string& base, int& ref_pos, int& length, int& i, int& aln_core_n_cigar
+        void germlineJudgeSnpHap(const std::string& chrName, VCF_Info* vcfSet, VarData& norVar, const std::string& base, int& ref_pos, int& length, int& i, int& aln_core_n_cigar
         ,uint32_t* cigar, std::map<int, MultiGenomeVar>::iterator& currentVariantIter, int& hp1Count, int& hp2Count, std::map<int, int>& variantsHP, std::map<int, int>& countPS);
 
         void germlineJudgeDeletionHap(const std::string& chrName, const std::string& ref_string, int& ref_pos, int& length, int& query_pos, std::map<int, MultiGenomeVar>::iterator &currentVariantIter, VCF_Info* vcfSet, const bam1_t* aln, int& hp1Count, int& hp2Count, std::map<int, int>& variantsHP, std::map<int, int>& countPS);

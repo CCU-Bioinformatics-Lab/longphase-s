@@ -299,7 +299,7 @@ int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, s
 
             while( currentVariantIter != currentChrVariants.end() && (*currentVariantIter).first < ref_pos + length){
 
-                auto norVar = (*currentVariantIter).second.Variant[NORMAL].allele;
+                auto norVar = (*currentVariantIter).second.Variant[NORMAL];
 
                 int offset = (*currentVariantIter).first - ref_pos;
 
