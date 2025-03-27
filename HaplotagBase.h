@@ -90,6 +90,8 @@ class BamFileRAII {
 
 
 struct VarData{
+    const static int NONE_PHASED_SET = -1;
+
     RefAlt allele;
     //phased set (-1 means no phase set)
     int PhasedSet;
@@ -103,10 +105,10 @@ struct VarData{
     bool is_unphased_hetero;
 
     bool isExistPhasedSet(){
-        return PhasedSet != -1;
+        return PhasedSet != NONE_PHASED_SET;
     }
 
-    VarData(): PhasedSet(-1), HP1(""), HP2(""), is_phased_hetero(false), is_homozygous(false), is_unphased_hetero(false){}
+    VarData(): PhasedSet(NONE_PHASED_SET), HP1(""), HP2(""), is_phased_hetero(false), is_homozygous(false), is_unphased_hetero(false){}
 };
 
 struct MultiGenomeVar{
@@ -235,17 +237,9 @@ struct VCF_Info
 {
     std::vector<std::string> chrVec;
     std::map<std::string, int> chrLength;
-
-    // chr, variant position (0-base), allele haplotype
-    std::map<std::string, std::map<int, RefAlt>> chrVariant;
-
-    std::map<std::string, int > psIndex;
-    // chr, variant position (0-base), phased set
-    std::map<std::string, std::map<int, int>> chrVariantPS;
-    
-    // chr, variant position (0-base), haplotype
-    
-    // // The number of SVs occurring on different haplotypes in a read
+        
+    // The number of SVs occurring on different haplotypes in a read
+    // read id, sv haplotype, count
     std::map<std::string, std::map<int, int>> readSVHapCount;
 
     Genome gene_type;
@@ -378,6 +372,7 @@ class VcfParser{
         bool parseMODFile;
         bool tagTumorMode;
         bool integerPS;
+        std::map<std::string, int> psIndex;
         void compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         void unCompressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         virtual void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);

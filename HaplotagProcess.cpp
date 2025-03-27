@@ -753,7 +753,6 @@ void HaplotagProcess::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPo
             }
 
             if(curVar.Variant[TUMOR].is_phased_hetero){
-                // if(tumCountPS != nullptr) (*tumCountPS)[vcfSet[TUMOR].chrVariantPS[chrName][curPos]]++;
                 if(tumCountPS != nullptr) (*tumCountPS)[curVar[TUMOR].PhasedSet]++;
             }
         }

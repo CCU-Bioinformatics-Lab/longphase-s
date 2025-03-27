@@ -561,7 +561,7 @@ void SomaticVarCaller::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curP
                 //(*SomaticPos)[curPos].isNormalPosLowVAF = true;  
             }
 
-            if(tumCountPS != nullptr) (*tumCountPS)[vcfSet[TUMOR].chrVariantPS[chrName][curPos]]++;
+            if(tumCountPS != nullptr) (*tumCountPS)[curVar.Variant[TUMOR].PhasedSet]++;
 
         //max count base not match to tumorRefBase in normal.bam
         // }else if((*NorBase).getMaxFreqBase(chrName, curPos) != TumorRefBase){
