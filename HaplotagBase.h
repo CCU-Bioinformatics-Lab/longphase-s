@@ -124,19 +124,6 @@ struct MultiGenomeVar{
     }
 };
 
-// struct CoreStruct{
-//     std::map<std::string, std::map<int, MultiGenomeVar>> mergedChrVariant;
-
-//     // The number of SVs occurring on different haplotypes in a read
-//     //chr, genome, read, haplotype
-//     std::map<Genome, std::map<std::string, std::map<int, int>>> readSVHapCount;
-//     std::map<Genome, std::map<std::string, int>> psIndex;
-
-//     std::map<Genome, std::vector<std::string>> chrVec;
-//     std::map<Genome, std::map<std::string, int>> chrLength;
-// };
-
-
 //record each type of base in specific position
 struct PosBase{
     int A_count;
@@ -156,9 +143,6 @@ struct PosBase{
     float max_ratio;
     float second_max_ratio;
 
-    //if only one type of Base in this position : 1 
-    bool isHighRefAllelleFreq;
-
     int MPQ_A_count;
     int MPQ_C_count;
     int MPQ_G_count;
@@ -177,7 +161,7 @@ struct PosBase{
     
     PosBase(): A_count(0), C_count(0), G_count(0), T_count(0), unknow(0), depth(0), delCount(0)
              , max_count(0), second_max_count(INT_MAX), max_base(" "), second_max_base(" ")
-             , max_ratio(0), second_max_ratio(0), isHighRefAllelleFreq(false)
+             , max_ratio(0), second_max_ratio(0)
              , MPQ_A_count(0), MPQ_C_count(0), MPQ_G_count(0), MPQ_T_count(0), MPQ_unknow(0), filteredMpqDepth(0) 
              ,VAF(0.0), nonDelAF(0.0), filteredMpqVAF(0.0), lowMpqReadRatio(0.0), ReadHpCount(std::map<int, int>()){}
 };
@@ -208,9 +192,6 @@ struct HP3_Info{
 
     bool isHighConSomaticSNP;
 
-    //Corresponding normal position has a very low VAF
-    bool isNormalPosLowVAF;
-
     int somaticReadDeriveByHP;
     double shannonEntropy;
     int homopolymerLength;
@@ -228,7 +209,7 @@ struct HP3_Info{
     HP3_Info(): totalCleanHP3Read(0), pure_H1_1_read(0), pure_H2_1_read(0), pure_H3_read(0), Mixed_HP_read(0), unTag(0)
              , CaseReadCount(0), pure_H1_1_readRatio(0.0), pure_H2_1_readRatio(0.0), pure_H3_readRatio(0.0), Mixed_HP_readRatio(0.0)
              , tumDelRatio(0.0), base(), GTtype(""), somaticHp4Base(Nucleotide::UNKOWN), somaticHp5Base(Nucleotide::UNKOWN), somaticHp4BaseCount(0), somaticHp5BaseCount(0)
-             , isHighConSomaticSNP(false), isNormalPosLowVAF(false), somaticReadDeriveByHP(0), shannonEntropy(0.0), homopolymerLength(0), statisticPurity(false), MeanAltCountPerVarRead(0.0), zScore(0.0), intervalSnpCount(0), inDenseTumorInterval(false)
+             , isHighConSomaticSNP(false), somaticReadDeriveByHP(0), shannonEntropy(0.0), homopolymerLength(0), statisticPurity(false), MeanAltCountPerVarRead(0.0), zScore(0.0), intervalSnpCount(0), inDenseTumorInterval(false)
              , isFilterOut(false){}
 };
 
@@ -326,7 +307,6 @@ class BamBaseCounter : public GermlineJudgeBase{
                              VCF_Info *vcfSet, 
                              const Genome& genmoeType);
 
-        bool isHighRefAllelleFreq(std::string chr, int pos);
         std::string getMaxFreqBase(std::string chr, int pos);
         float getMaxBaseRatio(std::string chr, int pos);
         float getSecondMaxBaseRatio(std::string chr, int pos);
@@ -353,9 +333,9 @@ class SomaticJudgeBase{
     protected:
         void SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount
         , std::map<int, int> &NorCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP
-        , std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos);
+        , std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos);
 
-        virtual void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos)=0;
+        virtual void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos)=0;
         int determineReadHP(std::map<int, int> &hpCount, int &pqValue,std::map<int, int> &norCountPS, double &norHPsimilarity, double &tumHPsimilarity,  double percentageThreshold, int *totalHighSimilarity, int *totalCrossTwoBlock, int *totalWithOutVaraint);
 
         int convertStrNucToInt(std::string &base);

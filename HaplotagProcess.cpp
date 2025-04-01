@@ -428,7 +428,7 @@ int HaplotagProcess::somaticJudgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t 
                     std::string base(1, base_chr);
 
                     //std::cout << "flag 1" << std::endl;
-                    SomaticJudgeSnpHP(currentVariantIter, chrName, base, hpCount, norCountPS, tumCountPS, &variantsHP, nullptr, nullptr, &((*chrPosReadCase)[chrName]));
+                    SomaticJudgeSnpHP(currentVariantIter, chrName, base, hpCount, norCountPS, tumCountPS, &variantsHP, nullptr, &((*chrPosReadCase)[chrName]));
                     if((*chrPosReadCase)[chrName].find((*currentVariantIter).first) != (*chrPosReadCase)[chrName].end()){
 
                         //record the somatic snp derive by which germline hp in this read
@@ -729,7 +729,7 @@ std::string HaplotagProcess::convertHpResultToString(int hpResult){
     }
 }
 
-void HaplotagProcess::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
+void HaplotagProcess::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, std::map<int, HP3_Info> *SomaticPos){
 
     if(SomaticPos == nullptr){
         std::cerr << "ERROR (SomaticTaggingJudgeHP) => SomaticPos pointer cannot be nullptr"<< std::endl;

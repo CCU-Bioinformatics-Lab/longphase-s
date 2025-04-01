@@ -355,7 +355,7 @@ void SomaticVarCaller::extractTumorVariantData(const bam_hdr_t &bamHdr,const bam
 
                     //waring : using ref length to split SNP and indel that will be effect case ratio result 
                     if ( aln.core.qual >= params.somaticCallingMpqThreshold ){
-                        SomaticJudgeSnpHP(currentVariantIter, chr, base, hpCount, NorCountPS, TumCountPS, &variantsHP, &tumorAllelePosVec, NorBase, &somaticPosInfo);
+                        SomaticJudgeSnpHP(currentVariantIter, chr, base, hpCount, NorCountPS, TumCountPS, &variantsHP, &tumorAllelePosVec, &somaticPosInfo);
                         if((*currentVariantIter).second.isExists(TUMOR)){
                             tumorSnpPosVec.push_back((*currentVariantIter).first);
                         }
@@ -524,7 +524,7 @@ void SomaticVarCaller::extractTumorVariantData(const bam_hdr_t &bamHdr,const bam
     }
 }
 
-void SomaticVarCaller::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
+void SomaticVarCaller::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, std::map<int, HP3_Info> *SomaticPos){
     //the tumor SNP GT is phased heterozygous
     //all bases of the same type at the current position in normal.bam
 
@@ -537,40 +537,24 @@ void SomaticVarCaller::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curP
         exit(1);
     }
 
+    std::string& TumorRefBase = curVar.Variant[TUMOR].allele.Ref;
+    std::string& TumorAltBase = curVar.Variant[TUMOR].allele.Alt; 
     
-    if((*NorBase).isHighRefAllelleFreq(chrName, curPos) == true){
-        std::string& TumorRefBase = curVar.Variant[TUMOR].allele.Ref;
-        std::string& TumorAltBase = curVar.Variant[TUMOR].allele.Alt; 
+    if(base == TumorAltBase){
+        hpCount[3]++;
+        if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::SOMATIC_H3;
 
-        //max count base match to refBase in normal.bam
-        // if((*NorBase).getMaxFreqBase(chrName, curPos) == TumorRefBase){
-        
-            if(base == TumorAltBase){
-                hpCount[3]++;
-                if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::SOMATIC_H3;
+        //record postions that tagged as HP3 for calculating the confidence of somatic positions
+        (*tumorAllelePosVec).push_back(curPos);
 
-                //record postions that tagged as HP3 for calculating the confidence of somatic positions
-                (*tumorAllelePosVec).push_back(curPos);
-                (*SomaticPos)[curPos].isNormalPosLowVAF = true;                            
-
-            //base is not match to TumorRefBase & TumorAltBase (other HP)
-            }else if(base != TumorRefBase && base != TumorAltBase){
-                //hpCount[4]++;
-                //if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::SOMATIC_H4;
-                //(*tumorAllelePosVec).push_back(curPos);
-                //(*SomaticPos)[curPos].isNormalPosLowVAF = true;  
-            }
-
-            if(tumCountPS != nullptr) (*tumCountPS)[curVar.Variant[TUMOR].PhasedSet]++;
-
-        //max count base not match to tumorRefBase in normal.bam
-        // }else if((*NorBase).getMaxFreqBase(chrName, curPos) != TumorRefBase){
-        //     //temp 
-        // }
-    //exist more than one type of base at the current position in normal.bam 
-    // }else{
-    //     //temp
+    //base is not match to TumorRefBase & TumorAltBase (other HP)
+    }else if(base != TumorRefBase && base != TumorAltBase){
+        //hpCount[4]++;
+        //if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::SOMATIC_H4;
+        //(*tumorAllelePosVec).push_back(curPos);
     }
+
+    if(tumCountPS != nullptr) (*tumCountPS)[curVar.Variant[TUMOR].PhasedSet]++;
 }
 
 void SomaticVarCaller::ClassifyReadsByCase(std::vector<int> &tumorAllelePosVec, std::map<int, int> &NorCountPS, std::map<int, int> &hpCount, const HaplotagParameters &params, std::map<int, HP3_Info> &somaticPosInfo){
@@ -924,7 +908,7 @@ void SomaticVarCaller::SomaticFeatureFilter(const SomaticFilterParaemter &somati
         float norDepth = NorBase.getDepth(chr, (*somaticVarIter).first);
         
         //stage 1 filter
-        if (!(*somaticVarIter).second.isNormalPosLowVAF || !(norVAF <= norVAF_maxThr && norDepth > norDepth_minThr)) {
+        if (!(norVAF <= norVAF_maxThr && norDepth > norDepth_minThr)) {
             stage1_filtered = true;
         }
 

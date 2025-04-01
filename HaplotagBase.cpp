@@ -56,11 +56,11 @@ void BamBaseCounter::CountingBamBase(
         // bam file resource allocation
         BamFileRAII bam(BamFile, params.fastaFile, threadPool);
 
-        // store base information
-        std::map<int, PosBase> *variantBase = nullptr;
 
         // variant position (0-base), allele haplotype set
         std::map<int, MultiGenomeVar> currentVariants;
+        // store base information
+        std::map<int, PosBase> *variantBase = nullptr;
 
         #pragma omp critical
         {
@@ -475,24 +475,8 @@ void BamBaseCounter::CalculateBaseInfo(const std::string &chr, std::map<int, Pos
             baseInfo->lowMpqReadRatio = (float)(depth - filteredMpqDepth) / (float)depth;
         }
         
-        float refAllele_threshold = 0.90; //(VAF <= 0.1)      
-        if( !applyFilter ||
-            //(baseInfo->max_ratio >= refAllele_threshold && depth > 1 && baseInfo->lowMpqReadRatio <= 0.1) ){
-            // (baseInfo->VAF <= 0.1 && depth > 1 && baseInfo->lowMpqReadRatio <= 0.1) ){
-            (baseInfo->VAF <= 0.1 && depth > 1) ){
-            baseInfo->isHighRefAllelleFreq = true;
-        }
-        baseInfo->isHighRefAllelleFreq = true;
-        
         currentPosIter++;
     } 
-}
-
-bool BamBaseCounter::isHighRefAllelleFreq(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        return false;
-    }    
-    return (*ChrVariantBase)[chr][pos].isHighRefAllelleFreq;
 }
 
 std::string BamBaseCounter::getMaxFreqBase(std::string chr, int pos){
@@ -656,6 +640,9 @@ void GermlineJudgeBase::germlineGetRefLastVarPos(
                     }
                     break;
                 case TUMOR:
+                    break;
+       
+                case HIGH_CON_SOMATIC:
                     break;
             }
         }
@@ -952,7 +939,7 @@ void GermlineJudgeBase::writeGermlineTagLog(std::ofstream& tagResult, const bam1
     (tagResult) << "\n";
 }
 
-void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
+void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, std::map<int, HP3_Info> *SomaticPos){
     int curPos = (*currentVariantIter).first;
     auto& curVar = (*currentVariantIter).second;
 
@@ -1089,24 +1076,24 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator
                              << curVar.Variant[TUMOR].allele.Alt << "\n";
                     exit(EXIT_SUCCESS);
                 }else{
-                    OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, &tumCountPS, variantsHP, tumorAllelePosVec, NorBase, SomaticPos);
+                    OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, &tumCountPS, variantsHP, tumorAllelePosVec, SomaticPos);
                 }
             }
         //the tumor SNP GT is unphased heterozygous
         }else if(curVar.Variant[TUMOR].is_unphased_hetero == true){
             if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
-                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec, NorBase, SomaticPos);
+                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec, SomaticPos);
             }           
         //the tumor SNP GT is homozygous
         }else if(curVar.Variant[TUMOR].is_homozygous == true){
             if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
-                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec, NorBase, SomaticPos);
+                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec, SomaticPos);
             }
         }
     }
 }
 
-void SomaticJudgeBase::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, BamBaseCounter *NorBase, std::map<int, HP3_Info> *SomaticPos){
+void SomaticJudgeBase::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, std::map<int, HP3_Info> *SomaticPos){
 
 }
 
