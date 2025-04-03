@@ -1,12 +1,23 @@
 #include "SomaticVarCaller.h"
 
-SomaticVarCaller::SomaticVarCaller(){
+SomaticVarCaller::SomaticVarCaller(const std::vector<std::string> &chrVec, const HaplotagParameters &params){
     chrPosSomaticInfo = new std::map<std::string, std::map<int, HP3_Info>>();
     chrVarReadHpResult = new std::map<std::string, std::map<int, ReadHpResult>>();
     callerReadHpDistri = new ReadHpDistriLog();
     denseTumorSnpInterval = new std::map<std::string, std::map<int, std::pair<int, DenseSnpInterval>>>();
     chrReadHpResultSet = new std::map<std::string, std::map<std::string, ReadVarHpCount>>();
     chrTumorPosReadCorrBaseHP = new std::map<std::string, std::map<int, std::map<std::string, int>>>();
+
+    for(auto chr : chrVec){
+        (*chrPosSomaticInfo)[chr] = std::map<int, HP3_Info>();
+        (*chrVarReadHpResult)[chr] = std::map<int, ReadHpResult>();
+        (*denseTumorSnpInterval)[chr] = std::map<int, std::pair<int, DenseSnpInterval>>();
+        (*chrReadHpResultSet)[chr] = std::map<std::string, ReadVarHpCount>();
+        (*chrTumorPosReadCorrBaseHP)[chr] = std::map<int, std::map<std::string, int>>();
+    }
+
+    // setting somatic calling filter params
+    InitialSomaticFilterParams(params.enableFilter);  
 }
 
 SomaticVarCaller::~SomaticVarCaller(){
@@ -36,20 +47,6 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
         exit(1);        
     }
 
-    for(auto chr : chrVec){
-        (*chrPosSomaticInfo)[chr] = std::map<int, HP3_Info>();
-        (*chrVarReadHpResult)[chr] = std::map<int, ReadHpResult>();
-        (*denseTumorSnpInterval)[chr] = std::map<int, std::pair<int, DenseSnpInterval>>();
-        (*chrReadHpResultSet)[chr] = std::map<std::string, ReadVarHpCount>();
-        (*chrTumorPosReadCorrBaseHP)[chr] = std::map<int, std::map<std::string, int>>();
-    }
-
-    // somatic calling filter params
-    SomaticFilterParaemter somaticParams;
-
-    // setting somatic calling filter params
-    InitialSomaticFilterParams(somaticParams, params.enableFilter);  
-
     // init data structure and get core n
     htsThreadPool threadPool = {NULL, 0};
     // creat thread pool
@@ -59,25 +56,13 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
     }
 
     // record reference last variant pos
-    std::vector<int> last_tumor_pos;
-    for( auto chr : chrVec ){
-        bool existLastTumorPos = false;
+    std::vector<int> last_pos;
 
-        for (auto lastVariantIter = mergedChrVarinat[chr].rbegin(); lastVariantIter != mergedChrVarinat[chr].rend(); ++lastVariantIter) {
-            if ((*lastVariantIter).second.isExists(TUMOR)) {
-                last_tumor_pos.push_back((*lastVariantIter).first);
-                existLastTumorPos = true;
-                break;
-            }
-        }
-        
-        if(!existLastTumorPos){
-            last_tumor_pos.push_back(0);
-        }
-    }
+    // get the last variant position of the reference
+    getLastVarPos(last_pos, chrVec,mergedChrVarinat, Genome::TUMOR);
 
     // reference fasta parser
-    FastaParser fastaParser(params.fastaFile, chrVec, last_tumor_pos, params.numThreads);
+    FastaParser fastaParser(params.fastaFile, chrVec, last_pos, params.numThreads);
 
     // loop all chromosome
     #pragma omp parallel for schedule(dynamic) num_threads(params.numThreads) 
@@ -266,7 +251,7 @@ void SomaticVarCaller::VariantCalling(const std::string BamFile, std::map<std::s
     return;
 }
 
-void SomaticVarCaller::InitialSomaticFilterParams(SomaticFilterParaemter &somaticParams, bool enableFilter){
+void SomaticVarCaller::InitialSomaticFilterParams(bool enableFilter){
     
     // Determine whether to apply the filter
     somaticParams.applyFilter = enableFilter;
@@ -290,11 +275,10 @@ void SomaticVarCaller::InitialSomaticFilterParams(SomaticFilterParaemter &somati
 void SomaticVarCaller::extractTumorVariantData(const bam_hdr_t &bamHdr,const bam1_t &aln, const std::string &chr, const HaplotagParameters &params, BamBaseCounter *NorBase, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants, std::map<int, MultiGenomeVar>::iterator &firstVariantIter, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP, std::string &ref_string){
     
     std::map<int, int> hpCount;
-    hpCount[1] = 0; 
-    hpCount[2] = 0;
-    hpCount[3] = 0;
-    hpCount[4] = 0;
-
+    hpCount[SnpHP::GERMLINE_H1] = 0; 
+    hpCount[SnpHP::GERMLINE_H2] = 0;
+    hpCount[SnpHP::SOMATIC_H3] = 0;
+    hpCount[SnpHP::SOMATIC_H4] = 0;
     //record variants on this read
     std::map<int, int> variantsHP;
 

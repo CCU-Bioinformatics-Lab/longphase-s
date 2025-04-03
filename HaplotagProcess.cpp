@@ -43,7 +43,7 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const Genome& geneType
 
     std::vector<int> last_pos;
     // record reference last variant pos
-    germlineGetRefLastVarPos(last_pos, *chrVec, *mergedChrVarinat, geneType);
+    getLastVarPos(last_pos, *chrVec, *mergedChrVarinat, geneType);
     // reference fasta parser
     FastaParser fastaParser(params.fastaFile, *chrVec, last_pos, params.numThreads);
 
@@ -256,8 +256,10 @@ void HaplotagProcess::initFlag(bam1_t *aln, std::string flag){
 
 int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, std::string chrName, double percentageThreshold, std::ofstream *tagResult, int &pqValue, int &psValue, const int tagGeneType, std::string &ref_string){
 
-    int hp1Count = 0;
-    int hp2Count = 0;
+    std::map<int, int> hpCount;
+    hpCount[SnpHP::GERMLINE_H1] = 0;
+    hpCount[SnpHP::GERMLINE_H2] = 0;
+
     //record variants on this read
     std::map<int, int> variantsHP;
 
@@ -310,7 +312,7 @@ int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, s
                     char base_chr = seq_nt16_str[bam_seqi(q,query_pos + offset)];
                     std::string base(1, base_chr);
 
-                    germlineJudgeSnpHap(chrName, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, hp1Count, hp2Count, variantsHP, countPS);
+                    germlineJudgeSnpHap(chrName, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, hpCount, variantsHP, countPS);
 
                 }
                 currentVariantIter++;
@@ -325,7 +327,7 @@ int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, s
             // 2: deletion from the reference
         else if( cigar_op == 2 ){
 
-            germlineJudgeDeletionHap(chrName, ref_string, ref_pos, length, query_pos, currentVariantIter, &aln, hp1Count, hp2Count, variantsHP, countPS);
+            germlineJudgeDeletionHap(chrName, ref_string, ref_pos, length, query_pos, currentVariantIter, &aln, hpCount, variantsHP, countPS);
             ref_pos += length;
         }
             // 3: skipped region from the reference
@@ -348,17 +350,17 @@ int HaplotagProcess::judgeHaplotype(const bam_hdr_t &bamHdr,const bam1_t &aln, s
     }
 
     // get the number of SVs occurring on different haplotypes in a read
-    germlineJudgeSVHap(aln, vcfSet, hp1Count, hp2Count, tagGeneType);
+    germlineJudgeSVHap(aln, vcfSet, hpCount, tagGeneType);
 
     double min,max;
     int hpResult = ReadHP::unTag;
 
     // determine the haplotype of the read
-    hpResult = germlineDetermineReadHap(hp1Count, hp2Count, min, max, percentageThreshold, pqValue, psValue, countPS, &totalHighSimilarity, &totalWithOutVaraint);
+    hpResult = germlineDetermineReadHap(hpCount, min, max, percentageThreshold, pqValue, psValue, countPS, &totalHighSimilarity, &totalWithOutVaraint);
      
     //write tag log file
     if(tagResult != nullptr){
-        writeGermlineTagLog(*tagResult, aln, bamHdr, hpResult, max, min, hp1Count, hp2Count, pqValue, variantsHP, countPS);
+        writeGermlineTagLog(*tagResult, aln, bamHdr, hpResult, max, min, hpCount, pqValue, variantsHP, countPS);
     }
 
     return hpResult;
@@ -988,11 +990,12 @@ void HaplotagProcess::taggingProcess(HaplotagParameters &params)
     if(tagTumorMode){
 
         //Count each base numbers at tumor SNP position in the Normal.bam
-        BamBaseCounter *NorBase = new BamBaseCounter(params.enableFilter);
-        NorBase->CountingBamBase(params.bamFile, params, (*mergedChrVarinat), *chrVec, *chrLength, vcfSet, NORMAL);
+        BamBaseCounter *NorBase = new BamBaseCounter(*chrVec);
+        // NorBase->CountingBamBase(params.bamFile, params, (*mergedChrVarinat), *chrVec, *chrLength, vcfSet, NORMAL);
+        NorBase->extractNormalData(params.bamFile, params, (*mergedChrVarinat), *chrVec, *chrLength, vcfSet, NORMAL);
 
         //record the HP3 confidence of each read
-        SomaticVarCaller *SomaticVar = new SomaticVarCaller();
+        SomaticVarCaller *SomaticVar = new SomaticVarCaller(*chrVec, params);
         SomaticVar->VariantCalling(params.tumorBamFile, (*mergedChrVarinat), *chrVec, *chrLength, params, *NorBase);
         (*chrPosReadCase) = SomaticVar->getSomaticChrPosInfo();
 

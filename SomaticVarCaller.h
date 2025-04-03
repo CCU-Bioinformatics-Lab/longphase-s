@@ -66,8 +66,11 @@ struct SomaticFilterParaemter
     float LowMpqRatioThreshold; 
 };
 
-class SomaticVarCaller: public SomaticJudgeBase{
+class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
     private:
+        // somatic calling filter params
+        SomaticFilterParaemter somaticParams;
+
         // record the position that tagged as HP3
         // chr, tumor SNP pos, somatic info
         std::map<std::string, std::map<int, HP3_Info>> *chrPosSomaticInfo;
@@ -85,7 +88,7 @@ class SomaticVarCaller: public SomaticJudgeBase{
         // chr, position, read ID, baseHP 
         std::map<std::string, std::map<int, std::map<std::string, int>>> *chrTumorPosReadCorrBaseHP;
 
-        void InitialSomaticFilterParams(SomaticFilterParaemter &somaticParams, bool enableFilter);
+        void InitialSomaticFilterParams(bool enableFilter);
 
         void SetFilterParamsWithPurity(SomaticFilterParaemter &somaticParams, double &tumorPurity);
     
@@ -124,7 +127,7 @@ class SomaticVarCaller: public SomaticJudgeBase{
     protected:
         void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos);
     public:
-        SomaticVarCaller();
+        SomaticVarCaller(const std::vector<std::string> &chrVec, const HaplotagParameters &params);
         virtual ~SomaticVarCaller();
 
         void VariantCalling(const std::string BamFile, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength,const HaplotagParameters &params, BamBaseCounter &NorBase);

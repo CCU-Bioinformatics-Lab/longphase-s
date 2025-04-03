@@ -1,15 +1,17 @@
 #include "HaplotagBase.h"
 
-BamBaseCounter::BamBaseCounter(bool enableFilter){
+BamBaseCounter::BamBaseCounter(const std::vector<std::string> &chrVec){
     ChrVariantBase = new std::map<std::string, std::map<int, PosBase>>();
-    applyFilter = enableFilter;
+    for(auto chr : chrVec){
+        (*ChrVariantBase)[chr] = std::map<int, PosBase>();
+    }
 };
 
 BamBaseCounter::~BamBaseCounter(){
     delete ChrVariantBase;
 };
 
-void BamBaseCounter::CountingBamBase(
+void BamBaseCounter::extractNormalData(
     const std::string &BamFile, 
     const HaplotagParameters &params, 
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
@@ -18,466 +20,11 @@ void BamBaseCounter::CountingBamBase(
     VCF_Info *vcfSet, 
     const Genome& genmoeType
 ){
-    std::cerr<< "collecting data for the normal sample... ";
-    std::time_t begin = time(NULL);
-
-    if(chrVec.size() == 0){
-        std::cerr<<"ERROR: chrVec is empty\n";
-        exit(1);
-    }
-
-    if(chrLength.size() == 0){
-        std::cerr<<"ERROR: chrLength is empty\n";
-        exit(1);        
-    }
-
-    for(auto chr : chrVec){
-        (*ChrVariantBase)[chr] = std::map<int, PosBase>();
-    }
-    
-    std::vector<int> last_pos;
-    // get the last variant position of the reference
-    germlineGetRefLastVarPos(last_pos, chrVec,mergedChrVarinat, genmoeType);
-    // reference fasta parser
-    FastaParser fastaParser(params.fastaFile, chrVec, last_pos, params.numThreads);
-
-    // init data structure and get core n
-    htsThreadPool threadPool = {NULL, 0};
-    // creat thread pool
-    if (!(threadPool.pool = hts_tpool_init(params.numThreads))) {
-        fprintf(stderr, "Error creating thread pool\n");
-        exit(1);
-    }
-
-    // loop all chromosome
-    #pragma omp parallel for schedule(dynamic) num_threads(params.numThreads) 
-    for(auto chr : chrVec ){
-
-        // bam file resource allocation
-        BamFileRAII bam(BamFile, params.fastaFile, threadPool);
-
-
-        // variant position (0-base), allele haplotype set
-        std::map<int, MultiGenomeVar> currentVariants;
-        // store base information
-        std::map<int, PosBase> *variantBase = nullptr;
-
-        #pragma omp critical
-        {
-            variantBase = &((*ChrVariantBase)[chr]);
-            currentVariants = mergedChrVarinat[chr];
-        }
-        // fetch chromosome string
-        std::string ref_string = fastaParser.chrString.at(chr);
-
-        //inintial iterator
-        std::map<int, MultiGenomeVar>::iterator firstVariantIter = currentVariants.begin();
-
-        std::map<int, MultiGenomeVar>::reverse_iterator last = currentVariants.rbegin();
-
-        std::string region = !params.region.empty() ? params.region : chr + ":1-" + std::to_string(chrLength[chr]);
-        hts_itr_t* iter = sam_itr_querys(bam.idx, bam.bamHdr, region.c_str());
-
-        while (sam_itr_multi_next(bam.in, iter, bam.aln) >= 0) {
-            
-            int flag = bam.aln->core.flag;
-
-            // if ( bam.aln->core.qual < params.qualityThreshold ){
-            //    // mapping quality is lower than threshold
-            //    continue;
-            // }
-
-            if( (flag & 0x4) != 0 ){
-                // read unmapped
-                continue;
-            }
-            if( (flag & 0x100) != 0 ){
-                // secondary alignment. repeat.
-                // A secondary alignment occurs when a given read could align reasonably well to more than one place.
-                continue;
-            }
-            if( (flag & 0x800) != 0 && params.tagSupplementary == false ){
-                // supplementary alignment
-                // A chimeric alignment is represented as a set of linear alignments that do not have large overlaps.
-                continue;
-            }
-            //currentVariants rbegin == rend
-            if(last == currentVariants.rend()){ 
-                //skip
-            }
-            else if(int(bam.aln->core.pos) <= (*last).first){
-                StatisticBaseInfo(*bam.aln, *bam.bamHdr, chr, params, genmoeType, *variantBase, currentVariants, firstVariantIter, vcfSet, ref_string);
-            }
-        }
-        // std::cerr<<"calculate Base Information ...\n";
-        CalculateBaseInfo(chr, *variantBase, currentVariants);
-        
-        variantBase = nullptr;
-        hts_itr_destroy(iter);
-    }
-    // if(tagResult != nullptr){
-    //     (*tagResult).close();
-    // }
-    hts_tpool_destroy(threadPool.pool);
-    std::cerr<< difftime(time(NULL), begin) << "s\n";
+    std::cerr<< "extracting data from normal bam... ";
+    parsingBam(BamFile, params, mergedChrVarinat, chrVec, chrLength, vcfSet, genmoeType);
     return;
 }
 
-void BamBaseCounter::StatisticBaseInfo(
-    const bam1_t &aln, 
-    const bam_hdr_t &bamHdr,
-    const std::string &chrName, 
-    const HaplotagParameters &params, 
-    int genmoeType, 
-    std::map<int, PosBase> &variantBase, 
-    std::map<int, MultiGenomeVar> &currentVariants,
-    std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-    VCF_Info *vcfSet, 
-    const std::string &ref_string
-){
-
-    int hp1Count = 0;
-    int hp2Count = 0;
-    //record variants on this read
-    std::map<int, int> variantsHP;
-
-    std::map<int,int> countPS;
-
-    std::vector<int> tumVarPosVec;
-
-    // Skip variants that are to the left of this read
-    while( firstVariantIter != currentVariants.end() && (*(firstVariantIter)).first < aln.core.pos ){
-        firstVariantIter++;
-    }     
-
-    if( firstVariantIter == currentVariants.end()){
-        return ;
-    }
-
-    // position relative to reference
-    int ref_pos = aln.core.pos;
-    // position relative to read
-    int query_pos = 0;
-    // set variant start for current alignment
-    std::map<int, MultiGenomeVar>::iterator currentVariantIter = firstVariantIter;
-
-    // reading cigar to detect snp on this read
-    int aln_core_n_cigar = int(aln.core.n_cigar);
-    for(int i = 0; i < aln_core_n_cigar ; i++ ){
-        uint32_t *cigar = bam_get_cigar(&aln);
-        int cigar_op = bam_cigar_op(cigar[i]);
-        int length   = bam_cigar_oplen(cigar[i]);
-
-        // iterator next variant
-        while( currentVariantIter != currentVariants.end() && (*currentVariantIter).first < ref_pos ){
-            currentVariantIter++;
-        }
-        
-        // CIGAR operators: MIDNSHP=X correspond 012345678
-        // 0: alignment match (can be a sequence match or mismatch)
-        // 7: sequence match
-        // 8: sequence mismatch
-        if( cigar_op == 0 || cigar_op == 7 || cigar_op == 8 ){
-        
-            while( currentVariantIter != currentVariants.end() && (*currentVariantIter).first < ref_pos + length){
-            
-                int offset = (*currentVariantIter).first - ref_pos;
-
-                if( offset < 0){
-                }
-                else{
-                    uint8_t *q = bam_get_seq(&aln);
-                    char base_chr = seq_nt16_str[bam_seqi(q,query_pos + offset)];
-                    std::string base(1, base_chr);
-                    // printf("into match cigar\n");
-
-                    //statistically analyze SNP information exclusive to the tumor
-                    if((*currentVariantIter).second.isExists(TUMOR)){
-                        int curPos = (*currentVariantIter).first;
-                        //std::cout << "curPos :" << curPos << "is tumor "<<(*currentVariantIter).second.isExistTumor  << " isNormal: "<< (*currentVariantIter).second.isExistNormal<< std::endl;
-
-                        //detect ref bsae length(temp :tumor SNP)
-                        int tumRefLength = (*currentVariantIter).second.Variant[TUMOR].allele.Ref.length();
-                        int tumAltLength = (*currentVariantIter).second.Variant[TUMOR].allele.Alt.length();
-                        
-                        // the variant is SNP
-                        if(tumRefLength == 1 && tumAltLength == 1){
-                            //record tumor SNP position
-                            tumVarPosVec.push_back(curPos);
-                            // mapping quality is higher than threshold
-                            if ( aln.core.qual >= params.somaticCallingMpqThreshold ){
-                                if(base == "A"){
-                                    variantBase[curPos].MPQ_A_count++;
-                                }else if(base == "C"){
-                                    variantBase[curPos].MPQ_C_count++;
-                                }else if(base == "G"){
-                                    variantBase[curPos].MPQ_G_count++;
-                                }else if(base == "T"){
-                                    variantBase[curPos].MPQ_T_count++;
-                                }else{
-                                    variantBase[curPos].MPQ_unknow++;
-                                }
-                                variantBase[curPos].filteredMpqDepth++;
-                            }
-                            if(base == "A"){
-                                variantBase[curPos].A_count++;
-                                //std::cout << "base A read ID :" << bam_get_qname(aln) << std::endl;
-                            }else if(base == "C"){
-                                variantBase[curPos].C_count++;
-                            }else if(base == "G"){
-                                variantBase[curPos].G_count++;
-                            }else if(base == "T"){
-                                variantBase[curPos].T_count++;
-                            }else{
-                                variantBase[curPos].unknow++;
-                            }
-                            variantBase[curPos].depth++;  
-
-                        }
-
-                        // the indel(del) SNP position is the start position, and the deletion occurs at the next position
-                        else if(tumRefLength > 1 && tumAltLength == 1){
-                            // the indel SNP start position is at the end of the deletion, and the next cigar operator is deletion
-                            if(curPos == (ref_pos + length - 1) && bam_cigar_op(cigar[i+1]) == 2 && i+1 < aln_core_n_cigar){
-
-                            }
-                        }
-
-                    }       
-
-                    if ( aln.core.qual >= params.somaticCallingMpqThreshold && (*currentVariantIter).second.isExists(NORMAL)){
-                        // only judge the heterozygous SNP
-                        if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
-                            auto norVar = (*currentVariantIter).second.Variant[NORMAL];
-                            germlineJudgeSnpHap(chrName, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, hp1Count, hp2Count, variantsHP, countPS);
-                        }
-                    }
-                }
-                currentVariantIter++;
-            }
-            query_pos += length;
-            ref_pos += length;
-        }
-            // 1: insertion to the reference
-        else if( cigar_op == 1 ){
-            query_pos += length;
-        }
-        // 2: deletion from the reference
-        else if( cigar_op == 2 ){
-            bool alreadyJudgeDel = false;
-            while( currentVariantIter != currentVariants.end() && (*currentVariantIter).first < ref_pos + length){
-                //statistically analyze SNP information exclusive to the tumor
-                if((*currentVariantIter).second.isExists(TUMOR)){
-
-                    int curPos = (*currentVariantIter).first;
-                    
-                    //record tumor SNP position
-                    tumVarPosVec.push_back(curPos);
-
-                    //detect ref bsae length(temp :tumor SNP)
-                    int tumRefLength = (*currentVariantIter).second.Variant[TUMOR].allele.Ref.length();
-                    int tumAltLength = (*currentVariantIter).second.Variant[TUMOR].allele.Alt.length();
-
-                    // the variant is SNP
-                    if(tumRefLength == 1 && tumAltLength == 1){
-                        variantBase[curPos].delCount++;
-                        variantBase[curPos].depth++;
-                    }
-                    // the variant is deletion
-                    else if(tumRefLength > 1 && tumAltLength == 1){
-
-                    }
-                }
-
-                // only execute at the first phased normal snp
-                if ( aln.core.qual >= params.somaticCallingMpqThreshold && (*currentVariantIter).second.isExists(NORMAL) && !alreadyJudgeDel){
-                    if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
-                        // longphase v1.73 only execute once
-                        alreadyJudgeDel = true;
-                        auto norVar = (*currentVariantIter).second.Variant[NORMAL];
-                        germlineJudgeDeletionHap(chrName, ref_string, ref_pos, length, query_pos, currentVariantIter, &aln, hp1Count, hp2Count, variantsHP, countPS);
-                    }
-                }
-                
-                //std::cout << "read ID : "<<  bam_get_qname(&aln) <<" pos :" << curPos << " deletion count ++" << std::endl;
-                currentVariantIter++;
-            }
-
-            ref_pos += length;
-        }
-        // 3: skipped region from the reference
-        else if( cigar_op == 3 ){
-            ref_pos += length;
-        }
-        // 4: soft clipping (clipped sequences present in SEQ)
-        else if( cigar_op == 4 ){
-            query_pos += length;
-        }
-        // 5: hard clipping (clipped sequences NOT present in SEQ)
-        // 6: padding (silent deletion from padded reference)
-        else if( cigar_op == 5 || cigar_op == 6 ){
-        // do nothing
-        }
-        else{
-            std::cerr<< "alignment find unsupported CIGAR operation from read: " << bam_get_qname(&aln) << "\n";
-            exit(1);
-        }
-    }
-
-    // printf("end cigar operation\n");
-
-    // get the number of SVs occurring on different haplotypes in a read
-    if( aln.core.qual >= params.somaticCallingMpqThreshold ){
-        germlineJudgeSVHap(aln, vcfSet, hp1Count, hp2Count, genmoeType);
-    }
-
-    double min = 0.0;
-    double max = 0.0;
-    int hpResult = ReadHP::unTag;
-    int pqValue = 0;
-    int psValue = 0;
-    double percentageThreshold = params.percentageThreshold;
-    // determine the haplotype of the read
-    hpResult = germlineDetermineReadHap(hp1Count, hp2Count, min, max, percentageThreshold, pqValue, psValue, countPS, nullptr, nullptr);
-
-    //record read hp to tumor SNP position
-    for(auto pos : tumVarPosVec){
-        variantBase[pos].ReadHpCount[hpResult]++;
-    }
-
-}
-
-void BamBaseCounter::CalculateBaseInfo(const std::string &chr, std::map<int, PosBase> &VariantBase, std::map<int, MultiGenomeVar> &currentVariants){
-    std::map<int, PosBase>::iterator currentPosIter = VariantBase.begin();
-    if(currentPosIter == VariantBase.end()){
-        //exit(1);
-        return;
-    } 
-
-    while (currentPosIter != VariantBase.end()) {
-
-        PosBase *baseInfo = &(currentPosIter->second);
-
-        // Determine whether this position is clean or not
-        int zero_count = 0;
-        if (baseInfo->A_count == 0) {
-            zero_count++;
-        }
-        if (baseInfo->C_count == 0) {
-            zero_count++;
-        }
-        if (baseInfo->G_count == 0) {
-            zero_count++;
-        }
-        if (baseInfo->T_count == 0) {
-            zero_count++;
-        }
-
-        // Which type of bases are the most and second most frequent
-        int max_count = 0;
-        int second_max_count = 0;
-        std::string max_base = " ";
-        std::string second_max_base = " ";
-
-        // Determine max & second max base count
-        if (baseInfo->A_count > max_count) {
-            second_max_count = max_count;
-            max_count = baseInfo->A_count;
-            second_max_base = max_base;
-            max_base = "A";
-        } else if (baseInfo->A_count > second_max_count) {
-            second_max_count = baseInfo->A_count;
-            second_max_base = "A";
-        }
-
-        if (baseInfo->C_count > max_count) {
-            second_max_count = max_count;
-            max_count = baseInfo->C_count;
-            second_max_base = max_base;
-            max_base = "C";
-        } else if (baseInfo->C_count > second_max_count) {
-            second_max_count = baseInfo->C_count;
-            second_max_base = "C";
-        }
-
-        if (baseInfo->G_count > max_count) {
-            second_max_count = max_count;
-            max_count = baseInfo->G_count;
-            second_max_base = max_base;
-            max_base = "G";
-        } else if (baseInfo->G_count > second_max_count) {
-            second_max_count = baseInfo->G_count;
-            second_max_base = "G";
-        }
-
-        if (baseInfo->T_count > max_count) {
-            second_max_count = max_count;
-            max_count = baseInfo->T_count;
-            second_max_base = max_base;
-            max_base = "T";
-        } else if (baseInfo->T_count > second_max_count) {
-            second_max_count = baseInfo->T_count;
-            second_max_base = "T";
-        }
-
-        int depth = baseInfo->depth;
-
-        //record max base information
-        baseInfo->max_count = max_count;
-        baseInfo->max_base = max_base;
-        baseInfo->max_ratio = (float)max_count / (float)depth;
-
-        //record second max base information
-        if(zero_count == 3){
-            baseInfo->second_max_count = 0;
-            baseInfo->second_max_base = ' ';
-            baseInfo->second_max_ratio = 0.0;
-        }else{
-            baseInfo->second_max_count = second_max_count;
-            baseInfo->second_max_base = second_max_base;
-            baseInfo->second_max_ratio = (float)second_max_count / (float)depth;
-        }
-
-        // calculate VAF
-        std::string tumRefBase = currentVariants[(*currentPosIter).first].Variant[TUMOR].allele.Ref;
-        std::string tumAltBase = currentVariants[(*currentPosIter).first].Variant[TUMOR].allele.Alt;
-
-        int AltCount = 0;
-        int filteredMpqAltCount = 0;
-
-        if(tumAltBase == "A"){
-            AltCount = baseInfo->A_count;
-            filteredMpqAltCount = baseInfo->MPQ_A_count;
-        }else if(tumAltBase == "T"){
-            AltCount = baseInfo->T_count;
-            filteredMpqAltCount = baseInfo->MPQ_T_count;
-        }else if(tumAltBase == "C"){
-            AltCount = baseInfo->C_count;
-            filteredMpqAltCount = baseInfo->MPQ_C_count;
-        }else if(tumAltBase == "G"){
-            AltCount = baseInfo->G_count;
-            filteredMpqAltCount = baseInfo->MPQ_G_count;
-        }
-
-
-        if(AltCount != 0 && depth != 0){
-            baseInfo->VAF = (float)AltCount / (float)depth;
-            baseInfo->nonDelAF = (float)AltCount / (float)(depth - baseInfo->delCount);
-        }
-
-        int filteredMpqDepth = baseInfo->filteredMpqDepth;
-        
-        if(filteredMpqAltCount != 0 && filteredMpqDepth != 0){
-            baseInfo->filteredMpqVAF = (float)filteredMpqAltCount / (float)filteredMpqDepth;
-        }
-
-        if(depth != 0){
-            baseInfo->lowMpqReadRatio = (float)(depth - filteredMpqDepth) / (float)depth;
-        }
-        
-        currentPosIter++;
-    } 
-}
 
 std::string BamBaseCounter::getMaxFreqBase(std::string chr, int pos){
     if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
@@ -621,7 +168,584 @@ void BamBaseCounter::displayPosInfo(std::string chr, int pos){
     }
 }
 
-void GermlineJudgeBase::germlineGetRefLastVarPos(
+HaplotagBamParser::HaplotagBamParser(){
+}
+
+HaplotagBamParser::~HaplotagBamParser(){
+
+}
+
+void HaplotagBamParser::parsingBam(
+    const std::string &BamFile, 
+    const HaplotagParameters &params, 
+    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
+    std::vector<std::string> &chrVec, 
+    std::map<std::string, int> &chrLength, 
+    VCF_Info *vcfSet, const Genome& genmoeType
+){
+    // std::cerr<< "collecting data for the normal sample... ";
+    std::time_t begin = time(NULL);
+
+    if(chrVec.size() == 0){
+        std::cerr<<"ERROR: chrVec is empty\n";
+        exit(1);
+    }
+
+    if(chrLength.size() == 0){
+        std::cerr<<"ERROR: chrLength is empty\n";
+        exit(1);        
+    }
+    
+    std::vector<int> last_pos;
+    // get the last variant position of the reference
+    getLastVarPos(last_pos, chrVec,mergedChrVarinat, genmoeType);
+    // reference fasta parser
+    FastaParser fastaParser(params.fastaFile, chrVec, last_pos, params.numThreads);
+
+    // init data structure and get core n
+    htsThreadPool threadPool = {NULL, 0};
+    // creat thread pool
+    if (!(threadPool.pool = hts_tpool_init(params.numThreads))) {
+        fprintf(stderr, "Error creating thread pool\n");
+        exit(1);
+    }
+
+    // loop all chromosome
+    #pragma omp parallel for schedule(dynamic) num_threads(params.numThreads) 
+    for(auto chr : chrVec ){
+        runChrProcessor(chr, chrLength, params, BamFile, threadPool, mergedChrVarinat, genmoeType, fastaParser, vcfSet);
+    }
+
+    hts_tpool_destroy(threadPool.pool);
+    std::cerr<< difftime(time(NULL), begin) << "s\n";
+    return;
+}
+
+void HaplotagBamParser::runChrProcessor(
+    std::string& chr,
+    std::map<std::string, int>& chrLength,
+    const HaplotagParameters& params, 
+    const std::string& BamFile,
+    htsThreadPool& threadPool,
+    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
+    const Genome& genmoeType,
+    const FastaParser& fastaParser,
+    VCF_Info* vcfSet
+){
+    //select the chromosome processor
+    auto chrProcessor = createProcessor(chr);
+    chrProcessor->processSingleChromosome(chr, chrLength, params, BamFile, threadPool, mergedChrVarinat, genmoeType, fastaParser, vcfSet);
+}
+
+ChromosomeProcessor::ChromosomeProcessor(){
+
+}
+
+ChromosomeProcessor::~ChromosomeProcessor(){
+
+}
+
+void ChromosomeProcessor::processSingleChromosome(
+    std::string& chr,
+    std::map<std::string, int>& chrLength,
+    const HaplotagParameters& params, 
+    const std::string& BamFile,
+    htsThreadPool& threadPool,
+    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
+    const Genome& genmoeType,
+    const FastaParser& fastaParser,
+    VCF_Info* vcfSet
+){
+    // bam file resource allocation
+    BamFileRAII bam(BamFile, params.fastaFile, threadPool);
+
+    // variant position (0-base), allele haplotype set
+    std::map<int, MultiGenomeVar> currentVariants;
+
+    #pragma omp critical
+    {
+        currentVariants = mergedChrVarinat[chr];
+    }
+    // fetch chromosome string
+    std::string ref_string = fastaParser.chrString.at(chr);
+
+    //inintial iterator
+    std::map<int, MultiGenomeVar>::iterator firstVariantIter = currentVariants.begin();
+
+    std::map<int, MultiGenomeVar>::reverse_iterator last = currentVariants.rbegin();
+
+    std::string region = !params.region.empty() ? params.region : chr + ":1-" + std::to_string(chrLength[chr]);
+    hts_itr_t* iter = sam_itr_querys(bam.idx, bam.bamHdr, region.c_str());
+
+    while (sam_itr_multi_next(bam.in, iter, bam.aln) >= 0) {
+        
+        int flag = bam.aln->core.flag;
+
+        // if ( bam.aln->core.qual < params.qualityThreshold ){
+        //    // mapping quality is lower than threshold
+        //    continue;
+        // }
+
+        if( (flag & 0x4) != 0 ){
+            // read unmapped
+            continue;
+        }
+        if( (flag & 0x100) != 0 ){
+            // secondary alignment. repeat.
+            // A secondary alignment occurs when a given read could align reasonably well to more than one place.
+            continue;
+        }
+        if( (flag & 0x800) != 0 && params.tagSupplementary == false ){
+            // supplementary alignment
+            // A chimeric alignment is represented as a set of linear alignments that do not have large overlaps.
+            continue;
+        }
+        //currentVariants rbegin == rend
+        if(last == currentVariants.rend()){ 
+            //skip
+        }
+        else if(int(bam.aln->core.pos) <= (*last).first){
+            processRead(*bam.aln, *bam.bamHdr, chr, params, genmoeType, currentVariants, firstVariantIter, vcfSet, ref_string);
+        }
+
+    }
+
+    postProcess(chr, currentVariants);
+    
+    hts_itr_destroy(iter);
+}
+
+extractNorDataChrProcessor::extractNorDataChrProcessor(std::map<std::string, std::map<int, PosBase>> &ChrVariantBase, const std::string &chr){
+    std::cerr << "extractNormalDataProcessor constructor" << std::endl;
+    #pragma omp critical
+    {
+        variantBase = &((ChrVariantBase)[chr]);
+    }
+}
+
+extractNorDataChrProcessor::~extractNorDataChrProcessor(){
+    variantBase = nullptr;
+}
+
+void extractNorDataChrProcessor::processRead(
+    const bam1_t &aln, 
+    const bam_hdr_t &bamHdr,
+    const std::string &chrName, 
+    const HaplotagParameters &params, 
+    const Genome& genmoeType, 
+    std::map<int, MultiGenomeVar> &currentVariants,
+    std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
+    VCF_Info* vcfSet, 
+    const std::string &ref_string
+){
+
+    std::map<int, int> hpCount;
+
+    hpCount[SnpHP::GERMLINE_H1] = 0; 
+    hpCount[SnpHP::GERMLINE_H2] = 0;
+
+    //record variants on this read
+    std::map<int, int> variantsHP;
+
+    std::map<int,int> countPS;
+
+    std::vector<int> tumVarPosVec;
+
+    /// Create a CIGAR parser using polymorphism design
+    // Use extractNorDataCigarParser to process CIGAR strings for normal samples    
+    CigarParser* cigarParser = new extractNorDataCigarParser(*variantBase, tumVarPosVec);
+    cigarParser->parsingCigar(aln, bamHdr, chrName, params, firstVariantIter, currentVariants, ref_string, hpCount, variantsHP, countPS);
+    delete cigarParser;
+
+    // get the number of SVs occurring on different haplotypes in a read
+    if( aln.core.qual >= params.somaticCallingMpqThreshold ){
+        germlineJudgeSVHap(aln, vcfSet, hpCount, genmoeType);
+    }
+
+    double min = 0.0;
+    double max = 0.0;
+    int hpResult = ReadHP::unTag;
+    int pqValue = 0;
+    int psValue = 0;
+    double percentageThreshold = params.percentageThreshold;
+    // determine the haplotype of the read
+    hpResult = germlineDetermineReadHap(hpCount, min, max, percentageThreshold, pqValue, psValue, countPS, nullptr, nullptr);
+
+    //record read hp to tumor SNP position
+    for(auto pos : tumVarPosVec){
+        (*variantBase)[pos].ReadHpCount[hpResult]++;
+    }
+}
+
+void extractNorDataChrProcessor::postProcess(
+    const std::string &chr,
+    std::map<int, MultiGenomeVar> &currentVariants
+){
+    std::map<int, PosBase>::iterator currentPosIter = variantBase->begin();
+    if(currentPosIter == variantBase->end()){
+        //exit(1);
+        return;
+    } 
+
+    while (currentPosIter != variantBase->end()) {
+
+        PosBase *baseInfo = &(currentPosIter->second);
+
+        // Determine whether this position is clean or not
+        int zero_count = 0;
+        if (baseInfo->A_count == 0) {
+            zero_count++;
+        }
+        if (baseInfo->C_count == 0) {
+            zero_count++;
+        }
+        if (baseInfo->G_count == 0) {
+            zero_count++;
+        }
+        if (baseInfo->T_count == 0) {
+            zero_count++;
+        }
+
+        // Which type of bases are the most and second most frequent
+        int max_count = 0;
+        int second_max_count = 0;
+        std::string max_base = " ";
+        std::string second_max_base = " ";
+
+        // Determine max & second max base count
+        if (baseInfo->A_count > max_count) {
+            second_max_count = max_count;
+            max_count = baseInfo->A_count;
+            second_max_base = max_base;
+            max_base = "A";
+        } else if (baseInfo->A_count > second_max_count) {
+            second_max_count = baseInfo->A_count;
+            second_max_base = "A";
+        }
+
+        if (baseInfo->C_count > max_count) {
+            second_max_count = max_count;
+            max_count = baseInfo->C_count;
+            second_max_base = max_base;
+            max_base = "C";
+        } else if (baseInfo->C_count > second_max_count) {
+            second_max_count = baseInfo->C_count;
+            second_max_base = "C";
+        }
+
+        if (baseInfo->G_count > max_count) {
+            second_max_count = max_count;
+            max_count = baseInfo->G_count;
+            second_max_base = max_base;
+            max_base = "G";
+        } else if (baseInfo->G_count > second_max_count) {
+            second_max_count = baseInfo->G_count;
+            second_max_base = "G";
+        }
+
+        if (baseInfo->T_count > max_count) {
+            second_max_count = max_count;
+            max_count = baseInfo->T_count;
+            second_max_base = max_base;
+            max_base = "T";
+        } else if (baseInfo->T_count > second_max_count) {
+            second_max_count = baseInfo->T_count;
+            second_max_base = "T";
+        }
+
+        int depth = baseInfo->depth;
+
+        //record max base information
+        baseInfo->max_count = max_count;
+        baseInfo->max_base = max_base;
+        baseInfo->max_ratio = (float)max_count / (float)depth;
+
+        //record second max base information
+        if(zero_count == 3){
+            baseInfo->second_max_count = 0;
+            baseInfo->second_max_base = ' ';
+            baseInfo->second_max_ratio = 0.0;
+        }else{
+            baseInfo->second_max_count = second_max_count;
+            baseInfo->second_max_base = second_max_base;
+            baseInfo->second_max_ratio = (float)second_max_count / (float)depth;
+        }
+
+        // calculate VAF
+        std::string tumRefBase = currentVariants[(*currentPosIter).first].Variant[TUMOR].allele.Ref;
+        std::string tumAltBase = currentVariants[(*currentPosIter).first].Variant[TUMOR].allele.Alt;
+
+        int AltCount = 0;
+        int filteredMpqAltCount = 0;
+
+        if(tumAltBase == "A"){
+            AltCount = baseInfo->A_count;
+            filteredMpqAltCount = baseInfo->MPQ_A_count;
+        }else if(tumAltBase == "T"){
+            AltCount = baseInfo->T_count;
+            filteredMpqAltCount = baseInfo->MPQ_T_count;
+        }else if(tumAltBase == "C"){
+            AltCount = baseInfo->C_count;
+            filteredMpqAltCount = baseInfo->MPQ_C_count;
+        }else if(tumAltBase == "G"){
+            AltCount = baseInfo->G_count;
+            filteredMpqAltCount = baseInfo->MPQ_G_count;
+        }
+
+
+        if(AltCount != 0 && depth != 0){
+            baseInfo->VAF = (float)AltCount / (float)depth;
+            baseInfo->nonDelAF = (float)AltCount / (float)(depth - baseInfo->delCount);
+        }
+
+        int filteredMpqDepth = baseInfo->filteredMpqDepth;
+        
+        if(filteredMpqAltCount != 0 && filteredMpqDepth != 0){
+            baseInfo->filteredMpqVAF = (float)filteredMpqAltCount / (float)filteredMpqDepth;
+        }
+
+        if(depth != 0){
+            baseInfo->lowMpqReadRatio = (float)(depth - filteredMpqDepth) / (float)depth;
+        }
+        
+        currentPosIter++;
+    } 
+}
+
+CigarParser::CigarParser(){
+    aln = nullptr;
+    bamHdr = nullptr;
+    chrName = nullptr;
+    ref_string = nullptr;
+    hpCount = nullptr;
+    countPS = nullptr;
+    variantsHP = nullptr;
+    ref_pos = 0;
+    query_pos = 0;
+}
+
+CigarParser::~CigarParser(){
+
+};
+
+
+void CigarParser::parsingCigar(
+    const bam1_t& aln,
+    const bam_hdr_t& bamHdr,
+    const std::string& chrName,
+    const HaplotagParameters& params,
+    std::map<int, MultiGenomeVar>::iterator& firstVariantIter,
+    std::map<int, MultiGenomeVar>& currentVariants,
+    const std::string& ref_string,
+    std::map<int, int>& hpCount,
+    std::map<int, int>& variantsHP,
+    std::map<int, int>& countPS
+) {
+    this->aln = &aln;
+    this->bamHdr = &bamHdr;
+    this->chrName = &chrName;
+    this->params = &params;
+    this->ref_string = &ref_string;
+    this->hpCount = &hpCount;
+    this->variantsHP = &variantsHP;
+    this->countPS = &countPS;
+
+    // Skip variants that are to the left of this read
+    while (firstVariantIter != currentVariants.end() && (*firstVariantIter).first < aln.core.pos) {
+        firstVariantIter++;
+    }
+
+    if (firstVariantIter == currentVariants.end()) {
+        return;
+    }
+
+    currentVariantIter = firstVariantIter;
+
+    // position relative to reference
+    ref_pos = aln.core.pos;
+    // position relative to read
+    query_pos = 0;
+
+    // reading cigar to detect snp on this read
+    int aln_core_n_cigar = int(aln.core.n_cigar);
+    for (int i = 0; i < aln_core_n_cigar; i++) {
+        uint32_t* cigar = bam_get_cigar(&aln);
+        int cigar_op = bam_cigar_op(cigar[i]);
+        int length = bam_cigar_oplen(cigar[i]);
+
+        // iterator next variant
+        while (currentVariantIter != currentVariants.end() && (*currentVariantIter).first < ref_pos) {
+            currentVariantIter++;
+        }
+
+        // CIGAR operators: MIDNSHP=X correspond 012345678
+        // 0: alignment match (can be a sequence match or mismatch)
+        // 7: sequence match
+        // 8: sequence mismatch
+        if( cigar_op == 0 || cigar_op == 7 || cigar_op == 8 ){ 
+                while( currentVariantIter != currentVariants.end() && (*currentVariantIter).first < ref_pos + length){
+                    int offset = (*currentVariantIter).first - ref_pos;
+                    if( offset < 0){
+                    }
+                    else{
+                        uint8_t *q = bam_get_seq(&aln);
+                        char base_chr = seq_nt16_str[bam_seqi(q,query_pos + offset)];
+                        std::string base(1, base_chr);
+                        // printf("into match cigar\n");
+                        processMatchOperation(length, cigar, i, aln_core_n_cigar, base);
+                    }
+                    currentVariantIter++;
+                }
+                query_pos += length;
+                ref_pos += length;
+        }
+        // 1: insertion to the reference
+        else if( cigar_op == 1 ){            
+                processInsertionOperation(length);
+                query_pos += length;
+        }
+        // 2: deletion from the reference
+        else if( cigar_op == 2 ){
+                // only execute at the first phased normal snp
+                bool alreadyJudgeDel = false;
+                while( currentVariantIter != currentVariants.end() && (*currentVariantIter).first < ref_pos + length){
+                    processDeletionOperation(length, cigar, i, aln_core_n_cigar, alreadyJudgeDel);
+                    currentVariantIter++;
+                }
+                ref_pos += length;
+        }
+        // 3: skipped region from the reference
+        else if( cigar_op == 3 ){
+            processSkippedOperation(length);
+            ref_pos += length;
+        }
+        // 4: soft clipping (clipped sequences present in SEQ)
+        else if( cigar_op == 4 ){
+            processSoftClippingOperation(length);
+            query_pos += length;
+        }
+        // 5: hard clipping (clipped sequences NOT present in SEQ)
+        // 6: padding (silent deletion from padded reference)
+        else if( cigar_op == 5 || cigar_op == 6 ){
+            // do nothing
+        }
+        else{
+            std::cerr << "Alignment find unsupported CIGAR operation from read: " << bam_get_qname(&aln) << "\n";
+            exit(1);
+        }
+    }
+}
+
+extractNorDataCigarParser::extractNorDataCigarParser(std::map<int, PosBase>& variantBase, std::vector<int>& tumVarPosVec)
+: variantBase(variantBase), tumVarPosVec(tumVarPosVec){
+
+}
+
+extractNorDataCigarParser::~extractNorDataCigarParser(){
+
+}
+
+void extractNorDataCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base){
+    //statistically analyze SNP information exclusive to the tumor
+    if((*currentVariantIter).second.isExists(TUMOR)){
+        int curPos = (*currentVariantIter).first;
+        //std::cout << "curPos :" << curPos << "is tumor "<<(*currentVariantIter).second.isExistTumor  << " isNormal: "<< (*currentVariantIter).second.isExistNormal<< std::endl;
+
+        //detect ref bsae length(temp :tumor SNP)
+        int tumRefLength = (*currentVariantIter).second.Variant[TUMOR].allele.Ref.length();
+        int tumAltLength = (*currentVariantIter).second.Variant[TUMOR].allele.Alt.length();
+        
+        // the variant is SNP
+        if(tumRefLength == 1 && tumAltLength == 1){
+            //record tumor SNP position
+            tumVarPosVec.push_back(curPos);
+            // mapping quality is higher than threshold
+            if ( aln->core.qual >= params->somaticCallingMpqThreshold ){
+                if(base == "A"){
+                    variantBase[curPos].MPQ_A_count++;
+                }else if(base == "C"){
+                    variantBase[curPos].MPQ_C_count++;
+                }else if(base == "G"){
+                    variantBase[curPos].MPQ_G_count++;
+                }else if(base == "T"){
+                    variantBase[curPos].MPQ_T_count++;
+                }else{
+                    variantBase[curPos].MPQ_unknow++;
+                }
+                variantBase[curPos].filteredMpqDepth++;
+            }
+            if(base == "A"){
+                variantBase[curPos].A_count++;
+                //std::cout << "base A read ID :" << bam_get_qname(aln) << std::endl;
+            }else if(base == "C"){
+                variantBase[curPos].C_count++;
+            }else if(base == "G"){
+                variantBase[curPos].G_count++;
+            }else if(base == "T"){
+                variantBase[curPos].T_count++;
+            }else{
+                variantBase[curPos].unknow++;
+            }
+            variantBase[curPos].depth++;  
+
+        }
+        // the indel(del) SNP position is the start position, and the deletion occurs at the next position
+        else if(tumRefLength > 1 && tumAltLength == 1){
+            // the indel SNP start position is at the end of the deletion, and the next cigar operator is deletion
+            if(curPos == (ref_pos + length - 1) && bam_cigar_op(cigar[i+1]) == 2 && i+1 < aln_core_n_cigar){
+
+            }
+        }
+    }       
+
+    if ( aln->core.qual >= params->somaticCallingMpqThreshold && (*currentVariantIter).second.isExists(NORMAL)){
+        // only judge the heterozygous SNP
+        if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
+            auto norVar = (*currentVariantIter).second.Variant[NORMAL];
+            germlineJudgeSnpHap(*chrName, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, *hpCount, *variantsHP, *countPS);
+        }
+    }
+}
+
+void extractNorDataCigarParser::processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel){
+    //statistically analyze SNP information exclusive to the tumor
+    if((*currentVariantIter).second.isExists(TUMOR)){
+
+        int curPos = (*currentVariantIter).first;
+        
+        //record tumor SNP position
+        tumVarPosVec.push_back(curPos);
+
+        //detect ref bsae length(temp :tumor SNP)
+        int tumRefLength = (*currentVariantIter).second.Variant[TUMOR].allele.Ref.length();
+        int tumAltLength = (*currentVariantIter).second.Variant[TUMOR].allele.Alt.length();
+
+        // the variant is SNP
+        if(tumRefLength == 1 && tumAltLength == 1){
+            variantBase[curPos].delCount++;
+            variantBase[curPos].depth++;
+        }
+        // the variant is deletion
+        else if(tumRefLength > 1 && tumAltLength == 1){
+
+        }
+    }
+
+    // only execute at the first phased normal snp
+    if ( aln->core.qual >= params->somaticCallingMpqThreshold && (*currentVariantIter).second.isExists(NORMAL) && !alreadyJudgeDel){
+        if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
+            // longphase v1.73 only execute once
+            alreadyJudgeDel = true;
+            auto norVar = (*currentVariantIter).second.Variant[NORMAL];
+            germlineJudgeDeletionHap(*chrName, *ref_string, ref_pos, length, query_pos, currentVariantIter, aln, *hpCount, *variantsHP, *countPS);
+        }
+    }
+    
+    //std::cout << "read ID : "<<  bam_get_qname(&aln) <<" pos :" << curPos << " deletion count ++" << std::endl;
+}
+
+
+void GermlineJudgeBase::getLastVarPos(
     std::vector<int>& last_pos, 
     const std::vector<std::string>& chrVec, 
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
@@ -631,19 +755,23 @@ void GermlineJudgeBase::germlineGetRefLastVarPos(
         bool existLastPos = false;
 
         for (auto lastVariantIter = mergedChrVarinat[chr].rbegin(); lastVariantIter != mergedChrVarinat[chr].rend(); ++lastVariantIter) {
-            switch(genmoeType) {
-                case NORMAL:
-                    if ((*lastVariantIter).second.isExists(NORMAL) && (*lastVariantIter).second.Variant[NORMAL].isExistPhasedSet()) {
-                        last_pos.push_back((*lastVariantIter).first);
+            if (genmoeType == NORMAL) {
+                if ((*lastVariantIter).second.isExists(NORMAL) && (*lastVariantIter).second.Variant[NORMAL].isExistPhasedSet()) {
+                    last_pos.push_back((*lastVariantIter).first);
                         existLastPos = true;
                         break;
                     }
+            }
+            else if (genmoeType == TUMOR) {
+                if ((*lastVariantIter).second.isExists(TUMOR) || 
+                    ((*lastVariantIter).second.isExists(NORMAL) && (*lastVariantIter).second.Variant[NORMAL].isExistPhasedSet())) {
+                    last_pos.push_back((*lastVariantIter).first);
+                    existLastPos = true;
                     break;
-                case TUMOR:
-                    break;
-       
-                case HIGH_CON_SOMATIC:
-                    break;
+                }
+            }else{
+                std::cerr << "ERROR (germlineGetRefLastVarPos) => unsupported genome type: " << genmoeType << std::endl;
+                exit(EXIT_SUCCESS);
             }
         }
         
@@ -664,8 +792,7 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
     int& aln_core_n_cigar,
     uint32_t* cigar,
     std::map<int, MultiGenomeVar>::iterator &currentVariantIter,
-    int& hp1Count,
-    int& hp2Count,
+    std::map<int, int>& hpCount,
     std::map<int, int>& variantsHP,
     std::map<int, int>& countPS
 ){
@@ -689,11 +816,11 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
             }
             else{
                 if( base == norVar.HP1){
-                    hp1Count++;
+                    hpCount[SnpHP::GERMLINE_H1]++;
                     variantsHP[curPos]=0;
                 }
                 if( base == norVar.HP2){
-                    hp2Count++;
+                    hpCount[SnpHP::GERMLINE_H2]++;
                     variantsHP[curPos]=1;
                 }
                 countPS[norVar.PhasedSet]++;
@@ -710,24 +837,24 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
         if ( ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 1 ) {
             // hp1 occur insertion
             if( hp1Length != 1 && hp2Length == 1 ){
-                hp1Count++;
+                hpCount[SnpHP::GERMLINE_H1]++;
                 variantsHP[curPos]=0;
             }
             // hp2 occur insertion
             else if( hp1Length == 1 && hp2Length != 1 ){
-                hp2Count++;
+                hpCount[SnpHP::GERMLINE_H2]++;
                 variantsHP[curPos]=1;
             }
         }
         else {
             // hp1 occur insertion
             if( hp1Length != 1 && hp2Length == 1 ){
-                hp2Count++;
+                hpCount[SnpHP::GERMLINE_H2]++;
                 variantsHP[curPos]=1;
             }
             // hp2 occur insertion
             else if( hp1Length == 1 && hp2Length != 1 ){
-                hp1Count++;
+                hpCount[SnpHP::GERMLINE_H1]++;
                 variantsHP[curPos]=0;
             }
         }
@@ -742,24 +869,24 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
         if ( ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2 ) {
             // hp1 occur deletion
             if( hp1Length != 1 && hp2Length == 1 ){
-                hp1Count++;
+                hpCount[SnpHP::GERMLINE_H1]++;
                 variantsHP[curPos]=0;
             }
             // hp2 occur deletion
             else if( hp1Length == 1 && hp2Length != 1 ){
-                hp2Count++;
+                hpCount[SnpHP::GERMLINE_H2]++;
                 variantsHP[curPos]=1;
             }
         }
         else {
             // hp2 occur deletion
             if( hp1Length != 1 && hp2Length == 1 ){
-                hp2Count++;
+                hpCount[SnpHP::GERMLINE_H2]++;
                 variantsHP[curPos]=1;
             }
             // hp1 occur deletion
             else if( hp1Length == 1 && hp2Length != 1 ){
-                hp1Count++;
+                hpCount[SnpHP::GERMLINE_H1]++;
                 variantsHP[curPos]=0;
             }
         }
@@ -776,8 +903,7 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
     int& query_pos,
     std::map<int, MultiGenomeVar>::iterator &currentVariantIter,
     const bam1_t* aln,
-    int& hp1Count,
-    int& hp2Count,
+    std::map<int, int>& hpCount,
     std::map<int, int>& variantsHP,
     std::map<int, int>& countPS
 ) {
@@ -803,11 +929,11 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
                     std::string base(1, base_chr);
 
                     if (base == norVar.HP1) {
-                        hp1Count++;
+                        hpCount[SnpHP::GERMLINE_H1]++;
                         variantsHP[curPos] = 0;
                     }
                     if (base == norVar.HP2) {
-                        hp2Count++;
+                        hpCount[SnpHP::GERMLINE_H2]++;
                         variantsHP[curPos] = 1;
                     }
                     countPS[norVar.PhasedSet]++;
@@ -820,12 +946,12 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
                     int hp2Length = norVar.HP2.length();
                     // hp1 occur deletion
                     if (hp1Length != 1 && hp2Length == 1) {
-                        hp1Count++;
+                        hpCount[SnpHP::GERMLINE_H1]++;
                         variantsHP[curPos] = 0;
                     }
                     // hp2 occur deletion
                     else if (hp1Length == 1 && hp2Length != 1) {
-                        hp2Count++;
+                        hpCount[SnpHP::GERMLINE_H2]++;
                         variantsHP[curPos] = 1;
                     }
                     countPS[norVar.PhasedSet]++;
@@ -835,17 +961,16 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
     }
 }
 
-void GermlineJudgeBase::germlineJudgeSVHap(const bam1_t &aln, VCF_Info* vcfSet, int& hp1Count, int& hp2Count, const int& tagGeneType){
-    auto readIter = vcfSet[tagGeneType].readSVHapCount.find(bam_get_qname(&aln));
-    if( readIter != vcfSet[tagGeneType].readSVHapCount.end() ){
-        hp1Count += vcfSet[tagGeneType].readSVHapCount[bam_get_qname(&aln)][0];
-        hp2Count += vcfSet[tagGeneType].readSVHapCount[bam_get_qname(&aln)][1];
+void GermlineJudgeBase::germlineJudgeSVHap(const bam1_t &aln, VCF_Info* vcfSet, std::map<int, int>& hpCount, const int& genmoeType){
+    auto readIter = vcfSet[genmoeType].readSVHapCount.find(bam_get_qname(&aln));
+    if( readIter != vcfSet[genmoeType].readSVHapCount.end() ){
+        hpCount[SnpHP::GERMLINE_H1] += vcfSet[genmoeType].readSVHapCount[bam_get_qname(&aln)][0];
+        hpCount[SnpHP::GERMLINE_H2] += vcfSet[genmoeType].readSVHapCount[bam_get_qname(&aln)][1];
     }
 }
 
 int GermlineJudgeBase::germlineDetermineReadHap(
-    int& hp1Count, 
-    int& hp2Count, 
+    std::map<int, int>& hpCount, 
     double& min, 
     double& max, 
     double& percentageThreshold, 
@@ -857,13 +982,13 @@ int GermlineJudgeBase::germlineDetermineReadHap(
 ){
     int hpResult = ReadHP::unTag;
 
-    if(hp1Count > hp2Count){
-        min = hp2Count;
-        max = hp1Count;
+    if(hpCount[SnpHP::GERMLINE_H1] > hpCount[SnpHP::GERMLINE_H2]){
+        min = hpCount[SnpHP::GERMLINE_H2];
+        max = hpCount[SnpHP::GERMLINE_H1];
     }
     else{
-        min = hp1Count;
-        max = hp2Count;
+        min = hpCount[SnpHP::GERMLINE_H1];
+        max = hpCount[SnpHP::GERMLINE_H2];
     }
 
     if( max/(max+min) < percentageThreshold){
@@ -872,10 +997,10 @@ int GermlineJudgeBase::germlineDetermineReadHap(
         if(totalHighSimilarity != nullptr) (*totalHighSimilarity)++;
     }
     else{
-        if(hp1Count > hp2Count){
+        if(hpCount[SnpHP::GERMLINE_H1] > hpCount[SnpHP::GERMLINE_H2]){
             hpResult = ReadHP::H1;
         }
-        if(hp1Count < hp2Count){
+        if(hpCount[SnpHP::GERMLINE_H1] < hpCount[SnpHP::GERMLINE_H2]){
             hpResult = ReadHP::H2;
         }
     }
@@ -903,7 +1028,17 @@ int GermlineJudgeBase::germlineDetermineReadHap(
     return hpResult;
 }
 
-void GermlineJudgeBase::writeGermlineTagLog(std::ofstream& tagResult, const bam1_t& aln, const bam_hdr_t& bamHdr, int& hpResult, double& max, double& min, int& hp1Count, int& hp2Count, int& pqValue, const std::map<int, int>& variantsHP, const std::map<int, int>& countPS){
+void GermlineJudgeBase::writeGermlineTagLog(
+    std::ofstream& tagResult
+    , const bam1_t& aln
+    , const bam_hdr_t& bamHdr
+    , int& hpResult
+    , double& max
+    , double& min
+    , std::map<int, int>& hpCount
+    , int& pqValue
+    , const std::map<int, int>& variantsHP
+    , const std::map<int, int>& countPS){
     // write tag log file
     std::string hpResultStr = ((hpResult == ReadHP::unTag) ? "." : std::to_string(hpResult));
     std::string psResultStr = ".";
@@ -919,9 +1054,9 @@ void GermlineJudgeBase::writeGermlineTagLog(std::ofstream& tagResult, const bam1
                 << max / (max + min) << "\t"
                 << "H" << hpResultStr << "\t"
                 << psResultStr << "\t"
-                << hp1Count + hp2Count << "\t"
-                << hp1Count << "\t"
-                << hp2Count << "\t"
+                << hpCount[SnpHP::GERMLINE_H1] + hpCount[SnpHP::GERMLINE_H2] << "\t"
+                << hpCount[SnpHP::GERMLINE_H1] << "\t"
+                << hpCount[SnpHP::GERMLINE_H2] << "\t"
                 << pqValue << "\t";
 
     // print position and HP
