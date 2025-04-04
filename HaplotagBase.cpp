@@ -1,172 +1,60 @@
 #include "HaplotagBase.h"
 
-BamBaseCounter::BamBaseCounter(const std::vector<std::string> &chrVec){
-    ChrVariantBase = new std::map<std::string, std::map<int, PosBase>>();
-    for(auto chr : chrVec){
-        (*ChrVariantBase)[chr] = std::map<int, PosBase>();
-    }
-};
-
-BamBaseCounter::~BamBaseCounter(){
-    delete ChrVariantBase;
-};
-
-void BamBaseCounter::extractNormalData(
-    const std::string &BamFile, 
-    const HaplotagParameters &params, 
-    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-    std::vector<std::string> &chrVec, 
-    std::map<std::string, int> &chrLength, 
-    VCF_Info *vcfSet, 
-    const Genome& genmoeType
-){
-    std::cerr<< "extracting data from normal bam... ";
-    parsingBam(BamFile, params, mergedChrVarinat, chrVec, chrLength, vcfSet, genmoeType);
-    return;
-}
-
-
-std::string BamBaseCounter::getMaxFreqBase(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getMaxBase) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
+BamFileRAII::BamFileRAII(const std::string& BamFile, const std::string& fastaFile, htsThreadPool& threadPool, const HaplotagParameters& params):
+in(nullptr), bamHdr(nullptr), idx(nullptr), aln(nullptr)
+{
+    // open bam file
+    in = hts_open(BamFile.c_str(), "r");
+    if (in == nullptr) {
+        std::cerr << "ERROR: Cannot open bam file " + BamFile << std::endl;
         exit(1);
     }
-    return (*ChrVariantBase)[chr][pos].max_base;
-}
 
-float BamBaseCounter::getMaxBaseRatio(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getMaxBaseRatio) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
+    // load reference file
+    if (hts_set_fai_filename(in, fastaFile.c_str()) != 0) {
+        std::cerr << "ERROR: Cannot set FASTA index file for " + fastaFile << std::endl;
         exit(1);
     }
-    return (*ChrVariantBase)[chr][pos].max_ratio;
-}
 
-float BamBaseCounter::getSecondMaxBaseRatio(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getSecondMaxBaseRatio) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
+    // input reader
+    bamHdr = sam_hdr_read(in);
+    if (bamHdr == nullptr) {
+        std::cerr << "ERROR: Cannot read header from bam file " + BamFile << std::endl;
         exit(1);
     }
-    return (*ChrVariantBase)[chr][pos].second_max_ratio;
-}
 
-float BamBaseCounter::getLowMpqReadRatio(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getLowMpqReadRatio) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
+    // header add pg tag
+    sam_hdr_add_pg(bamHdr, "longphase", "VN", params.version.c_str(), "CL", params.command.c_str(), NULL);
+
+    // check bam file index
+    idx = sam_index_load(in, BamFile.c_str());
+    if (idx == nullptr) {
+        std::cerr << "ERROR: Cannot open index for bam file " + BamFile << std::endl;
         exit(1);
     }
-    return (*ChrVariantBase)[chr][pos].lowMpqReadRatio;
-}
 
-float BamBaseCounter::getVAF(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getVAF) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
+    // set thread
+    if (hts_set_opt(in, HTS_OPT_THREAD_POOL, &threadPool) != 0) {
+        std::cerr << "ERROR: Cannot set thread pool for bam file " + BamFile << std::endl;
         exit(1);
     }
-    return (*ChrVariantBase)[chr][pos].VAF;
-}
 
-float BamBaseCounter::getNoDelAF(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getNoDelAF) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
+    // initialize an alignment
+    aln = bam_init1();
+    if (aln == nullptr) {
+        std::cerr << "ERROR: Cannot initialize alignment for bam file " + BamFile << std::endl;
         exit(1);
     }
-    return (*ChrVariantBase)[chr][pos].nonDelAF;
 }
 
-float BamBaseCounter::getFilterdMpqVAF(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getFilterdMpqVAF) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
-        exit(1);
-    }
-    return (*ChrVariantBase)[chr][pos].filteredMpqVAF;
+BamFileRAII::~BamFileRAII(){
+    if (aln) bam_destroy1(aln);
+    if (idx) hts_idx_destroy(idx);
+    if (bamHdr) bam_hdr_destroy(bamHdr);
+    if (in) sam_close(in);
 }
 
-int BamBaseCounter::getReadHpCountInNorBam(std::string chr, int pos, int Haplotype){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getReadHpCountInNorBam) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
-        exit(1);
-    }
-    return (*ChrVariantBase)[chr][pos].ReadHpCount[Haplotype];
-}
 
-int BamBaseCounter::getBaseAcount(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getBaseAcount) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
-        exit(1);
-    }
-    return (*ChrVariantBase)[chr][pos].A_count;
-}
-
-int BamBaseCounter::getBaseCcount(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getBaseCcount) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
-        exit(1);
-    }
-    return (*ChrVariantBase)[chr][pos].C_count;
-}
-
-int BamBaseCounter::getBaseTcount(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getBaseTcount) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
-        exit(1);
-    }
-    return (*ChrVariantBase)[chr][pos].T_count;
-}
-
-int BamBaseCounter::getBaseGcount(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getBaseGcount) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
-        exit(1);
-    }
-    return (*ChrVariantBase)[chr][pos].G_count;
-}
-
-int BamBaseCounter::getDepth(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getDepth) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
-        exit(1);
-    }
-    return (*ChrVariantBase)[chr][pos].depth;
-}
-
-int BamBaseCounter::getMpqDepth(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getMpqDepth) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
-        exit(1);
-    }
-    return (*ChrVariantBase)[chr][pos].filteredMpqDepth;
-}
-
-int BamBaseCounter::getVarDeletionCount(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (getDelCount) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
-        exit(1);
-    }
-    return (*ChrVariantBase)[chr][pos].delCount;
-}
-
-void BamBaseCounter::displayPosInfo(std::string chr, int pos){
-    if((*ChrVariantBase)[chr].find(pos) == (*ChrVariantBase)[chr].end()){
-        std::cerr << "ERROR (displayPosInfo) => can't find the position:" << " chr: " << chr << " pos: " << pos << std::endl;
-        exit(1);
-    }else{
-        PosBase VarBase = (*ChrVariantBase)[chr][pos];
-        std::cout << " chr : " <<  chr <<" Pos :" << pos << std::endl;
-        std::cout << " A_count : " << VarBase.A_count << std::endl;
-        std::cout << " C_count : " << VarBase.C_count << std::endl;
-        std::cout << " G_count : " << VarBase.G_count << std::endl;
-        std::cout << " T_count : " << VarBase.T_count << std::endl;
-        std::cout << " max_base : " << VarBase.max_base << "  ratio : "<< VarBase.max_ratio << std::endl;
-        std::cout << " second_max_base : " << VarBase.second_max_base << "  ratio : "<< VarBase.second_max_ratio << std::endl;
-        std::cout << " depth :   " << VarBase.depth << std::endl;
-        std::cout << " unknow :  " << VarBase.unknow << std::endl;
-        std::cout << " deletion count :  " << VarBase.delCount << std::endl;
-        std::cout << " VAF :  " << VarBase.VAF << std::endl;
-        std::cout << " filterd MPQ VAF :  " << VarBase.filteredMpqVAF << std::endl;
-        std::cout << " Low MPQ read ratio :  " << VarBase.lowMpqReadRatio << std::endl;
-    }
-}
 
 HaplotagBamParser::HaplotagBamParser(){
 }
@@ -178,10 +66,11 @@ HaplotagBamParser::~HaplotagBamParser(){
 void HaplotagBamParser::parsingBam(
     const std::string &BamFile, 
     const HaplotagParameters &params, 
+    const std::vector<std::string> &chrVec, 
+    const std::map<std::string, int> &chrLength, 
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-    std::vector<std::string> &chrVec, 
-    std::map<std::string, int> &chrLength, 
-    VCF_Info *vcfSet, const Genome& genmoeType
+    VCF_Info *vcfSet, 
+    const Genome& genmoeType
 ){
     // std::cerr<< "collecting data for the normal sample... ";
     std::time_t begin = time(NULL);
@@ -213,28 +102,14 @@ void HaplotagBamParser::parsingBam(
     // loop all chromosome
     #pragma omp parallel for schedule(dynamic) num_threads(params.numThreads) 
     for(auto chr : chrVec ){
-        runChrProcessor(chr, chrLength, params, BamFile, threadPool, mergedChrVarinat, genmoeType, fastaParser, vcfSet);
+        //create the chromosome processor
+        auto chrProcessor = createProcessor(chr);
+        chrProcessor->processSingleChromosome(chr, chrLength, params, BamFile, threadPool, mergedChrVarinat, genmoeType, fastaParser, vcfSet);
     }
 
     hts_tpool_destroy(threadPool.pool);
     std::cerr<< difftime(time(NULL), begin) << "s\n";
     return;
-}
-
-void HaplotagBamParser::runChrProcessor(
-    std::string& chr,
-    std::map<std::string, int>& chrLength,
-    const HaplotagParameters& params, 
-    const std::string& BamFile,
-    htsThreadPool& threadPool,
-    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-    const Genome& genmoeType,
-    const FastaParser& fastaParser,
-    VCF_Info* vcfSet
-){
-    //select the chromosome processor
-    auto chrProcessor = createProcessor(chr);
-    chrProcessor->processSingleChromosome(chr, chrLength, params, BamFile, threadPool, mergedChrVarinat, genmoeType, fastaParser, vcfSet);
 }
 
 ChromosomeProcessor::ChromosomeProcessor(){
@@ -246,8 +121,8 @@ ChromosomeProcessor::~ChromosomeProcessor(){
 }
 
 void ChromosomeProcessor::processSingleChromosome(
-    std::string& chr,
-    std::map<std::string, int>& chrLength,
+    const std::string& chr,
+    const std::map<std::string, int>& chrLength,
     const HaplotagParameters& params, 
     const std::string& BamFile,
     htsThreadPool& threadPool,
@@ -257,7 +132,7 @@ void ChromosomeProcessor::processSingleChromosome(
     VCF_Info* vcfSet
 ){
     // bam file resource allocation
-    BamFileRAII bam(BamFile, params.fastaFile, threadPool);
+    BamFileRAII bam(BamFile, params.fastaFile, threadPool, params);
 
     // variant position (0-base), allele haplotype set
     std::map<int, MultiGenomeVar> currentVariants;
@@ -274,7 +149,7 @@ void ChromosomeProcessor::processSingleChromosome(
 
     std::map<int, MultiGenomeVar>::reverse_iterator last = currentVariants.rbegin();
 
-    std::string region = !params.region.empty() ? params.region : chr + ":1-" + std::to_string(chrLength[chr]);
+    std::string region = !params.region.empty() ? params.region : std::string(chr + ":1-" + std::to_string(chrLength.at(chr)));
     hts_itr_t* iter = sam_itr_querys(bam.idx, bam.bamHdr, region.c_str());
 
     while (sam_itr_multi_next(bam.in, iter, bam.aln) >= 0) {
@@ -315,213 +190,17 @@ void ChromosomeProcessor::processSingleChromosome(
     hts_itr_destroy(iter);
 }
 
-extractNorDataChrProcessor::extractNorDataChrProcessor(std::map<std::string, std::map<int, PosBase>> &ChrVariantBase, const std::string &chr){
-    std::cerr << "extractNormalDataProcessor constructor" << std::endl;
-    #pragma omp critical
-    {
-        variantBase = &((ChrVariantBase)[chr]);
-    }
-}
 
-extractNorDataChrProcessor::~extractNorDataChrProcessor(){
-    variantBase = nullptr;
-}
+CigarParser::CigarParser(int& ref_pos, int& query_pos)
+: ref_pos(ref_pos), query_pos(query_pos){
 
-void extractNorDataChrProcessor::processRead(
-    const bam1_t &aln, 
-    const bam_hdr_t &bamHdr,
-    const std::string &chrName, 
-    const HaplotagParameters &params, 
-    const Genome& genmoeType, 
-    std::map<int, MultiGenomeVar> &currentVariants,
-    std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-    VCF_Info* vcfSet, 
-    const std::string &ref_string
-){
-
-    std::map<int, int> hpCount;
-
-    hpCount[SnpHP::GERMLINE_H1] = 0; 
-    hpCount[SnpHP::GERMLINE_H2] = 0;
-
-    //record variants on this read
-    std::map<int, int> variantsHP;
-
-    std::map<int,int> countPS;
-
-    std::vector<int> tumVarPosVec;
-
-    /// Create a CIGAR parser using polymorphism design
-    // Use extractNorDataCigarParser to process CIGAR strings for normal samples    
-    CigarParser* cigarParser = new extractNorDataCigarParser(*variantBase, tumVarPosVec);
-    cigarParser->parsingCigar(aln, bamHdr, chrName, params, firstVariantIter, currentVariants, ref_string, hpCount, variantsHP, countPS);
-    delete cigarParser;
-
-    // get the number of SVs occurring on different haplotypes in a read
-    if( aln.core.qual >= params.somaticCallingMpqThreshold ){
-        germlineJudgeSVHap(aln, vcfSet, hpCount, genmoeType);
-    }
-
-    double min = 0.0;
-    double max = 0.0;
-    int hpResult = ReadHP::unTag;
-    int pqValue = 0;
-    int psValue = 0;
-    double percentageThreshold = params.percentageThreshold;
-    // determine the haplotype of the read
-    hpResult = germlineDetermineReadHap(hpCount, min, max, percentageThreshold, pqValue, psValue, countPS, nullptr, nullptr);
-
-    //record read hp to tumor SNP position
-    for(auto pos : tumVarPosVec){
-        (*variantBase)[pos].ReadHpCount[hpResult]++;
-    }
-}
-
-void extractNorDataChrProcessor::postProcess(
-    const std::string &chr,
-    std::map<int, MultiGenomeVar> &currentVariants
-){
-    std::map<int, PosBase>::iterator currentPosIter = variantBase->begin();
-    if(currentPosIter == variantBase->end()){
-        //exit(1);
-        return;
-    } 
-
-    while (currentPosIter != variantBase->end()) {
-
-        PosBase *baseInfo = &(currentPosIter->second);
-
-        // Determine whether this position is clean or not
-        int zero_count = 0;
-        if (baseInfo->A_count == 0) {
-            zero_count++;
-        }
-        if (baseInfo->C_count == 0) {
-            zero_count++;
-        }
-        if (baseInfo->G_count == 0) {
-            zero_count++;
-        }
-        if (baseInfo->T_count == 0) {
-            zero_count++;
-        }
-
-        // Which type of bases are the most and second most frequent
-        int max_count = 0;
-        int second_max_count = 0;
-        std::string max_base = " ";
-        std::string second_max_base = " ";
-
-        // Determine max & second max base count
-        if (baseInfo->A_count > max_count) {
-            second_max_count = max_count;
-            max_count = baseInfo->A_count;
-            second_max_base = max_base;
-            max_base = "A";
-        } else if (baseInfo->A_count > second_max_count) {
-            second_max_count = baseInfo->A_count;
-            second_max_base = "A";
-        }
-
-        if (baseInfo->C_count > max_count) {
-            second_max_count = max_count;
-            max_count = baseInfo->C_count;
-            second_max_base = max_base;
-            max_base = "C";
-        } else if (baseInfo->C_count > second_max_count) {
-            second_max_count = baseInfo->C_count;
-            second_max_base = "C";
-        }
-
-        if (baseInfo->G_count > max_count) {
-            second_max_count = max_count;
-            max_count = baseInfo->G_count;
-            second_max_base = max_base;
-            max_base = "G";
-        } else if (baseInfo->G_count > second_max_count) {
-            second_max_count = baseInfo->G_count;
-            second_max_base = "G";
-        }
-
-        if (baseInfo->T_count > max_count) {
-            second_max_count = max_count;
-            max_count = baseInfo->T_count;
-            second_max_base = max_base;
-            max_base = "T";
-        } else if (baseInfo->T_count > second_max_count) {
-            second_max_count = baseInfo->T_count;
-            second_max_base = "T";
-        }
-
-        int depth = baseInfo->depth;
-
-        //record max base information
-        baseInfo->max_count = max_count;
-        baseInfo->max_base = max_base;
-        baseInfo->max_ratio = (float)max_count / (float)depth;
-
-        //record second max base information
-        if(zero_count == 3){
-            baseInfo->second_max_count = 0;
-            baseInfo->second_max_base = ' ';
-            baseInfo->second_max_ratio = 0.0;
-        }else{
-            baseInfo->second_max_count = second_max_count;
-            baseInfo->second_max_base = second_max_base;
-            baseInfo->second_max_ratio = (float)second_max_count / (float)depth;
-        }
-
-        // calculate VAF
-        std::string tumRefBase = currentVariants[(*currentPosIter).first].Variant[TUMOR].allele.Ref;
-        std::string tumAltBase = currentVariants[(*currentPosIter).first].Variant[TUMOR].allele.Alt;
-
-        int AltCount = 0;
-        int filteredMpqAltCount = 0;
-
-        if(tumAltBase == "A"){
-            AltCount = baseInfo->A_count;
-            filteredMpqAltCount = baseInfo->MPQ_A_count;
-        }else if(tumAltBase == "T"){
-            AltCount = baseInfo->T_count;
-            filteredMpqAltCount = baseInfo->MPQ_T_count;
-        }else if(tumAltBase == "C"){
-            AltCount = baseInfo->C_count;
-            filteredMpqAltCount = baseInfo->MPQ_C_count;
-        }else if(tumAltBase == "G"){
-            AltCount = baseInfo->G_count;
-            filteredMpqAltCount = baseInfo->MPQ_G_count;
-        }
-
-
-        if(AltCount != 0 && depth != 0){
-            baseInfo->VAF = (float)AltCount / (float)depth;
-            baseInfo->nonDelAF = (float)AltCount / (float)(depth - baseInfo->delCount);
-        }
-
-        int filteredMpqDepth = baseInfo->filteredMpqDepth;
-        
-        if(filteredMpqAltCount != 0 && filteredMpqDepth != 0){
-            baseInfo->filteredMpqVAF = (float)filteredMpqAltCount / (float)filteredMpqDepth;
-        }
-
-        if(depth != 0){
-            baseInfo->lowMpqReadRatio = (float)(depth - filteredMpqDepth) / (float)depth;
-        }
-        
-        currentPosIter++;
-    } 
-}
-
-CigarParser::CigarParser(){
     aln = nullptr;
     bamHdr = nullptr;
     chrName = nullptr;
     ref_string = nullptr;
     hpCount = nullptr;
-    countPS = nullptr;
+    norCountPS = nullptr;
     variantsHP = nullptr;
-    ref_pos = 0;
-    query_pos = 0;
 }
 
 CigarParser::~CigarParser(){
@@ -539,8 +218,8 @@ void CigarParser::parsingCigar(
     const std::string& ref_string,
     std::map<int, int>& hpCount,
     std::map<int, int>& variantsHP,
-    std::map<int, int>& countPS
-) {
+    std::map<int, int>& norCountPS
+){
     this->aln = &aln;
     this->bamHdr = &bamHdr;
     this->chrName = &chrName;
@@ -548,7 +227,7 @@ void CigarParser::parsingCigar(
     this->ref_string = &ref_string;
     this->hpCount = &hpCount;
     this->variantsHP = &variantsHP;
-    this->countPS = &countPS;
+    this->norCountPS = &norCountPS;
 
     // Skip variants that are to the left of this read
     while (firstVariantIter != currentVariants.end() && (*firstVariantIter).first < aln.core.pos) {
@@ -634,114 +313,6 @@ void CigarParser::parsingCigar(
             exit(1);
         }
     }
-}
-
-extractNorDataCigarParser::extractNorDataCigarParser(std::map<int, PosBase>& variantBase, std::vector<int>& tumVarPosVec)
-: variantBase(variantBase), tumVarPosVec(tumVarPosVec){
-
-}
-
-extractNorDataCigarParser::~extractNorDataCigarParser(){
-
-}
-
-void extractNorDataCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base){
-    //statistically analyze SNP information exclusive to the tumor
-    if((*currentVariantIter).second.isExists(TUMOR)){
-        int curPos = (*currentVariantIter).first;
-        //std::cout << "curPos :" << curPos << "is tumor "<<(*currentVariantIter).second.isExistTumor  << " isNormal: "<< (*currentVariantIter).second.isExistNormal<< std::endl;
-
-        //detect ref bsae length(temp :tumor SNP)
-        int tumRefLength = (*currentVariantIter).second.Variant[TUMOR].allele.Ref.length();
-        int tumAltLength = (*currentVariantIter).second.Variant[TUMOR].allele.Alt.length();
-        
-        // the variant is SNP
-        if(tumRefLength == 1 && tumAltLength == 1){
-            //record tumor SNP position
-            tumVarPosVec.push_back(curPos);
-            // mapping quality is higher than threshold
-            if ( aln->core.qual >= params->somaticCallingMpqThreshold ){
-                if(base == "A"){
-                    variantBase[curPos].MPQ_A_count++;
-                }else if(base == "C"){
-                    variantBase[curPos].MPQ_C_count++;
-                }else if(base == "G"){
-                    variantBase[curPos].MPQ_G_count++;
-                }else if(base == "T"){
-                    variantBase[curPos].MPQ_T_count++;
-                }else{
-                    variantBase[curPos].MPQ_unknow++;
-                }
-                variantBase[curPos].filteredMpqDepth++;
-            }
-            if(base == "A"){
-                variantBase[curPos].A_count++;
-                //std::cout << "base A read ID :" << bam_get_qname(aln) << std::endl;
-            }else if(base == "C"){
-                variantBase[curPos].C_count++;
-            }else if(base == "G"){
-                variantBase[curPos].G_count++;
-            }else if(base == "T"){
-                variantBase[curPos].T_count++;
-            }else{
-                variantBase[curPos].unknow++;
-            }
-            variantBase[curPos].depth++;  
-
-        }
-        // the indel(del) SNP position is the start position, and the deletion occurs at the next position
-        else if(tumRefLength > 1 && tumAltLength == 1){
-            // the indel SNP start position is at the end of the deletion, and the next cigar operator is deletion
-            if(curPos == (ref_pos + length - 1) && bam_cigar_op(cigar[i+1]) == 2 && i+1 < aln_core_n_cigar){
-
-            }
-        }
-    }       
-
-    if ( aln->core.qual >= params->somaticCallingMpqThreshold && (*currentVariantIter).second.isExists(NORMAL)){
-        // only judge the heterozygous SNP
-        if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
-            auto norVar = (*currentVariantIter).second.Variant[NORMAL];
-            germlineJudgeSnpHap(*chrName, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, *hpCount, *variantsHP, *countPS);
-        }
-    }
-}
-
-void extractNorDataCigarParser::processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel){
-    //statistically analyze SNP information exclusive to the tumor
-    if((*currentVariantIter).second.isExists(TUMOR)){
-
-        int curPos = (*currentVariantIter).first;
-        
-        //record tumor SNP position
-        tumVarPosVec.push_back(curPos);
-
-        //detect ref bsae length(temp :tumor SNP)
-        int tumRefLength = (*currentVariantIter).second.Variant[TUMOR].allele.Ref.length();
-        int tumAltLength = (*currentVariantIter).second.Variant[TUMOR].allele.Alt.length();
-
-        // the variant is SNP
-        if(tumRefLength == 1 && tumAltLength == 1){
-            variantBase[curPos].delCount++;
-            variantBase[curPos].depth++;
-        }
-        // the variant is deletion
-        else if(tumRefLength > 1 && tumAltLength == 1){
-
-        }
-    }
-
-    // only execute at the first phased normal snp
-    if ( aln->core.qual >= params->somaticCallingMpqThreshold && (*currentVariantIter).second.isExists(NORMAL) && !alreadyJudgeDel){
-        if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
-            // longphase v1.73 only execute once
-            alreadyJudgeDel = true;
-            auto norVar = (*currentVariantIter).second.Variant[NORMAL];
-            germlineJudgeDeletionHap(*chrName, *ref_string, ref_pos, length, query_pos, currentVariantIter, aln, *hpCount, *variantsHP, *countPS);
-        }
-    }
-    
-    //std::cout << "read ID : "<<  bam_get_qname(&aln) <<" pos :" << curPos << " deletion count ++" << std::endl;
 }
 
 
@@ -1724,57 +1295,6 @@ void ReadHpDistriLog::removeNotDeriveByH1andH2pos(const std::vector<std::string>
     }
 }
 
-
-BamFileRAII::BamFileRAII(const std::string& BamFile, const std::string& fastaFile, htsThreadPool& threadPool):
-in(nullptr), bamHdr(nullptr), idx(nullptr), aln(nullptr)
-{
-    // open bam file
-    in = hts_open(BamFile.c_str(), "r");
-    if (in == nullptr) {
-        std::cerr << "ERROR: Cannot open bam file " + BamFile << std::endl;
-        exit(1);
-    }
-
-    // load reference file
-    if (hts_set_fai_filename(in, fastaFile.c_str()) != 0) {
-        std::cerr << "ERROR: Cannot set FASTA index file for " + fastaFile << std::endl;
-        exit(1);
-    }
-
-    // input reader
-    bamHdr = sam_hdr_read(in);
-    if (bamHdr == nullptr) {
-        std::cerr << "ERROR: Cannot read header from bam file " + BamFile << std::endl;
-        exit(1);
-    }
-
-    // check bam file index
-    idx = sam_index_load(in, BamFile.c_str());
-    if (idx == nullptr) {
-        std::cerr << "ERROR: Cannot open index for bam file " + BamFile << std::endl;
-        exit(1);
-    }
-
-    // set thread
-    if (hts_set_opt(in, HTS_OPT_THREAD_POOL, &threadPool) != 0) {
-        std::cerr << "ERROR: Cannot set thread pool for bam file " + BamFile << std::endl;
-        exit(1);
-    }
-
-    // initialize an alignment
-    aln = bam_init1();
-    if (aln == nullptr) {
-        std::cerr << "ERROR: Cannot initialize alignment for bam file " + BamFile << std::endl;
-        exit(1);
-    }
-}
-
-BamFileRAII::~BamFileRAII(){
-    if (aln) bam_destroy1(aln);
-    if (idx) hts_idx_destroy(idx);
-    if (bamHdr) bam_hdr_destroy(bamHdr);
-    if (in) sam_close(in);
-}
 
 VcfParser::VcfParser(bool tagTumorMode){
     this->tagTumorMode = tagTumorMode;

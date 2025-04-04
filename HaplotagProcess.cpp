@@ -989,19 +989,12 @@ void HaplotagProcess::taggingProcess(HaplotagParameters &params)
     //somatic SNPs calling
     if(tagTumorMode){
 
-        //Count each base numbers at tumor SNP position in the Normal.bam
-        BamBaseCounter *NorBase = new BamBaseCounter(*chrVec);
-        // NorBase->CountingBamBase(params.bamFile, params, (*mergedChrVarinat), *chrVec, *chrLength, vcfSet, NORMAL);
-        NorBase->extractNormalData(params.bamFile, params, (*mergedChrVarinat), *chrVec, *chrLength, vcfSet, NORMAL);
-
         //record the HP3 confidence of each read
         SomaticVarCaller *SomaticVar = new SomaticVarCaller(*chrVec, params);
-        SomaticVar->VariantCalling(params.tumorBamFile, (*mergedChrVarinat), *chrVec, *chrLength, params, *NorBase);
+        SomaticVar->VariantCalling(params, *chrVec, *chrLength, (*mergedChrVarinat), vcfSet, Genome::TUMOR);
         (*chrPosReadCase) = SomaticVar->getSomaticChrPosInfo();
 
-        delete NorBase;
         delete SomaticVar;
-        NorBase = nullptr;
         SomaticVar = nullptr;
         // return;
     }

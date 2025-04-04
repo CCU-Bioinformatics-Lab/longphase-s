@@ -8,6 +8,11 @@
 #include <omp.h>
 #include <climits>
 
+class HaplotagBamParser;
+class ChromosomeProcessor;
+class CigarParser;
+
+
 struct HaplotagParameters
 {
     int numThreads;
@@ -75,17 +80,6 @@ enum ReadHP
     H1_2 = 6,
     H2_1 = 7,
     H2_2 = 8,
-};
-
-class BamFileRAII {
-    public:
-        samFile* in;
-        bam_hdr_t* bamHdr;
-        hts_idx_t* idx;
-        bam1_t* aln;
-
-        BamFileRAII(const std::string& BamFile, const std::string& fastaFile, htsThreadPool &threadPool);
-        ~BamFileRAII();
 };
 
 
@@ -240,7 +234,16 @@ struct ReadHpResult{
     ReadHpResult(): somaticSnpH3count(0), existDeriveByH1andH2(false), deriveHP(0), coverRegionStartPos(INT_MAX), coverRegionEndPos(INT_MIN){}
 };
 
-//-------
+class BamFileRAII {
+    public:
+        samFile* in;
+        bam_hdr_t* bamHdr;
+        hts_idx_t* idx;
+        bam1_t* aln;
+
+        BamFileRAII(const std::string& BamFile, const std::string& fastaFile, htsThreadPool &threadPool, const HaplotagParameters& params);
+        ~BamFileRAII();
+};
 
 class ReadHpDistriLog{
     private :
@@ -265,6 +268,7 @@ class ReadHpDistriLog{
         void writeTagReadCoverRegionLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength);
         void removeNotDeriveByH1andH2pos(const std::vector<std::string> &chrVec);
 };
+
 
 class GermlineJudgeBase{
     private:
@@ -298,11 +302,52 @@ class GermlineJudgeBase{
     public:
 };
 
+class SomaticJudgeBase{
+    private :
+
+    protected:
+        void SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount
+        , std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP
+        , std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos);
+
+        virtual void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos)=0;
+        int determineReadHP(std::map<int, int> &hpCount, int &pqValue,std::map<int, int> &norCountPS, double &norHPsimilarity, double &tumHPsimilarity,  double percentageThreshold, int *totalHighSimilarity, int *totalCrossTwoBlock, int *totalWithOutVaraint);
+
+        int convertStrNucToInt(std::string &base);
+        std::string convertIntNucToStr(int base);
+        void recordReadHp(int &pos, int &hpResult, int &BaseHP, std::map<int, ReadHpResult> &varReadHpResult);
+        void recordDeriveHp(int &pos, int &deriveHP, float deriveHPsimilarity, std::map<int, ReadHpResult> &varReadHpResult);
+    public:
+};
+
+
+class HaplotagBamParser : public GermlineJudgeBase{
+    private:
+
+    protected: 
+        // Factory method to create a chromosome processor
+        virtual std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) = 0;
+
+    public:
+        HaplotagBamParser();
+        virtual ~HaplotagBamParser();
+        void parsingBam(
+            const std::string &BamFile, 
+            const HaplotagParameters &params, 
+            const std::vector<std::string> &chrVec, 
+            const std::map<std::string, int> &chrLength, 
+            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
+            VCF_Info *vcfSet, 
+            const Genome& genmoeType
+        );
+
+};
 
 class ChromosomeProcessor : public GermlineJudgeBase{
     private:
 
     protected:
+
         virtual void processRead(
             const bam1_t &aln, 
             const bam_hdr_t &bamHdr,
@@ -325,8 +370,8 @@ class ChromosomeProcessor : public GermlineJudgeBase{
         virtual ~ChromosomeProcessor();
         
         void processSingleChromosome(
-            std::string& chr,
-            std::map<std::string, int>& chrLength,
+            const std::string& chr,
+            const std::map<std::string, int>& chrLength,
             const HaplotagParameters& params, 
             const std::string& BamFile,
             htsThreadPool& threadPool,
@@ -334,40 +379,6 @@ class ChromosomeProcessor : public GermlineJudgeBase{
             const Genome& genmoeType,
             const FastaParser& fastaParser,
             VCF_Info* vcfInfo
-        );
-
-};
-
-class HaplotagBamParser : public GermlineJudgeBase{
-    private:
-
-    protected: 
-        // Factory method to create a new chromosome processor
-        virtual std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) = 0;
-
-        void runChrProcessor(
-            std::string& chr,
-            std::map<std::string, int>& chrLength,
-            const HaplotagParameters& params, 
-            const std::string& BamFile,
-            htsThreadPool& threadPool,
-            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-            const Genome& genmoeType,
-            const FastaParser& fastaParser,
-            VCF_Info* vcfSet
-        );
-
-    public:
-        HaplotagBamParser();
-        virtual ~HaplotagBamParser();
-        void parsingBam(
-            const std::string &BamFile, 
-            const HaplotagParameters &params, 
-            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-            std::vector<std::string> &chrVec, 
-            std::map<std::string, int> &chrLength, 
-            VCF_Info *vcfSet, 
-            const Genome& genmoeType
         );
 
 };
@@ -382,13 +393,13 @@ class CigarParser : public GermlineJudgeBase{
         const HaplotagParameters* params;
         const std::string* ref_string;
         std::map<int, int>* hpCount;
-        std::map<int, int>* countPS;
+        std::map<int, int>* norCountPS;
         std::map<int, int>* variantsHP;
 
         // position relative to reference
-        int ref_pos;
+        int& ref_pos;
         // position relative to read
-        int query_pos;
+        int& query_pos;
 
         std::map<int, MultiGenomeVar>::iterator currentVariantIter;
 
@@ -402,7 +413,7 @@ class CigarParser : public GermlineJudgeBase{
 
     public:
 
-        CigarParser();
+        CigarParser(int& ref_pos, int& query_pos);
 
         virtual ~CigarParser();
         void parsingCigar(
@@ -415,118 +426,8 @@ class CigarParser : public GermlineJudgeBase{
             const std::string& ref_string,
             std::map<int, int>& hpCount,
             std::map<int, int>& variantsHP,
-            std::map<int, int>& countPS
+            std::map<int, int>& norCountPS
         );
-};
-
-
-class extractNorDataChrProcessor : public ChromosomeProcessor{
-    private:
-        // store base information
-        std::map<int, PosBase> *variantBase;
-    protected:
-        //override processRead
-        void processRead(
-            const bam1_t &aln, 
-            const bam_hdr_t &bamHdr,
-            const std::string &chrName, 
-            const HaplotagParameters &params, 
-            const Genome& genmoeType, 
-            std::map<int, MultiGenomeVar> &currentVariants,
-            std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-            VCF_Info* vcfSet, 
-            const std::string &ref_string
-        ) override;
-
-        //override postProcess
-        void postProcess(
-            const std::string &chr,
-            std::map<int, MultiGenomeVar> &currentVariants
-        ) override;
-
-    public:
-        extractNorDataChrProcessor(std::map<std::string, std::map<int, PosBase>> &ChrVariantBase, const std::string &chr);
-        virtual ~extractNorDataChrProcessor() override;
-};
-
-class extractNorDataCigarParser : public CigarParser{
-    private:
-        //specific data members
-        std::map<int, PosBase>& variantBase;
-        std::vector<int>& tumVarPosVec;
-    protected:
-
-        void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base) override;
-        void processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel) override;
-
-    public:
-        extractNorDataCigarParser(std::map<int, PosBase>& variantBase, std::vector<int>& tumVarPosVec);
-        ~extractNorDataCigarParser() override;
-};
-
-class BamBaseCounter : public HaplotagBamParser{
-    private:
-        // chr, variant position (0-base), base count & depth
-        std::map<std::string, std::map<int, PosBase>> *ChrVariantBase;
-
-        // Test if the logic of judgeHaplotype is consistent (only single chromosome)
-        std::ofstream *tagResult;
-
-    protected:
-        // Factory method to create a new chromosome processor
-        std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) override{
-            return std::unique_ptr<ChromosomeProcessor>(new extractNorDataChrProcessor(*ChrVariantBase, chr));
-        };
-
-    public:
-        BamBaseCounter(const std::vector<std::string> &chrVec);
-        ~BamBaseCounter();
-
-        //parsing normal bam for extracting base information
-        void extractNormalData(const std::string &BamFile, 
-                               const HaplotagParameters &params, 
-                               std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-                               std::vector<std::string> &chrVec, 
-                               std::map<std::string, int> &chrLength, 
-                               VCF_Info *vcfSet, 
-                               const Genome& genmoeType);
-
-        std::string getMaxFreqBase(std::string chr, int pos);
-        float getMaxBaseRatio(std::string chr, int pos);
-        float getSecondMaxBaseRatio(std::string chr, int pos);
-        float getVAF(std::string chr, int pos);
-        float getNoDelAF(std::string chr, int pos);
-        float getFilterdMpqVAF(std::string chr, int pos);
-        float getLowMpqReadRatio(std::string chr, int pos);
-        int getReadHpCountInNorBam(std::string chr, int pos, int Haplotype);
-
-        int getBaseAcount(std::string chr, int pos);
-        int getBaseCcount(std::string chr, int pos);
-        int getBaseTcount(std::string chr, int pos);
-        int getBaseGcount(std::string chr, int pos);
-        int getDepth(std::string chr, int pos);
-        int getMpqDepth(std::string chr, int pos);
-
-        int getVarDeletionCount(std::string chr, int pos);
-        void displayPosInfo(std::string chr, int pos);
-};
-
-class SomaticJudgeBase{
-    private :
-
-    protected:
-        void SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount
-        , std::map<int, int> &NorCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP
-        , std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos);
-
-        virtual void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos)=0;
-        int determineReadHP(std::map<int, int> &hpCount, int &pqValue,std::map<int, int> &norCountPS, double &norHPsimilarity, double &tumHPsimilarity,  double percentageThreshold, int *totalHighSimilarity, int *totalCrossTwoBlock, int *totalWithOutVaraint);
-
-        int convertStrNucToInt(std::string &base);
-        std::string convertIntNucToStr(int base);
-        void recordReadHp(int &pos, int &hpResult, int &BaseHP, std::map<int, ReadHpResult> &varReadHpResult);
-        void recordDeriveHp(int &pos, int &deriveHP, float deriveHPsimilarity, std::map<int, ReadHpResult> &varReadHpResult);
-    public:
 };
         
 class VcfParser{

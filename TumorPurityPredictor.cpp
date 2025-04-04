@@ -3,9 +3,9 @@
 TumorPurityPredictor::TumorPurityPredictor(
     const HaplotagParameters& params,
     const std::vector<std::string>& chrVec,
-    BamBaseCounter& norBase,
+    std::map<std::string, std::map<int, PosBase>>& chrPosNorBase,
     std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo
-) : params(params), chrVec(chrVec), norBase(norBase), chrPosSomaticInfo(chrPosSomaticInfo), initial_data_size(0){}
+) : params(params), chrVec(chrVec), chrPosNorBase(chrPosNorBase), chrPosSomaticInfo(chrPosSomaticInfo), initial_data_size(0){}
 
 TumorPurityPredictor::~TumorPurityPredictor(){
 
@@ -98,6 +98,7 @@ void TumorPurityPredictor::buildPurityFeatureValueVec(std::vector<PurityData> &p
             int H1readCount = (*somaticPosIter).second.allReadHpCount[ReadHP::H1];
             int H2readCount = (*somaticPosIter).second.allReadHpCount[ReadHP::H2];
             int tumDepth = (*somaticPosIter).second.base.depth;
+            int pos = (*somaticPosIter).first;
             initial_data_size++;
 
             // the ratio of the read count of H1 and H2
@@ -120,9 +121,9 @@ void TumorPurityPredictor::buildPurityFeatureValueVec(std::vector<PurityData> &p
 
 
             //read hp count in the normal bam
-            int norDepth = norBase.getDepth(chr, (*somaticPosIter).first);
-            int H1readCountInNorBam = norBase.getReadHpCountInNorBam(chr, (*somaticPosIter).first, ReadHP::H1);
-            int H2readCountInNorBam = norBase.getReadHpCountInNorBam(chr, (*somaticPosIter).first, ReadHP::H2);
+            int norDepth = chrPosNorBase[chr][pos].depth;
+            int H1readCountInNorBam = chrPosNorBase[chr][pos].ReadHpCount[ReadHP::H1];
+            int H2readCountInNorBam = chrPosNorBase[chr][pos].ReadHpCount[ReadHP::H2];
             int germlineReadHpCountInNorBam = H1readCountInNorBam + H2readCountInNorBam;
 
             double germlineReadHpConsistencyRatioInNorBam = 0.0;

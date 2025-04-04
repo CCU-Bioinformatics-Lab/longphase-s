@@ -4,6 +4,7 @@
 #include "Util.h" 
 #include "HaplotagBase.h"
 
+
 enum PeakTrend{
     NONE = 0,
     UP = 1,
@@ -180,7 +181,7 @@ class TumorPurityPredictor{
 
         const HaplotagParameters& params;    
         const std::vector<std::string>& chrVec;    
-        BamBaseCounter& norBase;
+        std::map<std::string, std::map<int, PosBase>>& chrPosNorBase;
         std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo;
         std::map<std::string, std::map<int, HP3_Info>> chrPosSomaticFlag;
 
@@ -191,7 +192,7 @@ class TumorPurityPredictor{
         TumorPurityPredictor(
             const HaplotagParameters& params,
             const std::vector<std::string>& chrVec,
-            BamBaseCounter& norBase,
+            std::map<std::string, std::map<int, PosBase>>& chrPosNorBase,
             std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo); 
 
         ~TumorPurityPredictor();
