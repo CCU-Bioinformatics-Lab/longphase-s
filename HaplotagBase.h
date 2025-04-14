@@ -20,7 +20,7 @@ struct HaplotagParameters
     
     double percentageThreshold;
     // Filter the read mapping quality below than threshold
-    int somaticCallingMpqThreshold;  
+    float somaticCallingMpqThreshold;  
     
     std::string snpFile;
     std::string tumorSnpFile;   
@@ -50,13 +50,22 @@ enum Genome
     HIGH_CON_SOMATIC = 2
 };
 
-enum Nucleotide
+enum Nitrogenous
 {
     UNKOWN = 0,
     A = 1,
     C = 2,
     G = 3,
     T = 4,
+};
+
+enum VariantType
+{
+    NONE_VAR = 0,
+    SNP = 1,
+    INSERTION = 2,
+    DELETION = 3,
+    MNP = 4
 };
 
 enum SnpHP
@@ -94,6 +103,8 @@ struct VarData{
     std::string HP1;
     std::string HP2;
 
+    VariantType variantType;
+
     bool is_phased_hetero;
     bool is_homozygous;
     bool is_unphased_hetero;
@@ -102,7 +113,22 @@ struct VarData{
         return PhasedSet != NONE_PHASED_SET;
     }
 
-    VarData(): PhasedSet(NONE_PHASED_SET), HP1(""), HP2(""), is_phased_hetero(false), is_homozygous(false), is_unphased_hetero(false){}
+    void setVariantType(){
+        if(allele.Ref.length() == 1 && allele.Alt.length() == 1){
+            variantType = VariantType::SNP;
+        }else if(allele.Ref.length() == 1 && allele.Alt.length() > 1){
+            variantType = VariantType::INSERTION;
+        }else if(allele.Ref.length() > 1 && allele.Alt.length() == 1){
+            variantType = VariantType::DELETION;
+        }else if((allele.Ref.length() > 1) && (allele.Ref.length() == allele.Alt.length())){
+            variantType = VariantType::MNP;
+        }else{
+            throw std::runtime_error("(loadVariantType)Invalid allele: " + allele.Ref + " " + allele.Alt);
+        }
+    }
+
+    VarData(): PhasedSet(NONE_PHASED_SET), HP1(""), HP2(""), variantType(VariantType::NONE_VAR)
+             , is_phased_hetero(false), is_homozygous(false), is_unphased_hetero(false){}
 };
 
 struct MultiGenomeVar{
@@ -128,15 +154,6 @@ struct PosBase{
     int depth;
     int delCount;
 
-    int max_count;
-    int second_max_count;
-
-    std::string max_base;
-    std::string second_max_base;
- 
-    float max_ratio;
-    float second_max_ratio;
-
     int MPQ_A_count;
     int MPQ_C_count;
     int MPQ_G_count;
@@ -146,18 +163,38 @@ struct PosBase{
 
     float VAF;
     //Non-deletion Adjusted AF
-    float nonDelAF;
+    float nonDelVAF;
     float filteredMpqVAF;
     float lowMpqReadRatio;
+    float delRatio;
 
+    //germline haplotype imbalance ratio
+    double germlineHaplotypeImbalanceRatio;
+    double percentageOfGermlineHp;
     //snp position, read hp count
     std::map<int, int> ReadHpCount;
     
     PosBase(): A_count(0), C_count(0), G_count(0), T_count(0), unknow(0), depth(0), delCount(0)
-             , max_count(0), second_max_count(INT_MAX), max_base(" "), second_max_base(" ")
-             , max_ratio(0), second_max_ratio(0)
              , MPQ_A_count(0), MPQ_C_count(0), MPQ_G_count(0), MPQ_T_count(0), MPQ_unknow(0), filteredMpqDepth(0) 
-             ,VAF(0.0), nonDelAF(0.0), filteredMpqVAF(0.0), lowMpqReadRatio(0.0), ReadHpCount(std::map<int, int>()){}
+             , VAF(0.0), nonDelVAF(0.0), filteredMpqVAF(0.0), lowMpqReadRatio(0.0), delRatio(0.0)
+             , germlineHaplotypeImbalanceRatio(0.0), percentageOfGermlineHp(0.0)
+             , ReadHpCount(std::map<int, int>()){}
+
+    int getBaseCount(const std::string& base) const {
+        if (base == "A") return A_count;
+        if (base == "T") return T_count;
+        if (base == "C") return C_count;
+        if (base == "G") return G_count;
+        throw std::runtime_error("(getBaseCount)Invalid base: " + base);
+    }
+
+    int getMpqBaseCount(const std::string& base) const {
+        if (base == "A") return MPQ_A_count;
+        if (base == "T") return MPQ_T_count;
+        if (base == "C") return MPQ_C_count;
+        if (base == "G") return MPQ_G_count;
+        throw std::runtime_error("(getMpqBaseCount)Invalid base: " + base);
+    }
 };
 
 struct HP3_Info{
@@ -175,8 +212,6 @@ struct HP3_Info{
     float pure_H3_readRatio;
     float Mixed_HP_readRatio;
 
-    float tumDelRatio;
-
     PosBase base;
     std::string GTtype;
     int somaticHp4Base;
@@ -189,22 +224,32 @@ struct HP3_Info{
     int somaticReadDeriveByHP;
     double shannonEntropy;
     int homopolymerLength;
-    //readHp, count
-    std::map<int, int> somaticReadHpCount;
-    //for predict tumor purity
-    std::map<int, int> allReadHpCount;
+
     bool statisticPurity;
+
+    // imbalance ratio for predict purity
+    double allelicImbalanceRatio;
+    double somaticHaplotypeImbalanceRatio;
+
+    //interval snp filter information
     float MeanAltCountPerVarRead;
     float zScore;
     int intervalSnpCount;
     bool inDenseTumorInterval;
+    
+    // filter out by somatic feature filter
     bool isFilterOut;
+
+    //readHp, count
+    std::map<int, int> somaticReadHpCount;
 
     HP3_Info(): totalCleanHP3Read(0), pure_H1_1_read(0), pure_H2_1_read(0), pure_H3_read(0), Mixed_HP_read(0), unTag(0)
              , CaseReadCount(0), pure_H1_1_readRatio(0.0), pure_H2_1_readRatio(0.0), pure_H3_readRatio(0.0), Mixed_HP_readRatio(0.0)
-             , tumDelRatio(0.0), base(), GTtype(""), somaticHp4Base(Nucleotide::UNKOWN), somaticHp5Base(Nucleotide::UNKOWN), somaticHp4BaseCount(0), somaticHp5BaseCount(0)
-             , isHighConSomaticSNP(false), somaticReadDeriveByHP(0), shannonEntropy(0.0), homopolymerLength(0), statisticPurity(false), MeanAltCountPerVarRead(0.0), zScore(0.0), intervalSnpCount(0), inDenseTumorInterval(false)
-             , isFilterOut(false){}
+             , base(), GTtype(""), somaticHp4Base(Nitrogenous::UNKOWN), somaticHp5Base(Nitrogenous::UNKOWN), somaticHp4BaseCount(0), somaticHp5BaseCount(0)
+             , isHighConSomaticSNP(false), somaticReadDeriveByHP(0), shannonEntropy(0.0), homopolymerLength(0)
+             , statisticPurity(false), allelicImbalanceRatio(0.0), somaticHaplotypeImbalanceRatio(0.0)
+             , MeanAltCountPerVarRead(0.0), zScore(0.0), intervalSnpCount(0), inDenseTumorInterval(false)
+             , isFilterOut(false), somaticReadHpCount(std::map<int, int>()){}
 };
 
 //record vcf information
@@ -364,6 +409,15 @@ class ChromosomeProcessor : public GermlineJudgeBase{
             const std::string &chr,
             std::map<int, MultiGenomeVar> &currentVariants
         ){};
+        
+        void calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase);
+
+        float calculateVAF(int altCount, int depth);
+        float calculateLowMpqReadRatio(int depth, int filteredMpqDepth);
+        float calculateDelRatio(int delCount, int depth);
+
+        double calculateHaplotypeImbalanceRatio(int& H1readCount, int& H2readCount, int& totalReadCount);
+        double calculatePercentageOfGermlineHp(int& totalReadCount, int& depth);
 
     public:
         ChromosomeProcessor();
@@ -410,6 +464,10 @@ class CigarParser : public GermlineJudgeBase{
         virtual void processSkippedOperation(int& length){};
         virtual void processSoftClippingOperation(int& length){};
         virtual void processHardClippingOperation(){};
+        
+        //count base nucleotide
+        void countBaseNucleotide(PosBase& posBase, std::string& base, const bam1_t& aln, const float& mpqThreshold);
+        void countDeletionBase(PosBase& posBase);
 
     public:
 

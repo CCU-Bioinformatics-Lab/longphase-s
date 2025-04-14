@@ -190,6 +190,57 @@ void ChromosomeProcessor::processSingleChromosome(
     hts_itr_destroy(iter);
 }
 
+void ChromosomeProcessor::calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase){
+    int &depth = baseInfo.depth;
+    int AltCount = baseInfo.getBaseCount(tumorAltBase);
+
+    int filteredMpqDepth = baseInfo.filteredMpqDepth;
+    int filteredMpqAltCount = baseInfo.getMpqBaseCount(tumorAltBase);
+
+    baseInfo.VAF = calculateVAF(AltCount, depth);
+    baseInfo.filteredMpqVAF = calculateVAF(filteredMpqAltCount, filteredMpqDepth);
+    baseInfo.nonDelVAF = calculateVAF(AltCount, (depth - baseInfo.delCount));
+
+    baseInfo.lowMpqReadRatio = calculateLowMpqReadRatio(depth, filteredMpqDepth);
+    baseInfo.delRatio = calculateDelRatio(baseInfo.delCount, depth);
+
+    //read hp count in the normal bam
+    int H1readCount = baseInfo.ReadHpCount[ReadHP::H1];
+    int H2readCount = baseInfo.ReadHpCount[ReadHP::H2];
+    int germlineReadHpCount = H1readCount + H2readCount;
+
+    baseInfo.germlineHaplotypeImbalanceRatio = calculateHaplotypeImbalanceRatio(H1readCount, H2readCount, germlineReadHpCount);
+
+    baseInfo.percentageOfGermlineHp = calculatePercentageOfGermlineHp(germlineReadHpCount, depth);
+}
+
+float ChromosomeProcessor::calculateVAF(int altCount, int depth){
+    return (depth == 0 || altCount == 0) ? 0.0 : (float)altCount / (float)depth;
+}
+
+float ChromosomeProcessor::calculateLowMpqReadRatio(int depth, int filteredMpqDepth){
+    return depth == 0 ? 0.0 : (float)(depth - filteredMpqDepth) / (float)depth;
+}
+
+float ChromosomeProcessor::calculateDelRatio(int delCount, int depth){
+    return (depth == 0 || delCount == 0) ? 0.0 : (float)delCount / (float)depth;
+}
+
+double ChromosomeProcessor::calculateHaplotypeImbalanceRatio(int& H1readCount, int& H2readCount, int& totalReadCount) {
+    if(H1readCount > 0 && H2readCount > 0) {
+        return (H1readCount > H2readCount) ? 
+               ((double)H1readCount / (double)totalReadCount) : 
+               ((double)H2readCount / (double)totalReadCount);
+    } else if(H1readCount == 0 && H2readCount == 0) {
+        return 0.0;
+    } else {
+        return 1.0;
+    }
+}
+
+double ChromosomeProcessor::calculatePercentageOfGermlineHp(int& totalGermlineReadCount, int& depth) {
+    return (depth == 0 || totalGermlineReadCount == 0) ? 0.0 : (double)totalGermlineReadCount / (double)depth;
+}
 
 CigarParser::CigarParser(int& ref_pos, int& query_pos)
 : ref_pos(ref_pos), query_pos(query_pos){
@@ -315,6 +366,41 @@ void CigarParser::parsingCigar(
     }
 }
 
+void CigarParser::countBaseNucleotide(PosBase& posBase, std::string& base, const bam1_t& aln, const float& mpqThreshold){
+    // mapping quality is higher than threshold
+    if ( aln.core.qual >= mpqThreshold ){
+        if(base == "A"){
+            posBase.MPQ_A_count++;
+        }else if(base == "C"){
+            posBase.MPQ_C_count++;
+        }else if(base == "G"){
+            posBase.MPQ_G_count++;
+        }else if(base == "T"){
+            posBase.MPQ_T_count++;
+        }else{
+            posBase.MPQ_unknow++;
+        }
+        posBase.filteredMpqDepth++;
+    }
+    if(base == "A"){
+        posBase.A_count++;
+    }else if(base == "C"){
+        posBase.C_count++;
+    }else if(base == "G"){
+        posBase.G_count++;
+    }else if(base == "T"){
+        posBase.T_count++;
+    }else{
+        posBase.unknow++;
+    }
+    posBase.depth++;  
+}
+
+void CigarParser::countDeletionBase(PosBase& posBase){
+    posBase.delCount++;
+    posBase.depth++;
+}
+
 
 void GermlineJudgeBase::getLastVarPos(
     std::vector<int>& last_pos, 
@@ -368,11 +454,9 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
     std::map<int, int>& countPS
 ){
     int curPos = (*currentVariantIter).first;
-    int refAlleleLen = norVar.allele.Ref.length();
-    int altAlleleLen = norVar.allele.Alt.length();
 
     // currentVariant is SNP
-    if( refAlleleLen == 1 && altAlleleLen == 1 ){
+    if( norVar.variantType == VariantType::SNP ){
         // Detected that the base of the read is either REF or ALT. 
         if( (base == norVar.allele.Ref) || (base == norVar.allele.Alt) ){
 
@@ -400,7 +484,7 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
         }
     }
     // currentVariant is insertion
-    else if( refAlleleLen == 1 && altAlleleLen != 1 && i+1 < aln_core_n_cigar){
+    else if( norVar.variantType == VariantType::INSERTION && i+1 < aln_core_n_cigar){
         
         int hp1Length = norVar.HP1.length();
         int hp2Length = norVar.HP2.length();
@@ -432,7 +516,7 @@ void GermlineJudgeBase::germlineJudgeSnpHap(
         countPS[norVar.PhasedSet]++;
     } 
     // currentVariant is deletion
-    else if( refAlleleLen != 1 && altAlleleLen == 1 && i+1 < aln_core_n_cigar) {
+    else if( norVar.variantType == VariantType::DELETION && i+1 < aln_core_n_cigar) {
 
         int hp1Length = norVar.HP1.length();
         int hp2Length = norVar.HP2.length();
@@ -490,11 +574,9 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
                 
                 int curPos = (*currentVariantIter).first;
                 auto norVar = (*currentVariantIter).second.Variant[NORMAL];
-                int refAlleleLen = norVar.allele.Ref.length();
-                int altAlleleLen = norVar.allele.Alt.length();
                 
                 // SNP
-                if (refAlleleLen == 1 && altAlleleLen == 1) {
+                if (norVar.variantType == VariantType::SNP) {
                     // get the next match
                     char base_chr = seq_nt16_str[bam_seqi(bam_get_seq(aln), query_pos)];
                     std::string base(1, base_chr);
@@ -511,7 +593,7 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
                 }
                 
                 // the read deletion contain VCF's deletion
-                else if (refAlleleLen != 1 && altAlleleLen == 1) {
+                else if (norVar.variantType == VariantType::DELETION) {
 
                     int hp1Length = norVar.HP1.length();
                     int hp2Length = norVar.HP2.length();
@@ -949,13 +1031,13 @@ int SomaticJudgeBase::determineReadHP(std::map<int, int> &hpCount, int &pqValue,
 
 int SomaticJudgeBase::convertStrNucToInt(std::string &base){
     if(base == "A"){
-        return Nucleotide::A;
+        return Nitrogenous::A;
     }else if(base == "C"){
-        return Nucleotide::C;
+        return Nitrogenous::C;
     }else if(base == "G"){
-        return Nucleotide::G;
+        return Nitrogenous::G;
     }else if(base == "T"){
-        return Nucleotide::T;
+        return Nitrogenous::T;
     }else{
         std::cerr << "Error(convertNucleotideToInt) => can't find Allele : " << base << "\n";
         exit(1);
@@ -963,15 +1045,15 @@ int SomaticJudgeBase::convertStrNucToInt(std::string &base){
 }
 
 std::string SomaticJudgeBase::convertIntNucToStr(int base){
-    if(base == Nucleotide::A){
+    if(base == Nitrogenous::A){
         return "A";
-    }else if(base == Nucleotide::C){
+    }else if(base == Nitrogenous::C){
         return "C";
-    }else if(base == Nucleotide::G){
+    }else if(base == Nitrogenous::G){
         return "G";
-    }else if(base == Nucleotide::T){
+    }else if(base == Nitrogenous::T){
         return "T";
-    }else if(base == Nucleotide::UNKOWN){
+    }else if(base == Nitrogenous::UNKOWN){
         //std::cerr << "Error(convertIntNucToStr) => can't find Allele : " << base << "\n";
         return "UNKOWN";
     }else {
@@ -1519,6 +1601,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                 varData.allele.Ref = fields[3];
                 varData.allele.Alt = fields[4];
                 varData.is_phased_hetero = true;
+                varData.setVariantType();
                 
                 if(integerPS){
                     varData.PhasedSet = std::stoi(psValue);
@@ -1622,6 +1705,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                     varData.allele.Ref = fields[3];
                     varData.allele.Alt = fields[4];
                     varData.is_homozygous = true;
+                    varData.setVariantType();
 
                     if(Info.gene_type == NORMAL){
                         mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;
@@ -1636,9 +1720,9 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                     VarData varData;
                     varData.allele.Ref = fields[3];
                     varData.allele.Alt = fields[4];
-                    varData.is_phased_hetero = false;
+                    
                     varData.is_unphased_hetero = true;
-                    varData.is_homozygous = false;
+                    varData.setVariantType();
 
                     if(Info.gene_type == NORMAL){
                         mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;

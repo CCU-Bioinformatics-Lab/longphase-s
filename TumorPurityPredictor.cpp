@@ -95,62 +95,33 @@ void TumorPurityPredictor::buildPurityFeatureValueVec(std::vector<PurityData> &p
     for(auto chr : chrVec){
         std::map<int, HP3_Info>::iterator somaticPosIter = chrPosSomaticInfo[chr].begin();
         while(somaticPosIter != chrPosSomaticInfo[chr].end()){
-            int H1readCount = (*somaticPosIter).second.allReadHpCount[ReadHP::H1];
-            int H2readCount = (*somaticPosIter).second.allReadHpCount[ReadHP::H2];
-            int tumDepth = (*somaticPosIter).second.base.depth;
+            // int H1readCount = (*somaticPosIter).second.base.ReadHpCount[ReadHP::H1];
+            // int H2readCount = (*somaticPosIter).second.base.ReadHpCount[ReadHP::H2];
             int pos = (*somaticPosIter).first;
             initial_data_size++;
 
             // the ratio of the read count of H1 and H2
-            int germlineReadHpCount = H1readCount + H2readCount;
-            double germlineReadHpConsistencyRatio = 0.0;
-            if(H1readCount > 0 && H2readCount > 0){
-                germlineReadHpConsistencyRatio = (H1readCount > H2readCount) ? ((double)H1readCount / (double)(H1readCount + H2readCount)) : ((double)H2readCount / (double)(H1readCount + H2readCount));
-            }else if(H1readCount == 0 && H2readCount == 0){
-                germlineReadHpConsistencyRatio = 0.0;
-            }
-            else{
-                germlineReadHpConsistencyRatio = 1.0;
-            }
-
-            // the ratio of the germlineHP based on depth
-            double percentageOfGermlineHp = 0.0;
-            if(tumDepth > 0 && germlineReadHpCount > 0){
-                percentageOfGermlineHp = (double)germlineReadHpCount / (double)tumDepth;            
-            }
-
+            double germlineReadHpImbalanceRatio = (*somaticPosIter).second.base.germlineHaplotypeImbalanceRatio;
 
             //read hp count in the normal bam
-            int norDepth = chrPosNorBase[chr][pos].depth;
             int H1readCountInNorBam = chrPosNorBase[chr][pos].ReadHpCount[ReadHP::H1];
             int H2readCountInNorBam = chrPosNorBase[chr][pos].ReadHpCount[ReadHP::H2];
             int germlineReadHpCountInNorBam = H1readCountInNorBam + H2readCountInNorBam;
 
-            double germlineReadHpConsistencyRatioInNorBam = 0.0;
-            if(H1readCountInNorBam > 0 && H2readCountInNorBam > 0){
-                germlineReadHpConsistencyRatioInNorBam = (H1readCountInNorBam > H2readCountInNorBam) ? ((double)H1readCountInNorBam / (double)germlineReadHpCountInNorBam) : ((double)H2readCountInNorBam / (double)germlineReadHpCountInNorBam);
-            }else if(H1readCountInNorBam == 0 && H2readCountInNorBam == 0){
-                germlineReadHpConsistencyRatioInNorBam = 0.0;
-            }
-            else{
-                germlineReadHpConsistencyRatioInNorBam = 1.0;
-            }
+            double germlineReadHpImbalanceRatioInNorBam = chrPosNorBase[chr][pos].germlineHaplotypeImbalanceRatio;
 
-            double percentageOfGermlineHpInNorBam = 0.0;
-            if(norDepth > 0 && germlineReadHpCountInNorBam > 0){
-                percentageOfGermlineHpInNorBam = (double)germlineReadHpCountInNorBam / (double)norDepth;
-            }
+            double percentageOfGermlineHpInNorBam = chrPosNorBase[chr][pos].percentageOfGermlineHp;
 
             bool includeInStatistics = true;
 
             // statistic the filter out data
-            if(germlineReadHpConsistencyRatioInNorBam == GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MIN_THR){
+            if(germlineReadHpImbalanceRatioInNorBam == GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MIN_THR){
                 includeInStatistics = false;
                 filterCounts.consistencyRatioInNorBam++;
-            }else if(germlineReadHpConsistencyRatio == GERMLINE_HP_CONSISTENCY_RATIO_MIN_THR){
+            }else if(germlineReadHpImbalanceRatio == GERMLINE_HP_IMBALANCE_RATIO_MIN_THR){
                 includeInStatistics = false;
                 filterCounts.consistencyRatio++;
-            }else if(germlineReadHpConsistencyRatioInNorBam >= GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MAX_THR){
+            }else if(germlineReadHpImbalanceRatioInNorBam >= GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MAX_THR){
                 includeInStatistics = false;
                 filterCounts.consistencyRatioInNorBamMaxThr++;
             }else if(germlineReadHpCountInNorBam <= GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR){
@@ -164,7 +135,7 @@ void TumorPurityPredictor::buildPurityFeatureValueVec(std::vector<PurityData> &p
                     PurityData{
                         .chr = chr,
                         .pos = (*somaticPosIter).first,
-                        .germlineReadHpConsistencyRatio = germlineReadHpConsistencyRatio,
+                        .germlineReadHpConsistencyRatio = germlineReadHpImbalanceRatio,
                         .germlineReadHpCountInNorBam = germlineReadHpCountInNorBam
                     }
                 );
@@ -374,9 +345,9 @@ void TumorPurityPredictor::writePurityLog(const HaplotagParameters &params, doub
 
         purityLog << "#Initial data size: " << initial_data_size << std::endl;
         purityLog << "#==========filter parameters==========" << std::endl;
-        purityLog << "#GERMLINE_HP_CONSISTENCY_RATIO_MIN_THR: " << GERMLINE_HP_CONSISTENCY_RATIO_MIN_THR << std::endl;
-        purityLog << "#GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MIN_THR: " << GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MIN_THR << std::endl;
-        purityLog << "#GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MAX_THR: " << GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MAX_THR << std::endl;
+        purityLog << "#GERMLINE_HP_CONSISTENCY_RATIO_MIN_THR: " << GERMLINE_HP_IMBALANCE_RATIO_MIN_THR << std::endl;
+        purityLog << "#GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MIN_THR: " << GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MIN_THR << std::endl;
+        purityLog << "#GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MAX_THR: " << GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MAX_THR << std::endl;
         purityLog << "#GERMLINE_HP_PERCENTAGE_IN_NOR_BAM_MAX_THR: " << GERMLINE_HP_PERCENTAGE_IN_NOR_BAM_MAX_THR << std::endl;
         purityLog << "#GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR: " << GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR << std::endl;
         purityLog << "#GERMLINE_HP_READ_COUNT_IN_NOR_BAM_DYNAMIC_THR: " << germlineReadHpCountThreshold << std::endl;

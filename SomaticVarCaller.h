@@ -129,24 +129,6 @@ class ExtractNorDataBamParser : public HaplotagBamParser{
     public:
         ExtractNorDataBamParser(std::map<std::string, std::map<int, PosBase>>& chrPosNorBase);
         ~ExtractNorDataBamParser();
-
-        std::string getMaxFreqBase(std::string chr, int pos);
-        float getMaxBaseRatio(std::string chr, int pos);
-        float getSecondMaxBaseRatio(std::string chr, int pos);
-        float getVAF(std::string chr, int pos);
-        float getNoDelAF(std::string chr, int pos);
-        float getFilterdMpqVAF(std::string chr, int pos);
-        float getLowMpqReadRatio(std::string chr, int pos);
-        int getReadHpCountInNorBam(std::string chr, int pos, int Haplotype);
-
-        int getBaseAcount(std::string chr, int pos);
-        int getBaseCcount(std::string chr, int pos);
-        int getBaseTcount(std::string chr, int pos);
-        int getBaseGcount(std::string chr, int pos);
-        int getDepth(std::string chr, int pos);
-        int getMpqDepth(std::string chr, int pos);
-
-        int getVarDeletionCount(std::string chr, int pos);
         void displayPosInfo(std::string chr, int pos);
 };
 
@@ -180,9 +162,10 @@ class ExtractTumDataChrProcessor : public ChromosomeProcessor, public SomaticJud
 
 
         void ClassifyReadsByCase(std::vector<int> &readPosHP3, std::map<int, int> &norCountPS, std::map<int, int> &hpCount, const HaplotagParameters &params, std::map<int, HP3_Info> &somaticPosInfo);
-        //not used
+
         void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, std::map<int, HP3_Info> *SomaticPos){};
 
+        void postProcess(const std::string &chr, std::map<int, MultiGenomeVar> &currentVariants) override;
     public:
         ExtractTumDataChrProcessor(
             std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo,
@@ -198,10 +181,10 @@ class ExtractTumDataCigarParser : public CigarParser, public SomaticJudgeBase{
     private:
         std::map<int, HP3_Info>& somaticPosInfo;
 
-        //record tumor-unique variants with low VAF in the normal.bam on this read
+        //record tumor-unique variants on current read
         std::vector<int>& tumorAllelePosVec;
 
-        //record tumor SNPs on this read
+        //record tumor SNPs on current read
         std::vector<int>& tumorSnpPosVec;
 
         //record PS count( PS value, count)

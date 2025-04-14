@@ -173,9 +173,9 @@ class TumorPurityPredictor{
             size_t outliers = 0;
         };
 
-        static constexpr float GERMLINE_HP_CONSISTENCY_RATIO_MIN_THR = 0.0;
-        static constexpr float GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MIN_THR = 0.0;
-        static constexpr float GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MAX_THR = 0.7;
+        static constexpr float GERMLINE_HP_IMBALANCE_RATIO_MIN_THR = 0.0;
+        static constexpr float GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MIN_THR = 0.0;
+        static constexpr float GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MAX_THR = 0.7;
         static constexpr float GERMLINE_HP_PERCENTAGE_IN_NOR_BAM_MAX_THR = 0.7;
         static const int GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR = 5;
 
