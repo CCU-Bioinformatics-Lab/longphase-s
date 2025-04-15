@@ -80,7 +80,10 @@ void BamFileRAII::destroy(){
     isReleased = true;
 }
 
-HaplotagBamParser::HaplotagBamParser(){
+HaplotagBamParser::HaplotagBamParser(bool writeOutputBam, bool mappingQualityFilter)
+: writeOutputBam(writeOutputBam), mappingQualityFilter(mappingQualityFilter)
+{
+
 }
 
 HaplotagBamParser::~HaplotagBamParser(){
@@ -123,6 +126,30 @@ void HaplotagBamParser::parsingBam(
         exit(1);
     }
 
+    if(writeOutputBam){
+        // Process the BAM file with output using a single thread
+        processBamWithOutput(BamFile, params, chrVec, chrLength, fastaParser, threadPool, mergedChrVarinat, vcfSet, genmoeType);
+    }else{
+        // Process the BAM file with output using multiple threads
+        processBamParallel(BamFile, params, chrVec, chrLength, fastaParser, threadPool, mergedChrVarinat, vcfSet, genmoeType);
+    }
+
+    hts_tpool_destroy(threadPool.pool);
+    std::cerr<< difftime(time(NULL), begin) << "s\n";
+    return;
+}
+
+void HaplotagBamParser::processBamParallel(
+    const std::string &BamFile, 
+    const HaplotagParameters &params, 
+    const std::vector<std::string> &chrVec, 
+    const std::map<std::string, int> &chrLength, 
+    const FastaParser &fastaParser,
+    htsThreadPool &threadPool,
+    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
+    VCF_Info *vcfSet, 
+    const Genome& genmoeType
+){
     // loop all chromosome
     #pragma omp parallel for schedule(dynamic) num_threads(params.numThreads) 
     for(auto chr : chrVec ){
@@ -132,10 +159,67 @@ void HaplotagBamParser::parsingBam(
         auto chrProcessor = createProcessor(chr);
         chrProcessor->processSingleChromosome(chr, chrLength, params, fastaParser, mergedChrVarinat, bamRAII, genmoeType, vcfSet);
     }
+}
 
-    hts_tpool_destroy(threadPool.pool);
-    std::cerr<< difftime(time(NULL), begin) << "s\n";
-    return;
+void HaplotagBamParser::processBamWithOutput(
+    const std::string &BamFile, 
+    const HaplotagParameters &params, 
+    const std::vector<std::string> &chrVec, 
+    const std::map<std::string, int> &chrLength, 
+    const FastaParser &fastaParser,
+    htsThreadPool &threadPool,
+    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
+    VCF_Info *vcfSet, 
+    const Genome& genmoeType
+){
+    bool writeOutputBam = true;
+    // bam file resource allocation
+    BamFileRAII bamRAII(BamFile, params.fastaFile, threadPool, params, writeOutputBam);
+    // loop all chromosome
+    for(auto chr : chrVec ){
+        //create the chromosome processor
+        std::time_t begin = time(NULL);
+        std::cerr<<"chr: " << chr << " ... " ;
+        auto chrProcessor = createProcessor(chr);
+        chrProcessor->processSingleChromosome(chr, chrLength, params, fastaParser, mergedChrVarinat, bamRAII, genmoeType, vcfSet);
+        std::cerr<< difftime(time(NULL), begin) << "s\n";
+    }
+}
+
+void HaplotagBamParser::getLastVarPos(
+    std::vector<int>& last_pos, 
+    const std::vector<std::string>& chrVec, 
+    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
+    const Genome& genmoeType
+){
+    for( auto chr : chrVec ){
+        bool existLastPos = false;
+
+        for (auto lastVariantIter = mergedChrVarinat[chr].rbegin(); lastVariantIter != mergedChrVarinat[chr].rend(); ++lastVariantIter) {
+            if (genmoeType == NORMAL) {
+                if ((*lastVariantIter).second.isExists(NORMAL) && (*lastVariantIter).second.Variant[NORMAL].isExistPhasedSet()) {
+                    last_pos.push_back((*lastVariantIter).first);
+                        existLastPos = true;
+                        break;
+                    }
+            }
+            else if (genmoeType == TUMOR) {
+                if ((*lastVariantIter).second.isExists(TUMOR) || 
+                    ((*lastVariantIter).second.isExists(NORMAL) && (*lastVariantIter).second.Variant[NORMAL].isExistPhasedSet())) {
+                    last_pos.push_back((*lastVariantIter).first);
+                    existLastPos = true;
+                    break;
+                }
+            }else{
+                std::cerr << "ERROR (germlineGetRefLastVarPos) => unsupported genome type: " << genmoeType << std::endl;
+                exit(EXIT_SUCCESS);
+            }
+        }
+        
+        if(!existLastPos){
+            last_pos.push_back(0);
+        }
+    }
 }
 
 ChromosomeProcessor::ChromosomeProcessor(bool mappingQualityFilter){
@@ -183,35 +267,34 @@ void ChromosomeProcessor::processSingleChromosome(
         if ( bamRAII.aln->core.qual < params.qualityThreshold && mappingQualityFilter){
            // mapping quality is lower than threshold
            processLowMappingQuality();
-           continue;
         }
-
-        if( (flag & 0x4) != 0 ){
+        else if( (flag & 0x4) != 0 ){
             // read unmapped
             processUnmappedRead();
-            continue;
         }
-        if( (flag & 0x100) != 0 ){
+        else if( (flag & 0x100) != 0 ){
             // secondary alignment. repeat.
             // A secondary alignment occurs when a given read could align reasonably well to more than one place.
             processSecondaryAlignment();
-            continue;
         }
-        if( (flag & 0x800) != 0 && params.tagSupplementary == false ){
+        else if( (flag & 0x800) != 0 && params.tagSupplementary == false ){
             // supplementary alignment
             // A chimeric alignment is represented as a set of linear alignments that do not have large overlaps.
             processSupplementaryAlignment();
-            continue;
         }
         //currentVariants rbegin == rend
-        if(last == currentVariants.rend()){ 
+        else if(last == currentVariants.rend()){ 
             //skip this read
             processEmptyVariants();
         }
         else if(int(bamRAII.aln->core.pos) <= (*last).first){
             processRead(*bamRAII.aln, *bamRAII.bamHdr, chr, params, genmoeType, currentVariants, firstVariantIter, vcfSet, ref_string);
         }
-
+        else{
+            processOtherCase();
+        }
+        // common process for all reads
+        commonProcess(bamRAII);
     }
 
     postProcess(chr, currentVariants);
@@ -350,7 +433,6 @@ void CigarParser::parsingCigar(
                         uint8_t *q = bam_get_seq(&aln);
                         char base_chr = seq_nt16_str[bam_seqi(q,query_pos + offset)];
                         std::string base(1, base_chr);
-                        // printf("into match cigar\n");
                         processMatchOperation(length, cigar, i, aln_core_n_cigar, base);
                     }
                     currentVariantIter++;

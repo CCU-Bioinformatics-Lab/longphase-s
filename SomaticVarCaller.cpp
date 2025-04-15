@@ -39,7 +39,7 @@ ExtractNorDataChrProcessor::~ExtractNorDataChrProcessor(){
 }
 
 void ExtractNorDataChrProcessor::processRead(
-    const bam1_t &aln,
+    bam1_t &aln,
     const bam_hdr_t &bamHdr,
     const std::string &chrName,
     const HaplotagParameters &params,
@@ -235,7 +235,7 @@ ExtractTumDataChrProcessor::~ExtractTumDataChrProcessor(){
 }
 
 void ExtractTumDataChrProcessor::processRead(
-    const bam1_t &aln, 
+    bam1_t &aln, 
     const bam_hdr_t &bamHdr,
     const std::string &chrName, 
     const HaplotagParameters &params, 
@@ -1596,10 +1596,10 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
             float pure_H3_readRatio = (*somaticVarIter).second.pure_H3_readRatio;
 
             int norDepth = (*chrPosNorBase)[chr][(*somaticVarIter).first].depth;
-            int norMpqDepth = (*chrPosNorBase)[chr][(*somaticVarIter).first].filteredMpqDepth;
+            // int norMpqDepth = (*chrPosNorBase)[chr][(*somaticVarIter).first].filteredMpqDepth;
 
             int tumDepth = (*somaticVarIter).second.base.depth;
-            int tumMpqDepth = (*somaticVarIter).second.base.filteredMpqDepth;
+            // int tumMpqDepth = (*somaticVarIter).second.base.filteredMpqDepth;
            
             //calculate the Subtract in depth between normal and tumor
             int subtractDepth = tumDepth - norDepth;

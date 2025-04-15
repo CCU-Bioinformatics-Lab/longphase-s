@@ -75,7 +75,7 @@ class ExtractNorDataChrProcessor : public ChromosomeProcessor{
     protected:
         //override processRead
         void processRead(
-            const bam1_t &aln, 
+            bam1_t &aln, 
             const bam_hdr_t &bamHdr,
             const std::string &chrName, 
             const HaplotagParameters &params, 
@@ -149,7 +149,7 @@ class ExtractTumDataChrProcessor : public ChromosomeProcessor, public SomaticJud
 
         //override processRead
         void processRead(
-            const bam1_t &aln, 
+            bam1_t &aln, 
             const bam_hdr_t &bamHdr,
             const std::string &chrName, 
             const HaplotagParameters &params, 
