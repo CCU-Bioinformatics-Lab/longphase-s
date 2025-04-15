@@ -191,7 +191,6 @@ void ExtractNorDataCigarParser::processDeletionOperation(int& length, uint32_t* 
         if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
             // longphase v1.73 only execute once
             alreadyJudgeDel = true;
-            auto norVar = (*currentVariantIter).second.Variant[NORMAL];
             germlineJudgeDeletionHap(*chrName, *ref_string, ref_pos, length, query_pos, currentVariantIter, aln, *hpCount, *variantsHP, *norCountPS);
         }
     }
@@ -505,7 +504,7 @@ ExtractTumDataCigarParser::~ExtractTumDataCigarParser(){
 void ExtractTumDataCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base){
     //waring : using ref length to split SNP and indel that will be effect case ratio result 
     if ( aln->core.qual >= params->somaticCallingMpqThreshold ){
-        SomaticJudgeSnpHP(currentVariantIter, *chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, &tumorAllelePosVec, &somaticPosInfo);
+        SomaticJudgeSnpHP(currentVariantIter, *chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, &tumorAllelePosVec);
         if((*currentVariantIter).second.isExists(TUMOR)){
             tumorSnpPosVec.push_back((*currentVariantIter).first);
         }
@@ -541,16 +540,12 @@ void ExtractTumDataCigarParser::processDeletionOperation(int& length, uint32_t* 
     }
 }
 
-void ExtractTumDataCigarParser::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, std::map<int, HP3_Info> *SomaticPos){
+void ExtractTumDataCigarParser::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){
  //the tumor SNP GT is phased heterozygous
     //all bases of the same type at the current position in normal.bam
 
     if(tumorAllelePosVec == nullptr){
         std::cerr << "ERROR (SomaticDetectJudgeHP) => tumorAllelePosVec pointer cannot be nullptr"<< std::endl;
-        exit(1);
-    }
-    if(SomaticPos == nullptr){
-        std::cerr << "ERROR (SomaticDetectJudgeHP) => SomaticPos pointer cannot be nullptr"<< std::endl;
         exit(1);
     }
 
@@ -1912,9 +1907,15 @@ void SomaticVarCaller::WriteDenseTumorSnpIntervalLog(const HaplotagParameters &p
     }
     (*closeSomaticSnpIntervalLog).close();
     delete closeSomaticSnpIntervalLog;
+    
     closeSomaticSnpIntervalLog = nullptr;
 }
 
-std::map<std::string, std::map<int, HP3_Info>> SomaticVarCaller::getSomaticChrPosInfo(){
-    return (*chrPosSomaticInfo);
+void SomaticVarCaller::getSomaticFlag(const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+    for(auto chr: chrVec){
+        for(auto somaticVar: (*chrPosSomaticInfo)[chr]){
+            mergedChrVarinat[chr][somaticVar.first].isSomaticVariant = true;
+            mergedChrVarinat[chr][somaticVar.first].somaticReadDeriveByHP = somaticVar.second.somaticReadDeriveByHP;
+        }
+    }
 }

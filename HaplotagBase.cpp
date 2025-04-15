@@ -1,14 +1,17 @@
 #include "HaplotagBase.h"
 
-BamFileRAII::BamFileRAII(const std::string& BamFile, const std::string& fastaFile, htsThreadPool& threadPool, const HaplotagParameters& params):
-in(nullptr), bamHdr(nullptr), idx(nullptr), aln(nullptr)
+BamFileRAII::BamFileRAII(
+    const std::string& BamFile
+  , const std::string& fastaFile
+  , htsThreadPool& threadPool
+  , const HaplotagParameters& params
+  , const bool writeOutputBam
+):
+isReleased(false), in(nullptr), out(nullptr), bamHdr(nullptr), idx(nullptr), aln(nullptr)
 {
     // open bam file
     in = hts_open(BamFile.c_str(), "r");
-    if (in == nullptr) {
-        std::cerr << "ERROR: Cannot open bam file " + BamFile << std::endl;
-        exit(1);
-    }
+    checkNullPointer(in, "Cannot open bam file " + BamFile);
 
     // load reference file
     if (hts_set_fai_filename(in, fastaFile.c_str()) != 0) {
@@ -18,25 +21,40 @@ in(nullptr), bamHdr(nullptr), idx(nullptr), aln(nullptr)
 
     // input reader
     bamHdr = sam_hdr_read(in);
-    if (bamHdr == nullptr) {
-        std::cerr << "ERROR: Cannot read header from bam file " + BamFile << std::endl;
-        exit(1);
-    }
+    checkNullPointer(bamHdr, "Cannot read header from bam file " + BamFile);
 
     // header add pg tag
     sam_hdr_add_pg(bamHdr, "longphase", "VN", params.version.c_str(), "CL", params.command.c_str(), NULL);
 
     // check bam file index
     idx = sam_index_load(in, BamFile.c_str());
-    if (idx == nullptr) {
-        std::cerr << "ERROR: Cannot open index for bam file " + BamFile << std::endl;
-        exit(1);
-    }
+    checkNullPointer(idx, "Cannot open index for bam file " + BamFile);
 
     // set thread
     if (hts_set_opt(in, HTS_OPT_THREAD_POOL, &threadPool) != 0) {
-        std::cerr << "ERROR: Cannot set thread pool for bam file " + BamFile << std::endl;
+        std::cerr << "ERROR: Cannot set thread pool for input bam file " + BamFile << std::endl;
         exit(1);
+    }
+
+    if (writeOutputBam) {
+        // output file mangement
+        std::string writeBamFile = params.resultPrefix + "." + params.outputFormat;
+        std::cerr << "set output bam file : " + writeBamFile << std::endl;
+        // open output bam file
+        out = hts_open(writeBamFile.c_str(), (params.outputFormat == "bam" ? "wb" : "wc" ));
+        // load reference file
+        hts_set_fai_filename(out, params.fastaFile.c_str());
+        // output writer
+        int result = sam_hdr_write(out, bamHdr);
+        if (result < 0) {
+            std::cerr << "ERROR: Cannot write header to output bam file " + writeBamFile << std::endl;
+            exit(1);
+        }
+        // set thread pool for output bam file
+        if (hts_set_opt(out, HTS_OPT_THREAD_POOL, &threadPool) != 0) {
+            std::cerr << "ERROR: Cannot set thread pool for output bam file " + BamFile << std::endl;
+            exit(1);
+        }
     }
 
     // initialize an alignment
@@ -48,13 +66,19 @@ in(nullptr), bamHdr(nullptr), idx(nullptr), aln(nullptr)
 }
 
 BamFileRAII::~BamFileRAII(){
+    if (!isReleased) {
+        destroy();
+    }
+}
+
+void BamFileRAII::destroy(){
     if (aln) bam_destroy1(aln);
     if (idx) hts_idx_destroy(idx);
     if (bamHdr) bam_hdr_destroy(bamHdr);
     if (in) sam_close(in);
+    if (out) sam_close(out);
+    isReleased = true;
 }
-
-
 
 HaplotagBamParser::HaplotagBamParser(){
 }
@@ -102,9 +126,11 @@ void HaplotagBamParser::parsingBam(
     // loop all chromosome
     #pragma omp parallel for schedule(dynamic) num_threads(params.numThreads) 
     for(auto chr : chrVec ){
+        // bam file resource allocation
+        BamFileRAII bamRAII(BamFile, params.fastaFile, threadPool, params);
         //create the chromosome processor
         auto chrProcessor = createProcessor(chr);
-        chrProcessor->processSingleChromosome(chr, chrLength, params, BamFile, threadPool, mergedChrVarinat, genmoeType, fastaParser, vcfSet);
+        chrProcessor->processSingleChromosome(chr, chrLength, params, fastaParser, mergedChrVarinat, bamRAII, genmoeType, vcfSet);
     }
 
     hts_tpool_destroy(threadPool.pool);
@@ -112,8 +138,8 @@ void HaplotagBamParser::parsingBam(
     return;
 }
 
-ChromosomeProcessor::ChromosomeProcessor(){
-
+ChromosomeProcessor::ChromosomeProcessor(bool mappingQualityFilter){
+    this->mappingQualityFilter = mappingQualityFilter;
 }
 
 ChromosomeProcessor::~ChromosomeProcessor(){
@@ -124,63 +150,66 @@ void ChromosomeProcessor::processSingleChromosome(
     const std::string& chr,
     const std::map<std::string, int>& chrLength,
     const HaplotagParameters& params, 
-    const std::string& BamFile,
-    htsThreadPool& threadPool,
-    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-    const Genome& genmoeType,
     const FastaParser& fastaParser,
+    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
+    BamFileRAII& bamRAII,
+    const Genome& genmoeType,
     VCF_Info* vcfSet
 ){
-    // bam file resource allocation
-    BamFileRAII bam(BamFile, params.fastaFile, threadPool, params);
-
-    // variant position (0-base), allele haplotype set
+    // records all variants within this chromosome.
     std::map<int, MultiGenomeVar> currentVariants;
 
     #pragma omp critical
     {
         currentVariants = mergedChrVarinat[chr];
     }
+    // since each read is sorted based on the start coordinates, to save time, 
+    // firstVariantIter keeps track of the first variant that each read needs to check.
+    std::map<int, MultiGenomeVar>::iterator firstVariantIter = currentVariants.begin();
+    // get the coordinates of the last variant
+    // the tagging process will not be perform if the read's start coordinate are over than last variant.
+    std::map<int, MultiGenomeVar>::reverse_iterator last = currentVariants.rbegin();
+
     // fetch chromosome string
     std::string ref_string = fastaParser.chrString.at(chr);
 
-    //inintial iterator
-    std::map<int, MultiGenomeVar>::iterator firstVariantIter = currentVariants.begin();
-
-    std::map<int, MultiGenomeVar>::reverse_iterator last = currentVariants.rbegin();
-
     std::string region = !params.region.empty() ? params.region : std::string(chr + ":1-" + std::to_string(chrLength.at(chr)));
-    hts_itr_t* iter = sam_itr_querys(bam.idx, bam.bamHdr, region.c_str());
+    hts_itr_t* iter = sam_itr_querys(bamRAII.idx, bamRAII.bamHdr, region.c_str());
 
-    while (sam_itr_multi_next(bam.in, iter, bam.aln) >= 0) {
+    while (sam_itr_multi_next(bamRAII.in, iter, bamRAII.aln) >= 0) {
         
-        int flag = bam.aln->core.flag;
+        int flag = bamRAII.aln->core.flag;
 
-        // if ( bam.aln->core.qual < params.qualityThreshold ){
-        //    // mapping quality is lower than threshold
-        //    continue;
-        // }
+        if ( bamRAII.aln->core.qual < params.qualityThreshold && mappingQualityFilter){
+           // mapping quality is lower than threshold
+           processLowMappingQuality();
+           continue;
+        }
 
         if( (flag & 0x4) != 0 ){
             // read unmapped
+            processUnmappedRead();
             continue;
         }
         if( (flag & 0x100) != 0 ){
             // secondary alignment. repeat.
             // A secondary alignment occurs when a given read could align reasonably well to more than one place.
+            processSecondaryAlignment();
             continue;
         }
         if( (flag & 0x800) != 0 && params.tagSupplementary == false ){
             // supplementary alignment
             // A chimeric alignment is represented as a set of linear alignments that do not have large overlaps.
+            processSupplementaryAlignment();
             continue;
         }
         //currentVariants rbegin == rend
         if(last == currentVariants.rend()){ 
-            //skip
+            //skip this read
+            processEmptyVariants();
         }
-        else if(int(bam.aln->core.pos) <= (*last).first){
-            processRead(*bam.aln, *bam.bamHdr, chr, params, genmoeType, currentVariants, firstVariantIter, vcfSet, ref_string);
+        else if(int(bamRAII.aln->core.pos) <= (*last).first){
+            processRead(*bamRAII.aln, *bamRAII.bamHdr, chr, params, genmoeType, currentVariants, firstVariantIter, vcfSet, ref_string);
         }
 
     }
@@ -727,7 +756,7 @@ void GermlineJudgeBase::writeGermlineTagLog(
     (tagResult) << "\n";
 }
 
-void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, std::map<int, HP3_Info> *SomaticPos){
+void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){
     int curPos = (*currentVariantIter).first;
     auto& curVar = (*currentVariantIter).second;
 
@@ -864,24 +893,24 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator
                              << curVar.Variant[TUMOR].allele.Alt << "\n";
                     exit(EXIT_SUCCESS);
                 }else{
-                    OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, &tumCountPS, variantsHP, tumorAllelePosVec, SomaticPos);
+                    OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, &tumCountPS, variantsHP, tumorAllelePosVec);
                 }
             }
         //the tumor SNP GT is unphased heterozygous
         }else if(curVar.Variant[TUMOR].is_unphased_hetero == true){
             if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
-                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec, SomaticPos);
+                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec);
             }           
         //the tumor SNP GT is homozygous
         }else if(curVar.Variant[TUMOR].is_homozygous == true){
             if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
-                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec, SomaticPos);
+                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec);
             }
         }
     }
 }
 
-void SomaticJudgeBase::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, std::map<int, HP3_Info> *SomaticPos){
+void SomaticJudgeBase::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){
 
 }
 

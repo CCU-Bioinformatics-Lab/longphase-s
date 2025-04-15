@@ -134,7 +134,8 @@ struct VarData{
 struct MultiGenomeVar{
     // record the variants from the normal and tumor VCF files (normal:0, tumor:1, HighCon:2)
     std::map<Genome, VarData> Variant;
-
+    bool isSomaticVariant;
+    int somaticReadDeriveByHP;
     bool isExists(Genome type){
         return Variant.find(type) != Variant.end();
     }
@@ -142,6 +143,8 @@ struct MultiGenomeVar{
     VarData& operator[](Genome type){
         return Variant[type];
     }
+    
+    MultiGenomeVar(): isSomaticVariant(false), somaticReadDeriveByHP(0){}
 };
 
 //record each type of base in specific position
@@ -280,14 +283,33 @@ struct ReadHpResult{
 };
 
 class BamFileRAII {
+    private:
+        bool isReleased;
+
+        template<typename T>
+        void checkNullPointer(const T* ptr, const std::string& errorMessage) const {
+            if (ptr == nullptr) {
+                std::cerr << "ERROR: " << errorMessage << std::endl;
+                exit(1);
+            }
+        }
     public:
         samFile* in;
+        samFile* out;
         bam_hdr_t* bamHdr;
         hts_idx_t* idx;
         bam1_t* aln;
 
-        BamFileRAII(const std::string& BamFile, const std::string& fastaFile, htsThreadPool &threadPool, const HaplotagParameters& params);
+        BamFileRAII(const std::string& BamFile
+                  , const std::string& fastaFile
+                  , htsThreadPool &threadPool
+                  , const HaplotagParameters& params
+                  , const bool writeOutputBam = false);
         ~BamFileRAII();
+
+        void destroy();
+
+        
 };
 
 class ReadHpDistriLog{
@@ -353,9 +375,9 @@ class SomaticJudgeBase{
     protected:
         void SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount
         , std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP
-        , std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos);
+        , std::vector<int> *tumorAllelePosVec);
 
-        virtual void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3, std::map<int, HP3_Info> *SomaticPos)=0;
+        virtual void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec)=0;
         int determineReadHP(std::map<int, int> &hpCount, int &pqValue,std::map<int, int> &norCountPS, double &norHPsimilarity, double &tumHPsimilarity,  double percentageThreshold, int *totalHighSimilarity, int *totalCrossTwoBlock, int *totalWithOutVaraint);
 
         int convertStrNucToInt(std::string &base);
@@ -390,8 +412,15 @@ class HaplotagBamParser : public GermlineJudgeBase{
 
 class ChromosomeProcessor : public GermlineJudgeBase{
     private:
-
+        bool mappingQualityFilter;
     protected:
+
+        virtual void processLowMappingQuality(){};
+        virtual void processUnmappedRead(){};
+        virtual void processSecondaryAlignment(){};
+        virtual void processSupplementaryAlignment(){};
+        virtual void processEmptyVariants(){};
+        virtual void processReadWithVariants(){};
 
         virtual void processRead(
             const bam1_t &aln, 
@@ -420,19 +449,18 @@ class ChromosomeProcessor : public GermlineJudgeBase{
         double calculatePercentageOfGermlineHp(int& totalReadCount, int& depth);
 
     public:
-        ChromosomeProcessor();
+        ChromosomeProcessor(bool mappingQualityFilter=false);
         virtual ~ChromosomeProcessor();
         
         void processSingleChromosome(
             const std::string& chr,
             const std::map<std::string, int>& chrLength,
             const HaplotagParameters& params, 
-            const std::string& BamFile,
-            htsThreadPool& threadPool,
-            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-            const Genome& genmoeType,
             const FastaParser& fastaParser,
-            VCF_Info* vcfInfo
+            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
+            BamFileRAII& bam,
+            const Genome& genmoeType,
+            VCF_Info* vcfSet
         );
 
 };
