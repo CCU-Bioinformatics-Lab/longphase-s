@@ -82,7 +82,7 @@ class ExtractNorDataChrProcessor : public ChromosomeProcessor{
             const Genome& genmoeType, 
             std::map<int, MultiGenomeVar> &currentVariants,
             std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-            VCF_Info* vcfSet, 
+            std::map<Genome, VCF_Info> &vcfSet, 
             const std::string &ref_string
         ) override;
 
@@ -156,7 +156,7 @@ class ExtractTumDataChrProcessor : public ChromosomeProcessor, public SomaticJud
             const Genome& genmoeType, 
             std::map<int, MultiGenomeVar> &currentVariants,
             std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-            VCF_Info* vcfSet, 
+            std::map<Genome, VCF_Info> &vcfSet, 
             const std::string &ref_string
         ) override;
 
@@ -283,8 +283,11 @@ class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
         double entropyComponent(int count, int total);
         double calculateShannonEntropy(int nA, int nC, int nT, int nG);
         double calculateMean(const std::map<int, double>& data);
-        void FindOtherSomaticSnpHP(const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants);
 
+        void FindOtherSomaticSnpHP(const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants);
+        int convertStrNucToInt(std::string &base);
+        std::string convertIntNucToStr(int base);
+        
         void releaseMemory();
 
     protected:
@@ -298,7 +301,7 @@ class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
             const std::vector<std::string> &chrVec,
             const std::map<std::string, int> &chrLength,
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
-            VCF_Info* vcfSet,
+            std::map<Genome, VCF_Info> &vcfSet,
             const Genome& genmoeType
         );
         void getSomaticFlag(const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);

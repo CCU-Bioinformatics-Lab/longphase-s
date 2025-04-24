@@ -4,10 +4,11 @@ HaplotagProcess::HaplotagProcess(HaplotagParameters &params):
 params(params),chrVec(nullptr),chrLength(nullptr),tagResult(nullptr),readStats(),processBegin(time(NULL))
 {
     //initialize variable
-    vcfSet[NORMAL].gene_type = NORMAL;
-    vcfSet[TUMOR].gene_type = TUMOR;
+    vcfSet[Genome::NORMAL] = VCF_Info{.gene_type = Genome::NORMAL};
+    vcfSet[Genome::TUMOR] = VCF_Info{.gene_type = Genome::TUMOR};
+    vcfSet[Genome::HIGH_CON_SOMATIC] = VCF_Info{.gene_type = Genome::HIGH_CON_SOMATIC};
 
-    mergedChrVarinat = new std::map<std::string, std::map<int, MultiGenomeVar>>();;
+    mergedChrVarinat = new std::map<std::string, std::map<int, MultiGenomeVar>>();
 
     hpBeforeInheritance = new ReadHpDistriLog();
     hpAfterInheritance = new ReadHpDistriLog();
@@ -119,7 +120,7 @@ void HaplotagProcess::taggingProcess()
             std::time_t begin = time(NULL);
             std::cerr<< "loading high confidence SNP ... ";
             highConSomaticData.setTestingFunc(true);
-            highConSomaticData.loadHighConSomatic(params.benchmarkVcf, vcfSet[HIGH_CON_SOMATIC], *mergedChrVarinat);
+            highConSomaticData.loadHighConSomatic(params.benchmarkVcf, vcfSet[Genome::HIGH_CON_SOMATIC], *mergedChrVarinat);
             std::cerr<< difftime(time(NULL), begin) << "s\n";
             highConSomaticData.displaySomaticVarCount(vcfSet[HIGH_CON_SOMATIC].chrVec, *mergedChrVarinat);
         }
@@ -128,7 +129,7 @@ void HaplotagProcess::taggingProcess()
             std::time_t begin = time(NULL);
             std::cerr<< "parsing tumor SNP VCF ... ";
             vcfParser.setParseSnpFile(true);
-            vcfParser.variantParser(params.tumorSnpFile, vcfSet[TUMOR], *mergedChrVarinat);
+            vcfParser.variantParser(params.tumorSnpFile, vcfSet[Genome::TUMOR], *mergedChrVarinat);
             vcfParser.reset();
             std::cerr<< difftime(time(NULL), begin) << "s\n";
         }
@@ -144,7 +145,7 @@ void HaplotagProcess::taggingProcess()
     }
 
     vcfParser.setParseSnpFile(true);
-    vcfParser.variantParser(params.snpFile, vcfSet[NORMAL], *mergedChrVarinat);
+    vcfParser.variantParser(params.snpFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
     vcfParser.reset();
     std::cerr<< difftime(time(NULL), begin) << "s\n";
     // load SV vcf file
@@ -395,7 +396,7 @@ void GermlineHaplotagChrProcessor::processRead(
     const Genome& genmoeType, 
     std::map<int, MultiGenomeVar> &currentVariants,
     std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-    VCF_Info* vcfSet, 
+    std::map<Genome, VCF_Info> &vcfSet, 
     const std::string &ref_string
 ){
     if( (aln.core.flag & 0x800) != 0 ){
@@ -445,7 +446,7 @@ int GermlineHaplotagChrProcessor::judgeHaplotype(
     const HaplotagParameters &params,
     std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
     std::map<int, MultiGenomeVar> &currentChrVariants,
-    VCF_Info* vcfSet
+    std::map<Genome, VCF_Info> &vcfSet
 ){
 
     std::map<int, int> hpCount;
@@ -574,7 +575,7 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
     const HaplotagParameters &params,
     std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
     std::map<int, MultiGenomeVar> &currentChrVariants,
-    VCF_Info* vcfSet
+    std::map<Genome, VCF_Info> &vcfSet
 ){
     std::map<int, int> hpCount;
     hpCount[1] = 0;

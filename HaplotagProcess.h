@@ -63,7 +63,7 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
             const Genome& genmoeType, 
             std::map<int, MultiGenomeVar> &currentVariants,
             std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-            VCF_Info* vcfSet, 
+            std::map<Genome, VCF_Info> &vcfSet, 
             const std::string &ref_string
         ) override;
 
@@ -80,7 +80,7 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
             const HaplotagParameters &params,
             std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
             std::map<int, MultiGenomeVar> &currentChrVariants,
-            VCF_Info* vcfSet
+            std::map<Genome, VCF_Info> &vcfSet
         );
 
         void initFlag(bam1_t *aln, std::string flag);
@@ -165,7 +165,7 @@ class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor, public S
             const HaplotagParameters &params,
             std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
             std::map<int, MultiGenomeVar> &currentChrVariants,
-            VCF_Info* vcfSet
+            std::map<Genome, VCF_Info> &vcfSet
         ) override;
 
         virtual void addAuxiliaryTags(bam1_t *aln, int& haplotype, int& pqValue, int& psValue) override;
@@ -242,8 +242,8 @@ class HaplotagProcess: public SomaticJudgeBase
         std::map<int, MultiGenomeVar> currentChrVariants;
         std::map<int, MultiGenomeVar>::iterator firstVariantIter;
 
-        // record the VCF files of the normal and tumor datasets (normal:0, tumor:1, seqcHighCon:2)
-        VCF_Info vcfSet[3];
+        // record the VCF files
+        std::map<Genome, VCF_Info> vcfSet;
 
         //--------------------verification parameter---------------------
         bool tagTumorMode;

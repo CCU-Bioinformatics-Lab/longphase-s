@@ -339,7 +339,7 @@ class ReadHpDistriLog{
         void loadChrKey(const std::string &chr);
         // Returns a pointer to ensure thread-safe access to chromosome results
         chrReadHpResult* getChrHpResultsPtr (const std::string &chr);
-        
+
         // only use in single thread scenario
         void recordChrReadHp(const std::string &chr, int &pos, int &hpResult, int &BaseHP);
         void recordChrDeriveHp(const std::string &chr, int &pos, int &deriveHP, float deriveHPsimilarity);
@@ -377,7 +377,7 @@ class GermlineJudgeBase{
                                     , const bam1_t* aln, std::map<int, int>& hpCount
                                     , std::map<int, int>& variantsHP
                                     , std::map<int, int>& countPS);
-        void germlineJudgeSVHap(const bam1_t &aln, VCF_Info* vcfSet, std::map<int, int>& hpCount, const int& tagGeneType);
+        void germlineJudgeSVHap(const bam1_t &aln, std::map<Genome, VCF_Info> &vcfSet, std::map<int, int>& hpCount, const int& tagGeneType);
         int germlineDetermineReadHap(std::map<int, int>& hpCount, double& min, double& max, double& percentageThreshold, int& pqValue, int& psValue, std::map<int, int>& countPS, int* totalHighSimilarity, int* totalWithOutVaraint);
         void writeGermlineTagLog(std::ofstream& tagResult, const bam1_t& aln, const bam_hdr_t& bamHdr, int& hpResult, double& max, double& min, std::map<int, int>& hpCount, int& pqValue, const std::map<int, int>& variantsHP, const std::map<int, int>& countPS);
     public:
@@ -394,8 +394,6 @@ class SomaticJudgeBase{
         virtual void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec);
         int determineReadHP(std::map<int, int> &hpCount, int &pqValue,std::map<int, int> &norCountPS, double &norHPsimilarity, double &tumHPsimilarity,  double percentageThreshold, int *totalHighSimilarity, int *totalCrossTwoBlock, int *totalWithOutVaraint);
 
-        int convertStrNucToInt(std::string &base);
-        std::string convertIntNucToStr(int base);
     public:
 };
 
@@ -411,7 +409,7 @@ class HaplotagBamParser{
             const FastaParser &fastaParser,
             htsThreadPool &threadPool,
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-            VCF_Info *vcfSet, 
+            std::map<Genome, VCF_Info> &vcfSet, 
             const Genome& genmoeType
         );
 
@@ -423,7 +421,7 @@ class HaplotagBamParser{
             const FastaParser &fastaParser,
             htsThreadPool &threadPool,
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-            VCF_Info *vcfSet, 
+            std::map<Genome, VCF_Info> &vcfSet, 
             const Genome& genmoeType
         );
     protected: 
@@ -442,7 +440,7 @@ class HaplotagBamParser{
             const std::vector<std::string> &chrVec, 
             const std::map<std::string, int> &chrLength, 
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-            VCF_Info *vcfSet,
+            std::map<Genome, VCF_Info> &vcfSet,
             const Genome& genmoeType
         );
 
@@ -469,7 +467,7 @@ class ChromosomeProcessor : public GermlineJudgeBase{
             const Genome& genmoeType, 
             std::map<int, MultiGenomeVar> &currentVariants,
             std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-            VCF_Info* vcfSet, 
+            std::map<Genome, VCF_Info> &vcfSet, 
             const std::string &ref_string
         ) = 0;
 
@@ -501,7 +499,7 @@ class ChromosomeProcessor : public GermlineJudgeBase{
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
             BamFileRAII& bam,
             const Genome& genmoeType,
-            VCF_Info* vcfSet
+            std::map<Genome, VCF_Info> &vcfSet
         );
 
 };

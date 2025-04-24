@@ -51,7 +51,7 @@ void SomaticReadVerifier::parserProcess(std::string &input, VCF_Info &Info, std:
         VarData varData;
         varData.allele.Ref = fields[3];
         varData.allele.Alt = fields[4];
-        mergedChrVarinat[chr][pos].Variant[HIGH_CON_SOMATIC] = varData;
+        mergedChrVarinat[chr][pos].Variant[Genome::HIGH_CON_SOMATIC] = varData;
     }
 }
 

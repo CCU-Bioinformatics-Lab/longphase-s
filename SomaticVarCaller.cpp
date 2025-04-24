@@ -46,7 +46,7 @@ void ExtractNorDataChrProcessor::processRead(
     const Genome& genmoeType,
     std::map<int, MultiGenomeVar> &currentVariants,
     std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
-    VCF_Info* vcfSet,
+    std::map<Genome, VCF_Info> &vcfSet,
     const std::string &ref_string
 ){
 
@@ -242,7 +242,7 @@ void ExtractTumDataChrProcessor::processRead(
     const Genome& genmoeType, 
     std::map<int, MultiGenomeVar> &currentVariants,
     std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-    VCF_Info* vcfSet, 
+    std::map<Genome, VCF_Info> &vcfSet, 
     const std::string &ref_string
 ){
    
@@ -610,7 +610,7 @@ void SomaticVarCaller::VariantCalling(
     const std::vector<std::string> &chrVec,
     const std::map<std::string, int> &chrLength,
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
-    VCF_Info* vcfSet,
+    std::map<Genome, VCF_Info> &vcfSet,
     const Genome& genmoeType
 ){
 
@@ -1275,6 +1275,39 @@ void SomaticVarCaller::FindOtherSomaticSnpHP(const std::string &chr, std::map<in
             // }
         }
         somaticVarIter++;
+    }
+}
+
+int SomaticVarCaller::convertStrNucToInt(std::string &base){
+    if(base == "A"){
+        return Nitrogenous::A;
+    }else if(base == "C"){
+        return Nitrogenous::C;
+    }else if(base == "G"){
+        return Nitrogenous::G;
+    }else if(base == "T"){
+        return Nitrogenous::T;
+    }else{
+        std::cerr << "Error(convertNucleotideToInt) => can't find Allele : " << base << "\n";
+        exit(1);
+    }
+}
+
+std::string SomaticVarCaller::convertIntNucToStr(int base){
+    if(base == Nitrogenous::A){
+        return "A";
+    }else if(base == Nitrogenous::C){
+        return "C";
+    }else if(base == Nitrogenous::G){
+        return "G";
+    }else if(base == Nitrogenous::T){
+        return "T";
+    }else if(base == Nitrogenous::UNKOWN){
+        //std::cerr << "Error(convertIntNucToStr) => can't find Allele : " << base << "\n";
+        return "UNKOWN";
+    }else {
+        std::cerr << "Error(convertIntNucToStr) => can't find Allele : " << base << "\n";
+        exit(1);
     }
 }
 

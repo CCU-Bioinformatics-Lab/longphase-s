@@ -121,7 +121,7 @@ void HaplotagBamParser::parsingBam(
     const std::vector<std::string> &chrVec, 
     const std::map<std::string, int> &chrLength, 
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-    VCF_Info *vcfSet, 
+    std::map<Genome, VCF_Info> &vcfSet, 
     const Genome& genmoeType
 ){
     std::time_t begin = time(NULL);
@@ -171,7 +171,7 @@ void HaplotagBamParser::processBamParallel(
     const FastaParser &fastaParser,
     htsThreadPool &threadPool,
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-    VCF_Info *vcfSet, 
+    std::map<Genome, VCF_Info> &vcfSet, 
     const Genome& genmoeType
 ){
     // loop all chromosome
@@ -193,7 +193,7 @@ void HaplotagBamParser::processBamWithOutput(
     const FastaParser &fastaParser,
     htsThreadPool &threadPool,
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-    VCF_Info *vcfSet, 
+    std::map<Genome, VCF_Info> &vcfSet, 
     const Genome& genmoeType
 ){
     bool writeOutputBam = true;
@@ -264,7 +264,7 @@ void ChromosomeProcessor::processSingleChromosome(
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
     BamFileRAII& bamRAII,
     const Genome& genmoeType,
-    VCF_Info* vcfSet
+    std::map<Genome, VCF_Info> &vcfSet
 ){
     // records all variants within this chromosome.
     std::map<int, MultiGenomeVar> currentVariants;
@@ -731,11 +731,11 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
     }
 }
 
-void GermlineJudgeBase::germlineJudgeSVHap(const bam1_t &aln, VCF_Info* vcfSet, std::map<int, int>& hpCount, const int& genmoeType){
-    auto readIter = vcfSet[genmoeType].readSVHapCount.find(bam_get_qname(&aln));
-    if( readIter != vcfSet[genmoeType].readSVHapCount.end() ){
-        hpCount[SnpHP::GERMLINE_H1] += vcfSet[genmoeType].readSVHapCount[bam_get_qname(&aln)][0];
-        hpCount[SnpHP::GERMLINE_H2] += vcfSet[genmoeType].readSVHapCount[bam_get_qname(&aln)][1];
+void GermlineJudgeBase::germlineJudgeSVHap(const bam1_t &aln, std::map<Genome, VCF_Info> &vcfSet, std::map<int, int>& hpCount, const int& genmoeType){
+    auto readIter = vcfSet[Genome::NORMAL].readSVHapCount.find(bam_get_qname(&aln));
+    if( readIter != vcfSet[Genome::NORMAL].readSVHapCount.end() ){
+        hpCount[SnpHP::GERMLINE_H1] += vcfSet[Genome::NORMAL].readSVHapCount[bam_get_qname(&aln)][0];
+        hpCount[SnpHP::GERMLINE_H2] += vcfSet[Genome::NORMAL].readSVHapCount[bam_get_qname(&aln)][1];
     }
 }
 
@@ -1144,39 +1144,6 @@ int SomaticJudgeBase::determineReadHP(std::map<int, int> &hpCount, int &pqValue,
     }
 
     return hpResult;
-}
-
-int SomaticJudgeBase::convertStrNucToInt(std::string &base){
-    if(base == "A"){
-        return Nitrogenous::A;
-    }else if(base == "C"){
-        return Nitrogenous::C;
-    }else if(base == "G"){
-        return Nitrogenous::G;
-    }else if(base == "T"){
-        return Nitrogenous::T;
-    }else{
-        std::cerr << "Error(convertNucleotideToInt) => can't find Allele : " << base << "\n";
-        exit(1);
-    }
-}
-
-std::string SomaticJudgeBase::convertIntNucToStr(int base){
-    if(base == Nitrogenous::A){
-        return "A";
-    }else if(base == Nitrogenous::C){
-        return "C";
-    }else if(base == Nitrogenous::G){
-        return "G";
-    }else if(base == Nitrogenous::T){
-        return "T";
-    }else if(base == Nitrogenous::UNKOWN){
-        //std::cerr << "Error(convertIntNucToStr) => can't find Allele : " << base << "\n";
-        return "UNKOWN";
-    }else {
-        std::cerr << "Error(convertIntNucToStr) => can't find Allele : " << base << "\n";
-        exit(1);
-    }
 }
 
 void chrReadHpResult::recordReadHp(int &pos, int &hpResult, int &BaseHP){
