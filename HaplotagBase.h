@@ -282,17 +282,22 @@ struct ReadHpResult{
     ReadHpResult(): somaticSnpH3count(0), existDeriveByH1andH2(false), deriveHP(0), coverRegionStartPos(INT_MAX), coverRegionEndPos(INT_MIN){}
 };
 
+struct chrReadHpResult{
+    std::map<int, ReadHpResult> posReadHpResult;
+
+    void recordReadHp(int &pos, int &hpResult, int &BaseHP);
+    void recordDeriveHp(int &pos, int &deriveHP, float deriveHPsimilarity);
+    void recordAlignCoverRegion(int& curVarPos, int &startPos, int &endPos);
+};
+
 class BamFileRAII {
     private:
+        bool writeOutputBam;
         bool isReleased;
 
         template<typename T>
-        void checkNullPointer(const T* ptr, const std::string& errorMessage) const {
-            if (ptr == nullptr) {
-                std::cerr << "ERROR: " << errorMessage << std::endl;
-                exit(1);
-            }
-        }
+        void checkNullPointer(const T* ptr, const std::string& errorMessage) const;
+        
     public:
         samFile* in;
         samFile* out;
@@ -307,9 +312,9 @@ class BamFileRAII {
                   , const bool writeOutputBam = false);
         ~BamFileRAII();
 
-        void destroy();
+        bool validateState();
 
-        
+        void destroy();
 };
 
 class ReadHpDistriLog{
@@ -322,14 +327,24 @@ class ReadHpDistriLog{
             coverRegionInfo(): startPos(0), endPos(0), length(0){}
         };
         // chr, variant position (0-base), reads HP 
-        std::map<std::string, std::map<int, ReadHpResult>> chrVarReadHpResult;
+        // std::map<std::string, std::map<int, ReadHpResult>> chrVarReadHpResult;
+        std::map<std::string, chrReadHpResult> chrVarReadHpResult;
     protected:
 
     public:
         ReadHpDistriLog();
         ~ReadHpDistriLog();
-        //use for multi-thread SomaticVarCaller
-        void mergeLocalReadHp(const std::string &chr, std::map<int, ReadHpResult> &localReadHpResult);
+
+        // use in multi-thread scenario
+        void loadChrKey(const std::string &chr);
+        // Returns a pointer to ensure thread-safe access to chromosome results
+        chrReadHpResult* getChrHpResultsPtr (const std::string &chr);
+        
+        // only use in single thread scenario
+        void recordChrReadHp(const std::string &chr, int &pos, int &hpResult, int &BaseHP);
+        void recordChrDeriveHp(const std::string &chr, int &pos, int &deriveHP, float deriveHPsimilarity);
+        void recordChrAlignCoverRegion(const std::string &chr, int &pos, int &startPos, int &endPos);
+
         void writeReadHpDistriLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec);
         void writePosCoverRegionLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec);
         void writeTagReadCoverRegionLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength);
@@ -364,7 +379,6 @@ class GermlineJudgeBase{
                                     , std::map<int, int>& countPS);
         void germlineJudgeSVHap(const bam1_t &aln, VCF_Info* vcfSet, std::map<int, int>& hpCount, const int& tagGeneType);
         int germlineDetermineReadHap(std::map<int, int>& hpCount, double& min, double& max, double& percentageThreshold, int& pqValue, int& psValue, std::map<int, int>& countPS, int* totalHighSimilarity, int* totalWithOutVaraint);
-        void getLastVarPos(std::vector<int>& last_pos, const std::vector<std::string>& chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, const Genome& geneType);
         void writeGermlineTagLog(std::ofstream& tagResult, const bam1_t& aln, const bam_hdr_t& bamHdr, int& hpResult, double& max, double& min, std::map<int, int>& hpCount, int& pqValue, const std::map<int, int>& variantsHP, const std::map<int, int>& countPS);
     public:
 };
@@ -382,15 +396,12 @@ class SomaticJudgeBase{
 
         int convertStrNucToInt(std::string &base);
         std::string convertIntNucToStr(int base);
-        void recordReadHp(int &pos, int &hpResult, int &BaseHP, std::map<int, ReadHpResult> &varReadHpResult);
-        void recordDeriveHp(int &pos, int &deriveHP, float deriveHPsimilarity, std::map<int, ReadHpResult> &varReadHpResult);
     public:
 };
 
 
 class HaplotagBamParser{
     private:
-        bool writeOutputBam;
 
         void processBamParallel(
             const std::string &BamFile, 
@@ -416,6 +427,7 @@ class HaplotagBamParser{
             const Genome& genmoeType
         );
     protected: 
+        bool writeOutputBam;
         bool mappingQualityFilter;
         // Factory method to create a chromosome processor
         virtual std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) = 0;
@@ -438,6 +450,7 @@ class HaplotagBamParser{
 
 class ChromosomeProcessor : public GermlineJudgeBase{
     private:
+        bool writeOutputBam;
         bool mappingQualityFilter;
     protected:
 
@@ -447,7 +460,6 @@ class ChromosomeProcessor : public GermlineJudgeBase{
         virtual void processSupplementaryAlignment(){};
         virtual void processEmptyVariants(){};
         virtual void processOtherCase(){};
-        virtual void commonProcess(BamFileRAII& bamRAII){};
 
         virtual void processRead(
             bam1_t &aln, 
@@ -465,6 +477,8 @@ class ChromosomeProcessor : public GermlineJudgeBase{
             const std::string &chr,
             std::map<int, MultiGenomeVar> &currentVariants
         ){};
+
+        virtual void samWriteBam(BamFileRAII& bamRAII);
         
         void calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase);
 
@@ -476,7 +490,7 @@ class ChromosomeProcessor : public GermlineJudgeBase{
         double calculatePercentageOfGermlineHp(int& totalReadCount, int& depth);
 
     public:
-        ChromosomeProcessor(bool mappingQualityFilter=false);
+        ChromosomeProcessor( bool writeOutputBam=false, bool mappingQualityFilter=false);
         virtual ~ChromosomeProcessor();
         
         void processSingleChromosome(

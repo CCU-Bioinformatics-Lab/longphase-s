@@ -241,9 +241,6 @@ class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
         // chr, variant position (0-base), normal variant base
         std::map<std::string, std::map<int, PosBase>> *chrPosNorBase;
         
-        // chr, variant position (0-base), reads HP 
-        std::map<std::string, std::map<int, ReadHpResult>> *chrVarReadHpResult;
-        
         ReadHpDistriLog *callerReadHpDistri;
 
         //  chr, startPos, endPos
@@ -268,7 +265,13 @@ class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
         void CalibrateReadHP(const std::string &chr, const SomaticFilterParaemter &somaticParams, std::map<int, HP3_Info> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount);
         void CalculateReadSetHP(const HaplotagParameters &params, const std::string &chr, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount);
         
-        void StatisticSomaticPosReadHP(const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, ReadHpResult> &readHpDistributed);
+        void StatisticSomaticPosReadHP(
+            const std::string &chr,
+            std::map<int, HP3_Info> &somaticPosInfo,
+            std::map<int, std::map<std::string, int>> &somaticPosReadHPCount,
+            std::map<std::string, ReadVarHpCount> &readHpResultSet,
+            chrReadHpResult &localReadHpDistri
+        );
         
         void WriteSomaticVarCallingLog(const HaplotagParameters &params, const SomaticFilterParaemter &somaticParams, const std::vector<std::string> &chrVec
                                      , std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);

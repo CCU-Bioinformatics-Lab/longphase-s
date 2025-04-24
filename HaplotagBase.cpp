@@ -7,60 +7,85 @@ BamFileRAII::BamFileRAII(
   , const HaplotagParameters& params
   , const bool writeOutputBam
 ):
-isReleased(false), in(nullptr), out(nullptr), bamHdr(nullptr), idx(nullptr), aln(nullptr)
+writeOutputBam(writeOutputBam), isReleased(false), in(nullptr), out(nullptr), bamHdr(nullptr), idx(nullptr), aln(nullptr)
 {
-    // open bam file
-    in = hts_open(BamFile.c_str(), "r");
-    checkNullPointer(in, "Cannot open bam file " + BamFile);
+    try{
+        // open bam file
+        in = hts_open(BamFile.c_str(), "r");
+        checkNullPointer(in, "Cannot open bam file " + BamFile);
 
-    // load reference file
-    if (hts_set_fai_filename(in, fastaFile.c_str()) != 0) {
-        std::cerr << "ERROR: Cannot set FASTA index file for " + fastaFile << std::endl;
-        exit(1);
-    }
-
-    // input reader
-    bamHdr = sam_hdr_read(in);
-    checkNullPointer(bamHdr, "Cannot read header from bam file " + BamFile);
-
-    // header add pg tag
-    sam_hdr_add_pg(bamHdr, "longphase", "VN", params.version.c_str(), "CL", params.command.c_str(), NULL);
-
-    // check bam file index
-    idx = sam_index_load(in, BamFile.c_str());
-    checkNullPointer(idx, "Cannot open index for bam file " + BamFile);
-
-    // set thread
-    if (hts_set_opt(in, HTS_OPT_THREAD_POOL, &threadPool) != 0) {
-        std::cerr << "ERROR: Cannot set thread pool for input bam file " + BamFile << std::endl;
-        exit(1);
-    }
-
-    if (writeOutputBam) {
-        // output file mangement
-        std::string writeBamFile = params.resultPrefix + "." + params.outputFormat;
-        std::cerr << "set output bam file : " + writeBamFile << std::endl;
-        // open output bam file
-        out = hts_open(writeBamFile.c_str(), (params.outputFormat == "bam" ? "wb" : "wc" ));
         // load reference file
-        hts_set_fai_filename(out, params.fastaFile.c_str());
-        // output writer
-        int result = sam_hdr_write(out, bamHdr);
-        if (result < 0) {
-            std::cerr << "ERROR: Cannot write header to output bam file " + writeBamFile << std::endl;
+        if (hts_set_fai_filename(in, fastaFile.c_str()) != 0) {
+            std::cerr << "Cannot set FASTA index file for " + fastaFile << std::endl;
             exit(1);
         }
-        // set thread pool for output bam file
-        if (hts_set_opt(out, HTS_OPT_THREAD_POOL, &threadPool) != 0) {
-            std::cerr << "ERROR: Cannot set thread pool for output bam file " + BamFile << std::endl;
-            exit(1);
-        }
-    }
 
-    // initialize an alignment
-    aln = bam_init1();
-    if (aln == nullptr) {
-        std::cerr << "ERROR: Cannot initialize alignment for bam file " + BamFile << std::endl;
+        // input reader
+        bamHdr = sam_hdr_read(in);
+        checkNullPointer(bamHdr, "Cannot read header from bam file " + BamFile);
+
+        // header add pg tag
+        sam_hdr_add_pg(bamHdr, "longphase", "VN", params.version.c_str(), "CL", params.command.c_str(), NULL);
+
+        // check bam file index
+        idx = sam_index_load(in, BamFile.c_str());
+        checkNullPointer(idx, "Cannot open index for bam file " + BamFile);
+
+        // set thread
+        if (hts_set_opt(in, HTS_OPT_THREAD_POOL, &threadPool) != 0) {
+            std::cerr << "Cannot set thread pool for input bam file " + BamFile << std::endl;
+            exit(1);
+        }
+
+        if (writeOutputBam) {
+            // output file mangement
+            std::string writeBamFile = params.resultPrefix + "." + params.outputFormat;
+            std::cerr << "set output bam file : " + writeBamFile << std::endl;
+            // open output bam file
+            out = hts_open(writeBamFile.c_str(), (params.outputFormat == "bam" ? "wb" : "wc" ));
+            // load reference file
+            hts_set_fai_filename(out, params.fastaFile.c_str());
+            // output writer
+            int result = sam_hdr_write(out, bamHdr);
+            if (result < 0) {
+                std::cerr << "Cannot write header to output bam file " + writeBamFile << std::endl;
+                exit(1);
+            }
+            // set thread pool for output bam file
+            if (hts_set_opt(out, HTS_OPT_THREAD_POOL, &threadPool) != 0) {
+                std::cerr << "Cannot set thread pool for output bam file " + BamFile << std::endl;
+                exit(1);
+            }
+        }
+
+        // initialize an alignment
+        aln = bam_init1();
+        checkNullPointer(aln, "Cannot initialize alignment for bam file " + BamFile);
+    }catch(const std::runtime_error& e){
+        std::cerr << "[ERROR](BamFileRAII): " << e.what() << std::endl;
+        exit(1);
+    }
+}
+
+template<typename T>
+void BamFileRAII::checkNullPointer(const T* ptr, const std::string& errorMessage) const {
+    if (ptr == nullptr) {
+        throw std::runtime_error(errorMessage);
+    }
+}
+
+bool BamFileRAII::validateState(){
+    try{
+        checkNullPointer(in, "(validateState) in ptr is nullptr");
+        checkNullPointer(bamHdr, "(validateState) bamHdr ptr is nullptr");
+        checkNullPointer(idx, "(validateState) idx ptr is nullptr");
+        checkNullPointer(aln, "(validateState) aln ptr is nullptr");
+        if(writeOutputBam){
+            checkNullPointer(out, "(validateState) out ptr is nullptr");
+        }
+        return true;
+    }catch(const std::runtime_error& e){
+        std::cerr << "[ERROR](BamFileRAII): " << e.what() << std::endl;
         exit(1);
     }
 }
@@ -99,7 +124,6 @@ void HaplotagBamParser::parsingBam(
     VCF_Info *vcfSet, 
     const Genome& genmoeType
 ){
-    // std::cerr<< "collecting data for the normal sample... ";
     std::time_t begin = time(NULL);
 
     if(chrVec.size() == 0){
@@ -222,8 +246,10 @@ void HaplotagBamParser::getLastVarPos(
     }
 }
 
-ChromosomeProcessor::ChromosomeProcessor(bool mappingQualityFilter){
-    this->mappingQualityFilter = mappingQualityFilter;
+ChromosomeProcessor::ChromosomeProcessor(bool writeOutputBam, bool mappingQualityFilter)
+: writeOutputBam(writeOutputBam), mappingQualityFilter(mappingQualityFilter)
+{
+
 }
 
 ChromosomeProcessor::~ChromosomeProcessor(){
@@ -293,13 +319,29 @@ void ChromosomeProcessor::processSingleChromosome(
         else{
             processOtherCase();
         }
-        // common process for all reads
-        commonProcess(bamRAII);
+
+        //for write all reads in bam file
+        if(writeOutputBam){
+            samWriteBam(bamRAII);
+        }
     }
 
     postProcess(chr, currentVariants);
     
     hts_itr_destroy(iter);
+}
+
+void ChromosomeProcessor::samWriteBam(BamFileRAII& bamRAII){
+    if(bamRAII.validateState()){
+        int result = sam_write1(bamRAII.out, bamRAII.bamHdr, bamRAII.aln);
+        if (result < 0) {
+            std::cerr << "ERROR(samWriteBam): write output bam file failed" << std::endl;
+            exit(1);
+        }
+    }else{
+        std::cerr << "ERROR(samWriteBam): Bam file resource allocation failed" << std::endl;
+        exit(1);
+    }
 }
 
 void ChromosomeProcessor::calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase){
@@ -512,42 +554,6 @@ void CigarParser::countDeletionBase(PosBase& posBase){
     posBase.depth++;
 }
 
-
-void GermlineJudgeBase::getLastVarPos(
-    std::vector<int>& last_pos, 
-    const std::vector<std::string>& chrVec, 
-    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
-    const Genome& genmoeType
-){
-    for( auto chr : chrVec ){
-        bool existLastPos = false;
-
-        for (auto lastVariantIter = mergedChrVarinat[chr].rbegin(); lastVariantIter != mergedChrVarinat[chr].rend(); ++lastVariantIter) {
-            if (genmoeType == NORMAL) {
-                if ((*lastVariantIter).second.isExists(NORMAL) && (*lastVariantIter).second.Variant[NORMAL].isExistPhasedSet()) {
-                    last_pos.push_back((*lastVariantIter).first);
-                        existLastPos = true;
-                        break;
-                    }
-            }
-            else if (genmoeType == TUMOR) {
-                if ((*lastVariantIter).second.isExists(TUMOR) || 
-                    ((*lastVariantIter).second.isExists(NORMAL) && (*lastVariantIter).second.Variant[NORMAL].isExistPhasedSet())) {
-                    last_pos.push_back((*lastVariantIter).first);
-                    existLastPos = true;
-                    break;
-                }
-            }else{
-                std::cerr << "ERROR (germlineGetRefLastVarPos) => unsupported genome type: " << genmoeType << std::endl;
-                exit(EXIT_SUCCESS);
-            }
-        }
-        
-        if(!existLastPos){
-            last_pos.push_back(0);
-        }
-    }
-}
 
 
 void GermlineJudgeBase::germlineJudgeSnpHap(
@@ -1173,8 +1179,8 @@ std::string SomaticJudgeBase::convertIntNucToStr(int base){
     }
 }
 
-void SomaticJudgeBase::recordReadHp(int &pos, int &hpResult, int &BaseHP, std::map<int, ReadHpResult> &varReadHpResult){
-    varReadHpResult[pos].readHpCounter[hpResult]++;
+void chrReadHpResult::recordReadHp(int &pos, int &hpResult, int &BaseHP){
+    posReadHpResult[pos].readHpCounter[hpResult]++;
     
     if(hpResult != ReadHP::unTag){
         if(BaseHP == SnpHP::SOMATIC_H3){
@@ -1182,26 +1188,36 @@ void SomaticJudgeBase::recordReadHp(int &pos, int &hpResult, int &BaseHP, std::m
                 std::cerr << "Error(recordReadHp) => error read hp : BaseHP: " <<BaseHP << " readHP: " << hpResult << " pos: " << pos+1 << std::endl; 
                 exit(1);
             }
-            varReadHpResult[pos].somaticSnpH3count++;
-            varReadHpResult[pos].somaticBaseReadHpCounter[hpResult]++;
+            posReadHpResult[pos].somaticSnpH3count++;
+            posReadHpResult[pos].somaticBaseReadHpCounter[hpResult]++;
         }
     }
 }
 
-void SomaticJudgeBase::recordDeriveHp(int &pos, int &deriveHP, float deriveHPsimilarity, std::map<int, ReadHpResult> &varReadHpResult){
+void chrReadHpResult::recordDeriveHp(int &pos, int &deriveHP, float deriveHPsimilarity){
     if(deriveHP != SnpHP::GERMLINE_H1 && deriveHP != SnpHP::GERMLINE_H2 && deriveHP != SnpHP::NONE_SNP){
         std::cerr << "Error(recordDeriveHp) => error derive hp : pos: " <<pos+1 << " deriveHP: " << deriveHP << std::endl; 
         exit(1);        
     }
-    varReadHpResult[pos].deriveHP = deriveHP;
+    posReadHpResult[pos].deriveHP = deriveHP;
     if(deriveHPsimilarity != 0.0){
-        varReadHpResult[pos].deriveHPsimilarVec.emplace_back(deriveHPsimilarity);
+        posReadHpResult[pos].deriveHPsimilarVec.emplace_back(deriveHPsimilarity);
         if(deriveHPsimilarity != 1.0){
             // std::cout << "deriveHPsimilarity: " << deriveHPsimilarity << "\n";
             // std::cout << "deriveHPsimilarityVec: " << varReadHpResult[pos].deriveHPsimilarVec.back() << "\n";
         }
     }
-} 
+}
+
+void chrReadHpResult::recordAlignCoverRegion(int& curVarPos, int &startPos, int &endPos){
+    if(posReadHpResult[curVarPos].coverRegionStartPos > startPos){
+        posReadHpResult[curVarPos].coverRegionStartPos = startPos;
+    }
+    if(posReadHpResult[curVarPos].coverRegionEndPos < endPos){
+        posReadHpResult[curVarPos].coverRegionEndPos = endPos;
+    }
+}
+
 
 ReadHpDistriLog::ReadHpDistriLog(){
 
@@ -1211,14 +1227,29 @@ ReadHpDistriLog::~ReadHpDistriLog(){
 
 }
 
-void ReadHpDistriLog::mergeLocalReadHp(const std::string &chr, std::map<int, ReadHpResult> &localReadHpResult){
-    std::map<int, ReadHpResult>::iterator localReadHpIter = localReadHpResult.begin();
-    while(localReadHpIter != localReadHpResult.end()){
-        int pos = (*localReadHpIter).first;
-        chrVarReadHpResult[chr][pos] = (*localReadHpIter).second;
-        localReadHpIter++;
-    }
+void ReadHpDistriLog::loadChrKey(const std::string &chr){
+    chrVarReadHpResult[chr] = chrReadHpResult();
 }
+
+chrReadHpResult* ReadHpDistriLog::getChrHpResultsPtr (const std::string &chr){
+    return &(chrVarReadHpResult[chr]);
+}
+
+void ReadHpDistriLog::recordChrReadHp(const std::string &chr, int &pos, int &hpResult, int &BaseHP){
+    //only use in single thread scenario
+    chrVarReadHpResult[chr].recordReadHp(pos, hpResult, BaseHP);
+}
+
+void ReadHpDistriLog::recordChrDeriveHp(const std::string &chr, int &pos, int &deriveHP, float deriveHPsimilarity){
+    //only use in single thread scenario
+    chrVarReadHpResult[chr].recordDeriveHp(pos, deriveHP, deriveHPsimilarity);
+}
+
+void ReadHpDistriLog::recordChrAlignCoverRegion(const std::string &chr, int &pos, int &startPos, int &endPos){
+    //only use in single thread scenario
+    chrVarReadHpResult[chr].recordAlignCoverRegion(pos, startPos, endPos);
+}
+
 
 void ReadHpDistriLog::writeReadHpDistriLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec){
     std::ofstream *readHpDistriLog=NULL;
@@ -1226,8 +1257,8 @@ void ReadHpDistriLog::writeReadHpDistriLog(const HaplotagParameters &params, std
 
     int somaticSnpCount = 0;
     for(auto chr: chrVec){
-        if(!chrVarReadHpResult[chr].empty()){
-            somaticSnpCount += chrVarReadHpResult[chr].size();
+        if(!chrVarReadHpResult[chr].posReadHpResult.empty()){
+            somaticSnpCount += chrVarReadHpResult[chr].posReadHpResult.size();
         }
     }
 
@@ -1262,8 +1293,8 @@ void ReadHpDistriLog::writeReadHpDistriLog(const HaplotagParameters &params, std
     }
 
     for(auto chr: chrVec){
-        std::map<int, ReadHpResult>::iterator curVarReadHpIter = chrVarReadHpResult[chr].begin();
-        while(curVarReadHpIter != chrVarReadHpResult[chr].end()){
+        std::map<int, ReadHpResult>::iterator curVarReadHpIter = chrVarReadHpResult[chr].posReadHpResult.begin();
+        while(curVarReadHpIter != chrVarReadHpResult[chr].posReadHpResult.end()){
             int pos = (*curVarReadHpIter).first + 1;
             int HP1readCount = (*curVarReadHpIter).second.readHpCounter[ReadHP::H1];
             int HP1_1readCount = (*curVarReadHpIter).second.readHpCounter[ReadHP::H1_1];
@@ -1326,8 +1357,8 @@ void ReadHpDistriLog::writePosCoverRegionLog(const HaplotagParameters &params, s
 
     int somaticSnpCount = 0;
     for(auto chr: chrVec){
-        if(!chrVarReadHpResult[chr].empty()){
-            somaticSnpCount += chrVarReadHpResult[chr].size();
+        if(!chrVarReadHpResult[chr].posReadHpResult.empty()){
+            somaticSnpCount += chrVarReadHpResult[chr].posReadHpResult.size();
         }
     }
 
@@ -1348,8 +1379,8 @@ void ReadHpDistriLog::writePosCoverRegionLog(const HaplotagParameters &params, s
     }
 
     for(auto chr: chrVec){
-        std::map<int, ReadHpResult>::iterator curVarReadHpIter = chrVarReadHpResult[chr].begin();
-        while(curVarReadHpIter != chrVarReadHpResult[chr].end()){
+        std::map<int, ReadHpResult>::iterator curVarReadHpIter = chrVarReadHpResult[chr].posReadHpResult.begin();
+        while(curVarReadHpIter != chrVarReadHpResult[chr].posReadHpResult.end()){
             int pos = (*curVarReadHpIter).first + 1;
 
             (*posCoverRegionLog) << std::fixed << std::setprecision(3) 
@@ -1374,19 +1405,19 @@ void ReadHpDistriLog::writeTagReadCoverRegionLog(const HaplotagParameters &param
 
     // merge cover region from different SNPs
     for (const auto& chr : chrVec){
-        auto curVarReadHpIter = chrVarReadHpResult[chr].begin();
+        auto curVarReadHpIter = chrVarReadHpResult[chr].posReadHpResult.begin();
 
-        if (curVarReadHpIter == chrVarReadHpResult[chr].end()) {
+        if (curVarReadHpIter == chrVarReadHpResult[chr].posReadHpResult.end()) {
             continue;
         }
 
         int curStartPos = curVarReadHpIter->second.coverRegionStartPos;
         int curEndPos = curVarReadHpIter->second.coverRegionEndPos;
 
-        while (curVarReadHpIter != chrVarReadHpResult[chr].end()){
+        while (curVarReadHpIter != chrVarReadHpResult[chr].posReadHpResult.end()){
 
             auto nextVarReadHpIter = std::next(curVarReadHpIter);
-            if(nextVarReadHpIter != chrVarReadHpResult[chr].end()){
+            if(nextVarReadHpIter != chrVarReadHpResult[chr].posReadHpResult.end()){
                 int nextStartPos = nextVarReadHpIter->second.coverRegionStartPos;
                 int nextEndPos = nextVarReadHpIter->second.coverRegionEndPos;
 
@@ -1477,10 +1508,10 @@ void ReadHpDistriLog::writeTagReadCoverRegionLog(const HaplotagParameters &param
 void ReadHpDistriLog::removeNotDeriveByH1andH2pos(const std::vector<std::string> &chrVec){
     for (const auto& chr : chrVec) {
         auto& chrResult = chrVarReadHpResult[chr];
-        for (auto it = chrResult.begin(); it != chrResult.end(); ) {
+        for (auto it = chrResult.posReadHpResult.begin(); it != chrResult.posReadHpResult.end(); ) {
             if (!it->second.existDeriveByH1andH2) {
                 //std::cerr << "Removed position not derived by H1 and H2: " << chr << " " << it->first << std::endl;
-                it = chrResult.erase(it);
+                it = chrResult.posReadHpResult.erase(it);
             } else {
                 ++it;
             }

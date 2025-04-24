@@ -54,8 +54,6 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
         virtual void processSupplementaryAlignment() override;
         virtual void processEmptyVariants() override;
         virtual void processOtherCase() override;
-        //for write all reads in bam file
-        virtual void commonProcess(BamFileRAII& bamRAII) override;
 
         virtual void processRead(
             bam1_t &aln, 
@@ -91,6 +89,7 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
 
     public:
         GermlineHaplotagChrProcessor(
+            bool writeOutputBam,
             bool mappingQualityFilter,
             ReadStatistics& readStats,
             std::ofstream *tagResult
@@ -104,7 +103,7 @@ class GermlineHaplotagBamParser: public HaplotagBamParser{
         ReadStatistics& readStats;
         std::ofstream *tagResult;
         std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) override{
-            return std::unique_ptr<ChromosomeProcessor>(new GermlineHaplotagChrProcessor(mappingQualityFilter, readStats, tagResult));
+            return std::unique_ptr<ChromosomeProcessor>(new GermlineHaplotagChrProcessor(writeOutputBam, mappingQualityFilter, readStats, tagResult));
         };
     public:
         GermlineHaplotagBamParser(
@@ -150,8 +149,6 @@ class SomaticHaplotagCigarParser: public CigarParser, public SomaticJudgeBase{
 class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor, public SomaticJudgeBase{
     private:
         SomaticReadVerifier& highConSomaticData;
-        std::map<std::string, std::map<int, ReadHpResult>>& beforeCorrReadHpResult;
-        std::map<std::string, std::map<int, ReadHpResult>>& afterCorrReadHpResult;
         ReadHpDistriLog& hpBeforeInheritance;
         ReadHpDistriLog& hpAfterInheritance;
     protected:
@@ -179,14 +176,21 @@ class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor, public S
             std::map<int, MultiGenomeVar> &currentVariants
         ) override;
 
+        int inheritHaplotype(
+            float &deriveByHpSimilarity,
+            double percentageThreshold,
+            std::map<int, std::pair<int , int>>& somaticVarDeriveHP,
+            std::map<int, int>& hpCount,
+            int &hpResult
+        );
+
     public:
         SomaticHaplotagChrProcessor(
+            bool writeOutputBam,
             bool mappingQualityFilter,
             ReadStatistics& readStats,
             std::ofstream *tagResult,
             SomaticReadVerifier& highConSomaticData,
-            std::map<std::string, std::map<int, ReadHpResult>>& beforeCorrReadHpResult,
-            std::map<std::string, std::map<int, ReadHpResult>>& afterCorrReadHpResult,
             ReadHpDistriLog& hpBeforeInheritance,
             ReadHpDistriLog& hpAfterInheritance
         );
@@ -196,19 +200,16 @@ class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor, public S
 class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
     private:
         SomaticReadVerifier& highConSomaticData;
-        std::map<std::string, std::map<int, ReadHpResult>>& beforeCorrReadHpResult;
-        std::map<std::string, std::map<int, ReadHpResult>>& afterCorrReadHpResult;
         ReadHpDistriLog& hpBeforeInheritance;
         ReadHpDistriLog& hpAfterInheritance;
     protected:
         std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) override {
             return std::unique_ptr<ChromosomeProcessor>(new SomaticHaplotagChrProcessor(
+                writeOutputBam,
                 mappingQualityFilter,
                 readStats,
                 tagResult,
                 highConSomaticData,
-                beforeCorrReadHpResult,
-                afterCorrReadHpResult,
                 hpBeforeInheritance,
                 hpAfterInheritance
             ));
@@ -220,15 +221,13 @@ class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
             ReadStatistics& readStats,
             std::ofstream *tagResult,
             SomaticReadVerifier& highConSomaticData,
-            std::map<std::string, std::map<int, ReadHpResult>>& beforeCorrReadHpResult,
-            std::map<std::string, std::map<int, ReadHpResult>>& afterCorrReadHpResult,
             ReadHpDistriLog& hpBeforeInheritance,
             ReadHpDistriLog& hpAfterInheritance
         );
         ~SomaticHaplotagBamParser() override;
 };
 
-class HaplotagProcess: public SomaticJudgeBase, public GermlineJudgeBase
+class HaplotagProcess: public SomaticJudgeBase
 {
     private:
         HaplotagParameters &params;
@@ -253,10 +252,6 @@ class HaplotagProcess: public SomaticJudgeBase, public GermlineJudgeBase
         std::ofstream *tagResult;
 
         ReadStatistics readStats;
-
-        // chr, variant position (0-base), reads HP 
-        std::map<std::string, std::map<int, ReadHpResult>> *beforeCorrReadHpResult;
-        std::map<std::string, std::map<int, ReadHpResult>> *afterCorrReadHpResult;
 
         ReadHpDistriLog *hpBeforeInheritance;
         ReadHpDistriLog *hpAfterInheritance;

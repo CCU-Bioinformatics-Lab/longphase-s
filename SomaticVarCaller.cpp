@@ -574,7 +574,6 @@ void ExtractTumDataCigarParser::OnlyTumorSNPjudgeHP(const std::string &chrName, 
 SomaticVarCaller::SomaticVarCaller(const std::vector<std::string> &chrVec, const HaplotagParameters &params){
     chrPosSomaticInfo = new std::map<std::string, std::map<int, HP3_Info>>();
     chrPosNorBase = new std::map<std::string, std::map<int, PosBase>>();
-    chrVarReadHpResult = new std::map<std::string, std::map<int, ReadHpResult>>();
     callerReadHpDistri = new ReadHpDistriLog();
     denseTumorSnpInterval = new std::map<std::string, std::map<int, std::pair<int, DenseSnpInterval>>>();
     chrReadHpResultSet = new std::map<std::string, std::map<std::string, ReadVarHpCount>>();
@@ -583,7 +582,7 @@ SomaticVarCaller::SomaticVarCaller(const std::vector<std::string> &chrVec, const
     for(auto chr : chrVec){
         (*chrPosSomaticInfo)[chr] = std::map<int, HP3_Info>();
         (*chrPosNorBase)[chr] = std::map<int, PosBase>();
-        (*chrVarReadHpResult)[chr] = std::map<int, ReadHpResult>();
+        callerReadHpDistri->loadChrKey(chr);
         (*denseTumorSnpInterval)[chr] = std::map<int, std::pair<int, DenseSnpInterval>>();
         (*chrReadHpResultSet)[chr] = std::map<std::string, ReadVarHpCount>();
         (*chrTumorPosReadCorrBaseHP)[chr] = std::map<int, std::map<std::string, int>>();
@@ -600,7 +599,6 @@ SomaticVarCaller::~SomaticVarCaller(){
 void SomaticVarCaller::releaseMemory(){
     delete chrPosSomaticInfo;
     delete chrPosNorBase;
-    delete chrVarReadHpResult;
     delete callerReadHpDistri;
     delete denseTumorSnpInterval;
     delete chrReadHpResultSet;
@@ -644,7 +642,8 @@ void SomaticVarCaller::VariantCalling(
         // chr, variant position
         std::map<int, HP3_Info> *somaticPosInfo = nullptr;
         // read ID, reads hpResult 
-        std::map<int, ReadHpResult> *localCallerReadHpDistri = nullptr;
+        // std::map<int, ReadHpResult> *localCallerReadHpDistri = nullptr;
+        chrReadHpResult *localCallerReadHpDistri = nullptr;
         
         // pos, (endPos, denseSnpInterval)
         std::map<int, std::pair<int, DenseSnpInterval>> *localDenseTumorSnpInterval = nullptr;
@@ -661,7 +660,7 @@ void SomaticVarCaller::VariantCalling(
         #pragma omp critical
         {
             somaticPosInfo = &((*chrPosSomaticInfo)[chr]);
-            localCallerReadHpDistri = &((*chrVarReadHpResult)[chr]);
+            localCallerReadHpDistri = callerReadHpDistri->getChrHpResultsPtr(chr);
             localDenseTumorSnpInterval = &((*denseTumorSnpInterval)[chr]);
             readHpResultSet = &((*chrReadHpResultSet)[chr]);
             tumorPosReadCorrBaseHP = &((*chrTumorPosReadCorrBaseHP)[chr]);
@@ -689,11 +688,6 @@ void SomaticVarCaller::VariantCalling(
         //statistic all read HP in somatic SNP position
         StatisticSomaticPosReadHP(chr, *somaticPosInfo, *tumorPosReadCorrBaseHP, *readHpResultSet, *localCallerReadHpDistri);
 
-        //merge local read hp result to global read hp result
-        #pragma omp critical
-        {
-            callerReadHpDistri->mergeLocalReadHp(chr, *localCallerReadHpDistri);
-        }
     }
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 
@@ -1352,14 +1346,19 @@ void SomaticVarCaller::CalculateReadSetHP(const HaplotagParameters &params, cons
         }
 }
 
-void SomaticVarCaller::StatisticSomaticPosReadHP(const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, ReadHpResult> &localReadHpDistri){
+void SomaticVarCaller::StatisticSomaticPosReadHP(
+    const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo,
+    std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP,
+    std::map<std::string, ReadVarHpCount> &readHpResultSet,
+    chrReadHpResult &localReadHpDistri
+){
     std::map<int, HP3_Info>::iterator somaticVarIter = somaticPosInfo.begin();
     while(somaticVarIter != somaticPosInfo.end()){
         if((*somaticVarIter).second.isHighConSomaticSNP){
             int pos = (*somaticVarIter).first;
 
             if(tumorPosReadCorrBaseHP.find(pos) != tumorPosReadCorrBaseHP.end()){
-                localReadHpDistri[pos] = ReadHpResult();
+                localReadHpDistri.posReadHpResult[pos] = ReadHpResult();
 
                 // record the number of HP1-1 or HP2-1 derived from Base HP3
                 std::map<int, int> deriveByHPfromBaseHp3;
@@ -1373,7 +1372,7 @@ void SomaticVarCaller::StatisticSomaticPosReadHP(const std::string &chr, std::ma
                     int hpResult = readHpResultSet[readID].hpResult;
 
                     //record read HP
-                    recordReadHp(pos, hpResult, baseHP, localReadHpDistri);
+                    localReadHpDistri.recordReadHp(pos, hpResult, baseHP);
 
                     if(baseHP == SnpHP::SOMATIC_H3){
                         switch (hpResult) {
@@ -1402,7 +1401,7 @@ void SomaticVarCaller::StatisticSomaticPosReadHP(const std::string &chr, std::ma
                     }
                 }
 
-                localReadHpDistri[pos].existDeriveByH1andH2 = false;
+                localReadHpDistri.posReadHpResult[pos].existDeriveByH1andH2 = false;
 
                 if(HP1_1ratio >= 1.0){
                     (*somaticVarIter).second.somaticReadDeriveByHP = SnpHP::GERMLINE_H1;
@@ -1412,16 +1411,16 @@ void SomaticVarCaller::StatisticSomaticPosReadHP(const std::string &chr, std::ma
                     (*somaticVarIter).second.somaticReadDeriveByHP = SnpHP::NONE_SNP;
 
                     if((0 < HP1_1ratio && HP1_1ratio < 1.0)  || (0 < HP2_1ratio && HP2_1ratio < 1.0)){
-                        localReadHpDistri[pos].existDeriveByH1andH2 = true;
+                        localReadHpDistri.posReadHpResult[pos].existDeriveByH1andH2 = true;
                     }
                 }
                 //record derive HP of current snp
-                recordDeriveHp(pos, (*somaticVarIter).second.somaticReadDeriveByHP, 0.0, localReadHpDistri);
+                localReadHpDistri.recordDeriveHp(pos, (*somaticVarIter).second.somaticReadDeriveByHP, 0.0);
 
                 //error: haven't exist somatic HP read in current position 
-                if( localReadHpDistri[pos].readHpCounter[ReadHP::H3] == 0 && 
-                    localReadHpDistri[pos].readHpCounter[ReadHP::H1_1] == 0 &&
-                    localReadHpDistri[pos].readHpCounter[ReadHP::H2_1] == 0){
+                if( localReadHpDistri.posReadHpResult[pos].readHpCounter[ReadHP::H3] == 0 && 
+                    localReadHpDistri.posReadHpResult[pos].readHpCounter[ReadHP::H1_1] == 0 &&
+                    localReadHpDistri.posReadHpResult[pos].readHpCounter[ReadHP::H2_1] == 0){
                     // std::cerr << "ERROR (statistic all read HP) => hadn't exist somatic HP read in : chr: "<< chr << " pos: " << pos+1 <<std::endl;
                     // std::cerr << "HP1-1: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H1_1] 
                     //           << " HP1-2: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H1_2] 

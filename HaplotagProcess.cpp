@@ -9,32 +9,29 @@ params(params),chrVec(nullptr),chrLength(nullptr),tagResult(nullptr),readStats()
 
     mergedChrVarinat = new std::map<std::string, std::map<int, MultiGenomeVar>>();;
 
-    beforeCorrReadHpResult = new std::map<std::string, std::map<int, ReadHpResult>>();
-    afterCorrReadHpResult = new std::map<std::string, std::map<int, ReadHpResult>>();
-
     hpBeforeInheritance = new ReadHpDistriLog();
     hpAfterInheritance = new ReadHpDistriLog();
 
     if(params.writeReadLog){
-        tagResult = new std::ofstream(params.resultPrefix + ".tag.log");
+        tagResult = new std::ofstream(params.resultPrefix+".out");
         if(!tagResult->is_open()){
             std::cerr<< "Fail to open write file: " << params.resultPrefix+".out" << "\n";
             exit(1);
         }
         else{
             (*tagResult) << "##snpFile:"                 << params.snpFile                    << "\n";
-            if(tagTumorMode)
+            if(params.tagTumorSnp)
             (*tagResult) << "##TumorSnpFile:"            << params.tumorSnpFile               << "\n"; //new
             (*tagResult) << "##svFile:"                  << params.svFile                     << "\n";
             (*tagResult) << "##bamFile:"                 << params.bamFile                    << "\n";
-            if(tagTumorMode)
+            if(params.tagTumorSnp)
             (*tagResult) << "##tumorBamFile:"            << params.tumorBamFile               << "\n"; //new
             (*tagResult) << "##resultPrefix:"            << params.resultPrefix               << "\n";
             (*tagResult) << "##numThreads:"              << params.numThreads                 << "\n";
             (*tagResult) << "##region:"                  << params.region                     << "\n";
-            if(tagTumorMode)
+            if(params.tagTumorSnp)
             (*tagResult) << "##tagTumor:"                << params.tagTumorSnp                << "\n";  //new
-            if(tagTumorMode)
+            if(params.tagTumorSnp)
             (*tagResult) << "##somaticCallingThreshold:" << params.somaticCallingMpqThreshold << "\n";  //new
             (*tagResult) << "##qualityThreshold:"        << params.qualityThreshold           << "\n";
             (*tagResult) << "##percentageThreshold:"     << params.percentageThreshold        << "\n";
@@ -43,14 +40,14 @@ params(params),chrVec(nullptr),chrLength(nullptr),tagResult(nullptr),readStats()
                          << "CHROM\t"
                          << "ReadStart\t"
                          << "Confidnet(%)\t";
-            if(tagTumorMode)
+            if(params.tagTumorSnp)
             (*tagResult) << "deriveByHpSimilarity\t";
             (*tagResult) << "Haplotype\t"
                          << "PhaseSet\t"
                          << "TotalAllele\t"
                          << "HP1Allele\t"
                          << "HP2Allele\t";
-            if(tagTumorMode){
+            if(params.tagTumorSnp){
                 (*tagResult) << "HP3Allele\t"
                              << "HP4Allele\t";
             }
@@ -66,9 +63,6 @@ HaplotagProcess::~HaplotagProcess(){
     printAlignmentStaristics();
 
     delete mergedChrVarinat;
-
-    delete beforeCorrReadHpResult;
-    delete afterCorrReadHpResult;
 
     delete hpBeforeInheritance;
     delete hpAfterInheritance;
@@ -274,7 +268,7 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const Genome& geneType
     std::time_t begin = time(NULL);
     if(geneType == Genome::TUMOR){
         std::cerr<< "somatic tagging start ...\n";
-        SomaticHaplotagBamParser haplotagBamParser(writeOutputBam, mappingQualityFilter, readStats, tagResult, highConSomaticData, *beforeCorrReadHpResult, *afterCorrReadHpResult, *hpBeforeInheritance, *hpAfterInheritance);
+        SomaticHaplotagBamParser haplotagBamParser(writeOutputBam, mappingQualityFilter, readStats, tagResult, highConSomaticData, *hpBeforeInheritance, *hpAfterInheritance);
         haplotagBamParser.parsingBam(openBamFile, params, *chrVec, *chrLength, *mergedChrVarinat, vcfSet, geneType);
         
         if(params.writeReadLog){
@@ -342,10 +336,11 @@ GermlineHaplotagBamParser::~GermlineHaplotagBamParser(){
 
 
 GermlineHaplotagChrProcessor::GermlineHaplotagChrProcessor(
+    bool writeOutputBam,
     bool mappingQualityFilter,
     ReadStatistics& readStats,
     std::ofstream *tagResult
-):ChromosomeProcessor(mappingQualityFilter),
+):ChromosomeProcessor(writeOutputBam, mappingQualityFilter),
     readStats(readStats),
     tagResult(tagResult)
 {
@@ -428,17 +423,13 @@ void GermlineHaplotagChrProcessor::processRead(
         readStats.totalHpCount[ReadHP::unTag]++;
         readStats.totalUnTagCount++;
     }
+    readStats.totalAlignment++;
 }
 
 void GermlineHaplotagChrProcessor::addAuxiliaryTags(bam1_t *aln, int& haplotype, int& pqValue, int& psValue){
     bam_aux_append(aln, "HP", 'i', sizeof(haplotype), (uint8_t*) &haplotype);
     bam_aux_append(aln, "PS", 'i', sizeof(psValue), (uint8_t*) &psValue);
     bam_aux_append(aln, "PQ", 'i', sizeof(pqValue), (uint8_t*) &pqValue);
-}
-
-void GermlineHaplotagChrProcessor::commonProcess(BamFileRAII& bamRAII){
-    // write this alignment to result bam file
-    int result = sam_write1(bamRAII.out, bamRAII.bamHdr, bamRAII.aln);
 }
 
 int GermlineHaplotagChrProcessor::judgeHaplotype(
@@ -536,14 +527,10 @@ SomaticHaplotagBamParser::SomaticHaplotagBamParser(
     ReadStatistics& readStats,
     std::ofstream *tagResult,
     SomaticReadVerifier& highConSomaticData,
-    std::map<std::string, std::map<int, ReadHpResult>>& beforeCorrReadHpResult,
-    std::map<std::string, std::map<int, ReadHpResult>>& afterCorrReadHpResult,
     ReadHpDistriLog& hpBeforeInheritance,
     ReadHpDistriLog& hpAfterInheritance
 ):GermlineHaplotagBamParser(writeOutputBam, mappingQualityFilter, readStats, tagResult),
     highConSomaticData(highConSomaticData),
-    beforeCorrReadHpResult(beforeCorrReadHpResult),
-    afterCorrReadHpResult(afterCorrReadHpResult),
     hpBeforeInheritance(hpBeforeInheritance),
     hpAfterInheritance(hpAfterInheritance)
 {
@@ -555,18 +542,15 @@ SomaticHaplotagBamParser::~SomaticHaplotagBamParser(){
 }
 
 SomaticHaplotagChrProcessor::SomaticHaplotagChrProcessor(
+    bool writeOutputBam,
     bool mappingQualityFilter,
     ReadStatistics& readStats,
     std::ofstream *tagResult,
     SomaticReadVerifier& highConSomaticData,
-    std::map<std::string, std::map<int, ReadHpResult>>& beforeCorrReadHpResult,
-    std::map<std::string, std::map<int, ReadHpResult>>& afterCorrReadHpResult,
     ReadHpDistriLog& hpBeforeInheritance,
     ReadHpDistriLog& hpAfterInheritance
-):GermlineHaplotagChrProcessor(mappingQualityFilter, readStats, tagResult),
+):GermlineHaplotagChrProcessor(writeOutputBam, mappingQualityFilter, readStats, tagResult),
     highConSomaticData(highConSomaticData),
-    beforeCorrReadHpResult(beforeCorrReadHpResult),
-    afterCorrReadHpResult(afterCorrReadHpResult),
     hpBeforeInheritance(hpBeforeInheritance),
     hpAfterInheritance(hpAfterInheritance)
 {
@@ -644,75 +628,19 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
             // if(variantsHP.find(pos) != variantsHP.end()){
             //     baseHP = variantsHP[pos];
             // }
-            recordReadHp(pos, hpResult, baseHP, beforeCorrReadHpResult[chrName]);
-            recordDeriveHp(pos, deriveHP, 0.0, beforeCorrReadHpResult[chrName]);
+            hpBeforeInheritance.recordChrReadHp(chrName, pos, hpResult, baseHP);
+            hpBeforeInheritance.recordChrDeriveHp(chrName, pos, deriveHP, 0.0);
         }
     }
 
-    //correction read HP result by deriveByHp
     float deriveByHpSimilarity = 0.0;
- 
+
     if(hpResult == ReadHP::H3){
-        int deriveByH1 = 0;
-        int deriveByH2 = 0;
-        for(auto& somaticVarIter : somaticVarDeriveHP){
-            int baseHP = somaticVarIter.second.first;
-            int deriveHP = somaticVarIter.second.second;
-            if(baseHP == SnpHP::SOMATIC_H3){
-                if(deriveHP == SnpHP::GERMLINE_H1){
-                    deriveByH1++;
-                }
-                else if(deriveHP == SnpHP::GERMLINE_H2){
-                    deriveByH2++;
-                }
-            }
-            // if(strcmp(bam_get_qname(&aln), "SRR25005626.4310873") == 0){
-            //     std::cerr << "pos: " << somaticVarIter.first+1 << " BaseHP: " << BaseHP << " deriveHP: " << deriveHP << std::endl;
-            // }
-        }
-
-        int max = 0;
-        int min = 0;
-        int maxHp = 0;
-
-        if(deriveByH1 > deriveByH2){
-            max = deriveByH1;
-            min = deriveByH2;
-            maxHp = SnpHP::GERMLINE_H1;
-        }
-        else{
-            max = deriveByH2;
-            min = deriveByH1;   
-            maxHp = SnpHP::GERMLINE_H2;
-        }
-
-        //float deriveByHpSimilarity = (max == 0) ? 0.0 : ((float)max / ((float)max + (float)min));
-        deriveByHpSimilarity = (max == 0) ? 0.0 : ((float)max / ((float)max + (float)min));
-
-        if(deriveByHpSimilarity != 1.0 && deriveByHpSimilarity != 0.0){
-            // std::cerr << "deriveByH1: " << deriveByH1 << " deriveByH2: " << deriveByH2 << std::endl;
-            // std::cerr << "deriveByHpSimilarity: " << deriveByHpSimilarity << std::endl;
-            // std::cerr << "readID: " << bam_get_qname(&aln) << std::endl;
-            //exit(1);
-        }
-
-        if(deriveByHpSimilarity >= percentageThreshold){
-            switch(maxHp){
-                case SnpHP::GERMLINE_H1:
-                    hpResult = ReadHP::H1_1;
-                    break;
-                case SnpHP::GERMLINE_H2:
-                    hpResult = ReadHP::H2_1;
-                    break; 
-            }
-        }
+        // Inherit haplotype information for H3 reads based on somatic variant derived haplotype
+        hpResult = inheritHaplotype(deriveByHpSimilarity, params.percentageThreshold, somaticVarDeriveHP, hpCount, hpResult);
     }
+ 
 
-    if(hpCount[1] == 0 && hpCount[2] == 0 && hpCount[3] != 0){
-        if(hpResult == ReadHP::H3){
-            readStats.totalreadOnlyH3Snp++;
-        }
-    }
 
     //Record read HP result after correction hp result
     if(!somaticVarDeriveHP.empty()){
@@ -724,19 +652,20 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
             // if(variantsHP.find(pos) != variantsHP.end()){
             // baseHP = variantsHP[pos];
             // }
-            recordReadHp(pos, hpResult, baseHP, afterCorrReadHpResult[chrName]);
-            recordDeriveHp(pos, deriveHP, deriveByHpSimilarity , afterCorrReadHpResult[chrName]);
+            hpAfterInheritance.recordChrReadHp(chrName, pos, hpResult, baseHP);
+            hpAfterInheritance.recordChrDeriveHp(chrName, pos, deriveHP, deriveByHpSimilarity);
 
-            // update cover region at somatic position
-            if(hpResult != ReadHP::unTag){      
-                
-                if(afterCorrReadHpResult[chrName][pos].coverRegionStartPos > startPos){
-                    afterCorrReadHpResult[chrName][pos].coverRegionStartPos = startPos;
-                }
-                if(afterCorrReadHpResult[chrName][pos].coverRegionEndPos < endPos){
-                    afterCorrReadHpResult[chrName][pos].coverRegionEndPos = endPos;
-                }
+            if(hpResult != ReadHP::unTag){   
+
+                // update cover region at somatic position
+                hpAfterInheritance.recordChrAlignCoverRegion(chrName, pos, startPos, endPos);
             }
+        }
+    }
+
+    if(hpCount[1] == 0 && hpCount[2] == 0 && hpCount[3] != 0){
+        if(hpResult == ReadHP::H3){
+            readStats.totalreadOnlyH3Snp++;
         }
     }
 
@@ -825,6 +754,71 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
     return hpResult;
 }
 
+int SomaticHaplotagChrProcessor::inheritHaplotype(
+    float &deriveByHpSimilarity,
+    double percentageThreshold,
+    std::map<int, std::pair<int , int>>& somaticVarDeriveHP,
+    std::map<int, int>& hpCount,
+    int &hpResult
+){
+    int deriveByH1 = 0;
+    int deriveByH2 = 0;
+
+    for(auto& somaticVarIter : somaticVarDeriveHP){
+        int baseHP = somaticVarIter.second.first;
+        int deriveHP = somaticVarIter.second.second;
+        if(baseHP == SnpHP::SOMATIC_H3){
+            if(deriveHP == SnpHP::GERMLINE_H1){
+                deriveByH1++;
+            }
+            else if(deriveHP == SnpHP::GERMLINE_H2){
+                deriveByH2++;
+            }
+        }
+        // if(strcmp(bam_get_qname(&aln), "SRR25005626.4310873") == 0){
+        //     std::cerr << "pos: " << somaticVarIter.first+1 << " BaseHP: " << BaseHP << " deriveHP: " << deriveHP << std::endl;
+        // }
+    }
+
+    int max = 0;
+    int min = 0;
+    int maxHp = 0;
+
+    if(deriveByH1 > deriveByH2){
+        max = deriveByH1;
+        min = deriveByH2;
+        maxHp = SnpHP::GERMLINE_H1;
+    }
+    else{
+        max = deriveByH2;
+        min = deriveByH1;   
+        maxHp = SnpHP::GERMLINE_H2;
+    }
+
+    //float deriveByHpSimilarity = (max == 0) ? 0.0 : ((float)max / ((float)max + (float)min));
+    deriveByHpSimilarity = (max == 0) ? 0.0 : ((float)max / ((float)max + (float)min));
+
+    if(deriveByHpSimilarity != 1.0 && deriveByHpSimilarity != 0.0){
+        // std::cerr << "deriveByH1: " << deriveByH1 << " deriveByH2: " << deriveByH2 << std::endl;
+        // std::cerr << "deriveByHpSimilarity: " << deriveByHpSimilarity << std::endl;
+        // std::cerr << "readID: " << bam_get_qname(&aln) << std::endl;
+        //exit(1);
+    }
+
+    if(deriveByHpSimilarity >= percentageThreshold){
+        switch(maxHp){
+            case SnpHP::GERMLINE_H1:
+                hpResult = ReadHP::H1_1;
+                break;
+            case SnpHP::GERMLINE_H2:
+                hpResult = ReadHP::H2_1;
+                break; 
+        }
+    }
+
+    return hpResult;
+}
+
 void SomaticHaplotagChrProcessor::addAuxiliaryTags(bam1_t *aln, int& haplotype, int& pqValue, int& psValue){
     std::string haplotype_str = "";
     haplotype_str = convertHpResultToString(haplotype);
@@ -835,8 +829,7 @@ void SomaticHaplotagChrProcessor::addAuxiliaryTags(bam1_t *aln, int& haplotype, 
 }
 
 void SomaticHaplotagChrProcessor::postProcess(const std::string &chr, std::map<int, MultiGenomeVar> &currentVariants){
-    hpBeforeInheritance.mergeLocalReadHp(chr, beforeCorrReadHpResult[chr]);
-    hpAfterInheritance.mergeLocalReadHp(chr, afterCorrReadHpResult[chr]);
+    // do nothing
 }
 
 std::string SomaticHaplotagChrProcessor::convertHpResultToString(int hpResult){
