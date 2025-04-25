@@ -48,6 +48,9 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
     protected:
         ReadStatistics& readStats;
         std::ofstream *tagResult;
+
+        ReadStatistics localReadStats;
+        
         virtual void processLowMappingQuality() override;
         virtual void processUnmappedRead() override;
         virtual void processSecondaryAlignment() override;
@@ -83,10 +86,29 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
             std::map<Genome, VCF_Info> &vcfSet
         );
 
+        void writeTagReadLog(
+            std::ofstream& tagResult,
+            const bam1_t& aln,
+            const bam_hdr_t& bamHdr,
+            int& hpResult,
+            double& max,
+            double& min,
+            std::map<int, int>& hpCount,
+            int& pqValue,
+            const std::map<int, int>& variantsHP,
+            const std::map<int, int>& countPS
+        );
+
+
         void initFlag(bam1_t *aln, std::string flag);
 
         virtual void addAuxiliaryTags(bam1_t *aln, int& haplotype, int& pqValue, int& psValue);
 
+       void postProcess(
+            const std::string &chr,
+            std::map<int, MultiGenomeVar> &currentVariants
+        ) override;
+        
     public:
         GermlineHaplotagChrProcessor(
             bool writeOutputBam,
@@ -107,10 +129,11 @@ class GermlineHaplotagBamParser: public HaplotagBamParser{
         };
     public:
         GermlineHaplotagBamParser(
-            bool& writeOutputBam,
-            bool& mappingQualityFilter,
+            ParsingBamMode mode,
+            bool writeOutputBam,
+            bool mappingQualityFilter,
             ReadStatistics& readStats,
-            std::ofstream *tagResult
+            HaplotagParameters& params
         );
         ~GermlineHaplotagBamParser() override;
 };
@@ -119,7 +142,7 @@ class SomaticHaplotagCigarParser: public CigarParser, public SomaticJudgeBase{
     private:
         std::map<int, int>& tumCountPS;
         std::map<int, std::pair<int, int>>& somaticVarDeriveHP;
-        SomaticReadVerifier& highConSomaticData;
+        SomaticReadVerifier& somaticReadCounter;
     protected:
 
         void OnlyTumorSNPjudgeHP(
@@ -141,16 +164,21 @@ class SomaticHaplotagCigarParser: public CigarParser, public SomaticJudgeBase{
           , int& query_pos
           , std::map<int, int>& tumCountPS
           , std::map<int, std::pair<int, int>>& somaticVarDeriveHP
-          , SomaticReadVerifier& highConSomaticData
+          , SomaticReadVerifier& somaticReadCounter
         );
         ~SomaticHaplotagCigarParser() override;
 };
 
 class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor, public SomaticJudgeBase{
     private:
-        SomaticReadVerifier& highConSomaticData;
-        ReadHpDistriLog& hpBeforeInheritance;
-        ReadHpDistriLog& hpAfterInheritance;
+
+        SomaticReadVerifier* somaticReadCounter;
+
+        chrReadHpResult* localHpBeforeInheritance;
+        chrReadHpResult* localHpAfterInheritance;
+
+        std::string chr;
+        std::time_t begin;
     protected:
         int judgeHaplotype(
             const bam_hdr_t &bamHdr,
@@ -171,11 +199,6 @@ class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor, public S
         virtual void addAuxiliaryTags(bam1_t *aln, int& haplotype, int& pqValue, int& psValue) override;
         std::string convertHpResultToString(int hpResult);
 
-        void postProcess(
-            const std::string &chr,
-            std::map<int, MultiGenomeVar> &currentVariants
-        ) override;
-
         int inheritHaplotype(
             float &deriveByHpSimilarity,
             double percentageThreshold,
@@ -190,16 +213,17 @@ class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor, public S
             bool mappingQualityFilter,
             ReadStatistics& readStats,
             std::ofstream *tagResult,
-            SomaticReadVerifier& highConSomaticData,
+            SomaticReadBenchmark& highConSomaticData,
             ReadHpDistriLog& hpBeforeInheritance,
-            ReadHpDistriLog& hpAfterInheritance
+            ReadHpDistriLog& hpAfterInheritance,
+            const std::string &chr
         );
         ~SomaticHaplotagChrProcessor() override;
 };
 
 class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
     private:
-        SomaticReadVerifier& highConSomaticData;
+        SomaticReadBenchmark& highConSomaticData;
         ReadHpDistriLog& hpBeforeInheritance;
         ReadHpDistriLog& hpAfterInheritance;
     protected:
@@ -211,16 +235,18 @@ class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
                 tagResult,
                 highConSomaticData,
                 hpBeforeInheritance,
-                hpAfterInheritance
+                hpAfterInheritance,
+                chr
             ));
         };
     public:
         SomaticHaplotagBamParser(
-            bool& writeOutputBam,
-            bool& mappingQualityFilter,
+            ParsingBamMode mode,
+            bool writeOutputBam,
+            bool mappingQualityFilter,
             ReadStatistics& readStats,
-            std::ofstream *tagResult,
-            SomaticReadVerifier& highConSomaticData,
+            HaplotagParameters& params,
+            SomaticReadBenchmark& highConSomaticData,
             ReadHpDistriLog& hpBeforeInheritance,
             ReadHpDistriLog& hpAfterInheritance
         );
@@ -248,15 +274,12 @@ class HaplotagProcess: public SomaticJudgeBase
         //--------------------verification parameter---------------------
         bool tagTumorMode;
 
-        // write tag read detail information
-        std::ofstream *tagResult;
-
         ReadStatistics readStats;
 
         ReadHpDistriLog *hpBeforeInheritance;
         ReadHpDistriLog *hpAfterInheritance;
         
-        SomaticReadVerifier highConSomaticData;
+        SomaticReadBenchmark highConSomaticData;
         
         std::time_t processBegin;
 

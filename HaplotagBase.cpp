@@ -105,8 +105,8 @@ void BamFileRAII::destroy(){
     isReleased = true;
 }
 
-HaplotagBamParser::HaplotagBamParser(bool writeOutputBam, bool mappingQualityFilter)
-: writeOutputBam(writeOutputBam), mappingQualityFilter(mappingQualityFilter)
+HaplotagBamParser::HaplotagBamParser(ParsingBamMode mode, bool writeOutputBam, bool mappingQualityFilter)
+: mode(mode), writeOutputBam(writeOutputBam), mappingQualityFilter(mappingQualityFilter)
 {
 
 }
@@ -124,42 +124,58 @@ void HaplotagBamParser::parsingBam(
     std::map<Genome, VCF_Info> &vcfSet, 
     const Genome& genmoeType
 ){
-    std::time_t begin = time(NULL);
+    try{
+        std::time_t begin = time(NULL);
 
-    if(chrVec.size() == 0){
-        std::cerr<<"ERROR: chrVec is empty\n";
+        if(mode == ParsingBamMode::MULTI_THREAD && writeOutputBam) {
+            throw std::runtime_error("Cannot set Multi Thread mode when writeOutputBam is true");
+        }
+
+        if(chrVec.size() == 0){
+            throw std::runtime_error("chrVec is empty");
+        }
+
+        if(chrLength.size() == 0){
+            throw std::runtime_error("chrLength is empty");
+        }
+        
+        std::vector<int> last_pos;
+        // get the last variant position of the reference
+        getLastVarPos(last_pos, chrVec,mergedChrVarinat, genmoeType);
+        // reference fasta parser
+        FastaParser fastaParser(params.fastaFile, chrVec, last_pos, params.numThreads);
+
+        // init data structure and get core n
+        htsThreadPool threadPool = {NULL, 0};
+        // creat thread pool
+        if (!(threadPool.pool = hts_tpool_init(params.numThreads))) {
+            throw std::runtime_error("Error creating thread pool");
+        }
+
+        switch(mode){
+            case ParsingBamMode::SINGLE_THREAD:
+                // Process the BAM file using a single thread
+                std::cerr<< "[single thread]";
+                processBamWithOutput(BamFile, params, chrVec, chrLength, fastaParser, threadPool, mergedChrVarinat, vcfSet, genmoeType);
+                break;
+
+            case ParsingBamMode::MULTI_THREAD:
+                // Process the BAM file using multiple threads
+                std::cerr<< "[multi thread]";
+                processBamParallel(BamFile, params, chrVec, chrLength, fastaParser, threadPool, mergedChrVarinat, vcfSet, genmoeType);
+                break;
+
+            default:
+                throw std::runtime_error("Unsupported parsing bam mode: " + std::to_string(mode));
+        }
+
+        hts_tpool_destroy(threadPool.pool);
+        std::cerr<< difftime(time(NULL), begin) << "s\n";
+    }catch(const std::runtime_error& e){
+        std::cerr << "[ERROR](HaplotagBamParser): " << e.what() << std::endl;
         exit(1);
     }
 
-    if(chrLength.size() == 0){
-        std::cerr<<"ERROR: chrLength is empty\n";
-        exit(1);        
-    }
-    
-    std::vector<int> last_pos;
-    // get the last variant position of the reference
-    getLastVarPos(last_pos, chrVec,mergedChrVarinat, genmoeType);
-    // reference fasta parser
-    FastaParser fastaParser(params.fastaFile, chrVec, last_pos, params.numThreads);
-
-    // init data structure and get core n
-    htsThreadPool threadPool = {NULL, 0};
-    // creat thread pool
-    if (!(threadPool.pool = hts_tpool_init(params.numThreads))) {
-        fprintf(stderr, "Error creating thread pool\n");
-        exit(1);
-    }
-
-    if(writeOutputBam){
-        // Process the BAM file with output using a single thread
-        processBamWithOutput(BamFile, params, chrVec, chrLength, fastaParser, threadPool, mergedChrVarinat, vcfSet, genmoeType);
-    }else{
-        // Process the BAM file with output using multiple threads
-        processBamParallel(BamFile, params, chrVec, chrLength, fastaParser, threadPool, mergedChrVarinat, vcfSet, genmoeType);
-    }
-
-    hts_tpool_destroy(threadPool.pool);
-    std::cerr<< difftime(time(NULL), begin) << "s\n";
     return;
 }
 
@@ -196,7 +212,6 @@ void HaplotagBamParser::processBamWithOutput(
     std::map<Genome, VCF_Info> &vcfSet, 
     const Genome& genmoeType
 ){
-    bool writeOutputBam = true;
     // bam file resource allocation
     BamFileRAII bamRAII(BamFile, params.fastaFile, threadPool, params, writeOutputBam);
     // loop all chromosome
@@ -798,52 +813,6 @@ int GermlineJudgeBase::germlineDetermineReadHap(
     return hpResult;
 }
 
-void GermlineJudgeBase::writeGermlineTagLog(
-    std::ofstream& tagResult
-    , const bam1_t& aln
-    , const bam_hdr_t& bamHdr
-    , int& hpResult
-    , double& max
-    , double& min
-    , std::map<int, int>& hpCount
-    , int& pqValue
-    , const std::map<int, int>& variantsHP
-    , const std::map<int, int>& countPS){
-    // write tag log file
-    std::string hpResultStr = ((hpResult == ReadHP::unTag) ? "." : std::to_string(hpResult));
-    std::string psResultStr = ".";
-
-    if (hpResultStr != ".") {
-        auto psIter = countPS.begin();
-        psResultStr = std::to_string(psIter->first);
-    }
-
-    (tagResult) << bam_get_qname(&aln) << "\t"
-                << bamHdr.target_name[aln.core.tid] << "\t"
-                << aln.core.pos << "\t"
-                << max / (max + min) << "\t"
-                << "H" << hpResultStr << "\t"
-                << psResultStr << "\t"
-                << hpCount[SnpHP::GERMLINE_H1] + hpCount[SnpHP::GERMLINE_H2] << "\t"
-                << hpCount[SnpHP::GERMLINE_H1] << "\t"
-                << hpCount[SnpHP::GERMLINE_H2] << "\t"
-                << pqValue << "\t";
-
-    // print position and HP
-    for (const auto& v : variantsHP) {
-        (tagResult) << " " << v.first << "," << v.second;
-    }
-
-    (tagResult) << "\t";
-
-    // belong PS, number of variant
-    for (const auto& v : countPS) {
-        (tagResult) << " " << v.first << "," << v.second;
-    }
-
-    (tagResult) << "\n";
-}
-
 void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){
     int curPos = (*currentVariantIter).first;
     auto& curVar = (*currentVariantIter).second;
@@ -855,7 +824,6 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator
         // the tumor & normal SNP GT are phased heterozygous 
         if((curVar.Variant[NORMAL].is_phased_hetero) && (curVar.Variant[TUMOR].is_phased_hetero)){   
             if(curVar.Variant[NORMAL].allele.Ref == base || curVar.Variant[NORMAL].allele.Alt == base){
-                //std::cerr<< "tag tumor normal SNP\n";
                 if(!curVar.Variant[NORMAL].isExistPhasedSet()){
                     std::cerr<< "Unable to locate the phase set of the current normal SNP\n"
                              << curPos << "\t"

@@ -91,6 +91,10 @@ enum ReadHP
     H2_2 = 8,
 };
 
+enum ParsingBamMode{
+    SINGLE_THREAD = 0,
+    MULTI_THREAD = 1
+};
 
 struct VarData{
     const static int NONE_PHASED_SET = -1;
@@ -379,7 +383,6 @@ class GermlineJudgeBase{
                                     , std::map<int, int>& countPS);
         void germlineJudgeSVHap(const bam1_t &aln, std::map<Genome, VCF_Info> &vcfSet, std::map<int, int>& hpCount, const int& tagGeneType);
         int germlineDetermineReadHap(std::map<int, int>& hpCount, double& min, double& max, double& percentageThreshold, int& pqValue, int& psValue, std::map<int, int>& countPS, int* totalHighSimilarity, int* totalWithOutVaraint);
-        void writeGermlineTagLog(std::ofstream& tagResult, const bam1_t& aln, const bam_hdr_t& bamHdr, int& hpResult, double& max, double& min, std::map<int, int>& hpCount, int& pqValue, const std::map<int, int>& variantsHP, const std::map<int, int>& countPS);
     public:
 };
 
@@ -400,6 +403,7 @@ class SomaticJudgeBase{
 
 class HaplotagBamParser{
     private:
+        ParsingBamMode mode;
 
         void processBamParallel(
             const std::string &BamFile, 
@@ -425,6 +429,7 @@ class HaplotagBamParser{
             const Genome& genmoeType
         );
     protected: 
+
         bool writeOutputBam;
         bool mappingQualityFilter;
         // Factory method to create a chromosome processor
@@ -432,7 +437,11 @@ class HaplotagBamParser{
         void getLastVarPos(std::vector<int>& last_pos, const std::vector<std::string>& chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, const Genome& geneType);
 
     public:
-        HaplotagBamParser(bool writeOutputBam = false, bool mappingQualityFilter = false);
+        HaplotagBamParser(
+            ParsingBamMode mode = ParsingBamMode::MULTI_THREAD,
+            bool writeOutputBam = false, 
+            bool mappingQualityFilter = false
+        );
         virtual ~HaplotagBamParser();
         void parsingBam(
             const std::string &BamFile, 
