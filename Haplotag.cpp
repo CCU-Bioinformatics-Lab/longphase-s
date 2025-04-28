@@ -1,5 +1,6 @@
 #include "Haplotag.h"
 #include "HaplotagProcess.h"
+#include "SomaticHaplotagProcess.h"
 #include "Util.h"
 #include <getopt.h>
 

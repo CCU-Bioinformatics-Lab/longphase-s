@@ -4,7 +4,6 @@
 #include "Util.h" 
 #include "HaplotagBase.h"
 #include "TumorPurityPredictor.h"
-#include "HaplotagProcess.h"
 
 
 struct ReadVarHpCount{
