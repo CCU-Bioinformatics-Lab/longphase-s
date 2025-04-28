@@ -616,12 +616,16 @@ void SomaticVarCaller::VariantCalling(
 
     //Count each base numbers at tumor SNP position in the Normal.bam
     std::cerr<< "extracting data from normal BAM... ";
+    std::time_t begin = time(NULL);
     ExtractNorDataBamParser normalBamParser(*chrPosNorBase);
     normalBamParser.parsingBam(params.bamFile, params, chrVec, chrLength, mergedChrVarinat, vcfSet, Genome::NORMAL);
+    std::cerr<< difftime(time(NULL), begin) << "s\n";
 
     std::cerr << "extracting data from tumor BAM... ";
+    begin = time(NULL);
     ExtractTumDataBamParser tumorBamParser(*chrPosSomaticInfo, *chrReadHpResultSet, *chrTumorPosReadCorrBaseHP);
     tumorBamParser.parsingBam(params.tumorBamFile, params, chrVec, chrLength, mergedChrVarinat, vcfSet, Genome::TUMOR);
+    std::cerr<< difftime(time(NULL), begin) << "s\n";
 
     TumorPurityPredictor* tumorPurityPredictor = new TumorPurityPredictor(params, chrVec, *chrPosNorBase, *chrPosSomaticInfo);
     // predict tumor purity
@@ -634,7 +638,7 @@ void SomaticVarCaller::VariantCalling(
     SetFilterParamsWithPurity(somaticParams, tumorPurity);
     
     std::cerr<< "calling somatic variants ... ";
-    std::time_t begin = time(NULL);
+    begin = time(NULL);
     // loop all chromosome
     #pragma omp parallel for schedule(dynamic) num_threads(params.numThreads) 
     for(auto chr : chrVec ){

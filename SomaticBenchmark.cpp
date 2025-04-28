@@ -206,7 +206,12 @@ SomaticReadMetrics* SomaticReadBenchmark::getMetricsPtr(const std::string &chr){
     return &(chrMetrics[chr]);
 }
 
-void SomaticReadBenchmark::writePosAlleleCountLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void SomaticReadBenchmark::writePosAlleleCountLog(
+    std::vector<std::string>& chrVec,
+    HaplotagParameters &params,
+    std::string logPosfix,
+    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat
+){
     // if not open testing function, return
     if(!openTestingFunc) return;
 
@@ -214,7 +219,7 @@ void SomaticReadBenchmark::writePosAlleleCountLog(std::vector<std::string> &chrV
     refAltCountLog=new std::ofstream(params.resultPrefix + logPosfix);
     int totalVariantCount = 0;
 
-    for(auto &chr : chrVec){
+    for(auto chr: chrVec){
         totalVariantCount += chrMetrics[chr].posAltRefDelCount.size();
     }
 
@@ -237,7 +242,7 @@ void SomaticReadBenchmark::writePosAlleleCountLog(std::vector<std::string> &chrV
                           << "DEL_COUNT\n";
     }
 
-    for(auto &chr : chrVec){
+    for(auto chr: chrVec){
         for(auto &posIter : chrMetrics[chr].posAltRefDelCount){
             (*refAltCountLog) << chr << "\t"
                               << posIter.first << "\t"
@@ -254,42 +259,76 @@ void SomaticReadBenchmark::writePosAlleleCountLog(std::vector<std::string> &chrV
     refAltCountLog = nullptr;
 }
 
-void SomaticReadBenchmark::writeTaggedReadLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix){
+void SomaticReadBenchmark::writeTaggedReadLog(
+    const std::vector<std::string>& chrVec,
+    HaplotagParameters &params,
+    std::string logPosfix
+){
     // if not open testing function, return
     if(!openTestingFunc) return;
 
-    std::vector<SomaticReadLog> somaticReadVec;
+    std::map<std::string, std::vector<SomaticReadLog>*> somaticReadVecMap;
 
-    for(auto &chr : chrVec){
-        somaticReadVec.insert(somaticReadVec.end(), chrMetrics[chr].totalReadVec.begin(), chrMetrics[chr].totalReadVec.end());
+    auto metricsIter = chrMetrics.begin();
+    while(metricsIter != chrMetrics.end()){
+        setChrSomaticReadVecPtr(metricsIter->first, somaticReadVecMap, metricsIter->second.totalReadVec);
+        metricsIter++;
     }
-    writeReadLog(chrVec, params, logPosfix, somaticReadVec);
+
+    writeReadLog(chrVec, params, logPosfix, somaticReadVecMap);
 }
-void SomaticReadBenchmark::writeTaggedSomaticReadLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix){
+void SomaticReadBenchmark::writeTaggedSomaticReadLog(
+    const std::vector<std::string>& chrVec,
+    HaplotagParameters &params,
+    std::string logPosfix
+){
     // if not open testing function, return
     if(!openTestingFunc) return;
 
-    std::vector<SomaticReadLog> somaticReadVec;
+    std::map<std::string, std::vector<SomaticReadLog>*> somaticReadVecMap;
 
-    for(auto &chr : chrVec){
-        somaticReadVec.insert(somaticReadVec.end(), chrMetrics[chr].taggedSomaticReadVec.begin(), chrMetrics[chr].taggedSomaticReadVec.end());
+    auto metricsIter = chrMetrics.begin();
+    while(metricsIter != chrMetrics.end()){
+        setChrSomaticReadVecPtr(metricsIter->first, somaticReadVecMap, metricsIter->second.taggedSomaticReadVec);
+        metricsIter++;
     }
-    writeReadLog(chrVec, params, logPosfix, somaticReadVec);
+
+    writeReadLog(chrVec, params, logPosfix, somaticReadVecMap);
 }
 
-void SomaticReadBenchmark::writeCrossHighConSnpReadLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix){
+void SomaticReadBenchmark::writeCrossHighConSnpReadLog(
+    const std::vector<std::string>& chrVec,
+    HaplotagParameters &params,
+    std::string logPosfix
+){
     // if not open testing function, return
     if(!openTestingFunc) return;
 
-    std::vector<SomaticReadLog> somaticReadVec;
+    std::map<std::string, std::vector<SomaticReadLog>*> somaticReadVecMap;
 
-    for(auto &chr : chrVec){
-        somaticReadVec.insert(somaticReadVec.end(), chrMetrics[chr].readsCrossingHighConSnpVec.begin(), chrMetrics[chr].readsCrossingHighConSnpVec.end());
+    auto metricsIter = chrMetrics.begin();
+    while(metricsIter != chrMetrics.end()){
+        setChrSomaticReadVecPtr(metricsIter->first, somaticReadVecMap, metricsIter->second.readsCrossingHighConSnpVec);
+        metricsIter++;
     }
-    writeReadLog(chrVec, params, logPosfix, somaticReadVec);
+
+    writeReadLog(chrVec, params, logPosfix, somaticReadVecMap);
 }
 
-void SomaticReadBenchmark::writeReadLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix, std::vector<SomaticReadLog> &somaticReadVec){
+void SomaticReadBenchmark::setChrSomaticReadVecPtr(
+    const std::string &chr,
+    std::map<std::string, std::vector<SomaticReadLog>*> &somaticReadVecMap,
+    std::vector<SomaticReadLog> &somaticReadVec
+){
+    somaticReadVecMap[chr] = &somaticReadVec;
+}
+
+void SomaticReadBenchmark::writeReadLog(
+    const std::vector<std::string>& chrVec,
+    HaplotagParameters &params,
+    std::string logPosfix,
+    std::map<std::string, std::vector<SomaticReadLog>*> &somaticReadVecMap
+){
     // if not open testing function, return
     if(!openTestingFunc) return;
 
@@ -299,7 +338,7 @@ void SomaticReadBenchmark::writeReadLog(std::vector<std::string> &chrVec, Haplot
     int totalTruthSomaticReads = 0;
     int totalTaggedSomaticReads = 0;
     int totalReads = 0;
-    for(auto &chr : chrVec){
+    for(auto chr: chrVec){
         for(auto readIter :chrMetrics[chr].readsCrossingHighConSnpVec){
             if(readIter.hpResult == "1-1" || readIter.hpResult == "2-1" || readIter.hpResult == "3"){
                 totalTruthSomaticReads++;
@@ -338,20 +377,21 @@ void SomaticReadBenchmark::writeReadLog(std::vector<std::string> &chrVec, Haplot
                           << "somaticVariant,HP\n";
     }
 
-    for(auto somaticRead: somaticReadVec){
+    for(auto chr: chrVec){
+        for(auto somaticRead: *somaticReadVecMap[chr]){
+            (*somaticReadLog) << somaticRead.chr << "\t"
+                            << somaticRead.readID << "\t"
+                            << somaticRead.germlineVarSimilarity << "\t"
+                            << somaticRead.deriveByHpSimilarity << "\t"
+                            << somaticRead.germlineSnpCount << "\t"
+                            << somaticRead.tumorSnpCount << "\t"
+                            << "H" << somaticRead.hpResult << "\t";
 
-        (*somaticReadLog) << somaticRead.chr << "\t"
-                          << somaticRead.readID << "\t"
-                          << somaticRead.germlineVarSimilarity << "\t"
-                          << somaticRead.deriveByHpSimilarity << "\t"
-                          << somaticRead.germlineSnpCount << "\t"
-                          << somaticRead.tumorSnpCount << "\t"
-                          << "H" << somaticRead.hpResult << "\t";
-
-        for(auto SnpHp: somaticRead.somaticSnpHp){
-            (*somaticReadLog) << SnpHp.first+1 << "," << SnpHp.second << "\t";
+            for(auto SnpHp: somaticRead.somaticSnpHp){
+                (*somaticReadLog) << SnpHp.first+1 << "," << SnpHp.second << "\t";
+            }
+                (*somaticReadLog) << "\n";
         }
-        (*somaticReadLog) << "\n";
     }
     (*somaticReadLog).close();
     delete somaticReadLog;

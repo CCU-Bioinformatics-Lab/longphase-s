@@ -63,6 +63,26 @@ void HaplotagProcess::taggingProcess()
     }
 
     VcfParser vcfParser(tagTumorMode);
+    // load SNP, SV, MOD vcf file
+    parseVariantFiles(vcfParser);
+    //decide which genome type chrVec and chrLength belong to
+    setChrVecAndChrLength(tagGeneType);
+    // update chromosome processing based on region
+    setProcessingChromRegion();
+    // calculate SNP counts
+    calculateSnpCounts();
+    // preprocess before haplotag
+    prepareForHaplotag();
+    // // tag read
+    tagRead(params, tagGeneType);
+
+    return;
+};
+
+void HaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
+    // parse common variant files
+    // normal SNP, SV, MOD vcf file
+    parseCommonVariantFiles(vcfParser);
 
     if(tagTumorMode){
         //load seqc high con file for benchmarking
@@ -84,7 +104,9 @@ void HaplotagProcess::taggingProcess()
             std::cerr<< difftime(time(NULL), begin) << "s\n";
         }
     }
+}
 
+void HaplotagProcess::parseCommonVariantFiles(VcfParser& vcfParser){
     // load SNP vcf file
     std::time_t begin = time(NULL);
 
@@ -103,7 +125,7 @@ void HaplotagProcess::taggingProcess()
         begin = time(NULL);
         std::cerr<< "parsing SV VCF ... ";
         vcfParser.setParseSVFile(true);
-        vcfParser.variantParser(params.svFile, vcfSet[tagGeneType], *mergedChrVarinat);
+        vcfParser.variantParser(params.svFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
         vcfParser.reset();
         std::cerr<< difftime(time(NULL), begin) << "s\n";    
     }
@@ -113,15 +135,16 @@ void HaplotagProcess::taggingProcess()
         begin = time(NULL);
         std::cerr<< "parsing MOD VCF ... ";
         vcfParser.setParseMODFile(true);
-        vcfParser.variantParser(params.modFile, vcfSet[tagGeneType], *mergedChrVarinat);
+        vcfParser.variantParser(params.modFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
         vcfParser.reset();
         std::cerr<< difftime(time(NULL), begin) << "s\n";    
     }
+}
 
-    //decide which genome type chrVec and chrLength belong to
-    if(tagGeneType == NORMAL){
-        chrVec = &(vcfSet[NORMAL].chrVec);
-        chrLength = &(vcfSet[NORMAL].chrLength); 
+void HaplotagProcess::setChrVecAndChrLength(Genome tagGeneType){
+    if(tagGeneType == Genome::NORMAL){
+        chrVec = &(vcfSet[Genome::NORMAL].chrVec);
+        chrLength = &(vcfSet[Genome::NORMAL].chrLength); 
     }else{
 
         //check normal & tumor chr & length
@@ -138,11 +161,14 @@ void HaplotagProcess::taggingProcess()
             }
         }
 
-        chrVec = &(vcfSet[TUMOR].chrVec);
-        chrLength = &(vcfSet[TUMOR].chrLength); 
+        // chrVec = &(vcfSet[TUMOR].chrVec);
+        // chrLength = &(vcfSet[TUMOR].chrLength); 
+        chrVec = &(vcfSet[Genome::NORMAL].chrVec);
+        chrLength = &(vcfSet[Genome::NORMAL].chrLength); 
     }
+}
 
-    // update chromosome processing based on region
+void HaplotagProcess::setProcessingChromRegion(){
     if (!params.region.empty()) {
         auto colonPos = params.region.find(":");
         std::string regionChr;
@@ -160,7 +186,9 @@ void HaplotagProcess::taggingProcess()
             exit(1);
         }
     }
+}
 
+void HaplotagProcess::calculateSnpCounts(){
     int tumor_snp_count = 0;
     int normal_snp_count = 0;
     int overlap_snp_count = 0;
@@ -182,10 +210,11 @@ void HaplotagProcess::taggingProcess()
     std::cerr << "Normal SNP count: " << normal_snp_count << std::endl;
     std::cerr << "Tumor SNP count: " << tumor_snp_count << std::endl;
     std::cerr << "Overlap SNP count: " << overlap_snp_count << std::endl;
+}
 
+void HaplotagProcess::prepareForHaplotag(){
     //somatic SNPs calling
     if(tagTumorMode){
-
         //somatic variant calling
         SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(*chrVec, params);
         somaticVarCaller->VariantCalling(params, *chrVec, *chrLength, (*mergedChrVarinat), vcfSet, Genome::TUMOR);
@@ -194,12 +223,7 @@ void HaplotagProcess::taggingProcess()
         delete somaticVarCaller;
         // return;
     }
-
-    // // tag read
-    tagRead(params, tagGeneType);
-
-    return;
-};
+}
 
 void HaplotagProcess::tagRead(HaplotagParameters &params, const Genome& geneType){
 
@@ -212,17 +236,18 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const Genome& geneType
         openBamFile = params.bamFile;
     }
 
-    // bool writeOutputBam = true;
-    // ParsingBamMode mode = ParsingBamMode::SINGLE_THREAD;
-    ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;
-    bool writeOutputBam = false;
+    // ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;
+    // bool writeOutputBam = false;
+    ParsingBamMode mode = ParsingBamMode::SINGLE_THREAD;
+    bool writeOutputBam = true;
     bool mappingQualityFilter = true;
 
     // tag read
     std::time_t begin = time(NULL);
     if(geneType == Genome::TUMOR){
         std::cerr<< "somatic tagging start ...\n";
-        SomaticHaplotagBamParser haplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats, params, highConSomaticData, *hpBeforeInheritance, *hpAfterInheritance);
+        SomaticHaplotagBamParser haplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats, highConSomaticData, *hpBeforeInheritance, *hpAfterInheritance);
+        haplotagBamParser.createTagLog(params);
         haplotagBamParser.parsingBam(openBamFile, params, *chrVec, *chrLength, *mergedChrVarinat, vcfSet, geneType);
         std::cerr<< "finish somatic tagging ... " << difftime(time(NULL), begin) << "s\n";
         
@@ -241,7 +266,8 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const Genome& geneType
         }
     }else{
         std::cerr<< "tag read start ...\n";
-        GermlineHaplotagBamParser haplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats, params);
+        GermlineHaplotagBamParser haplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats);
+        haplotagBamParser.createTagLog(params);
         haplotagBamParser.parsingBam(openBamFile, params, *chrVec, *chrLength, *mergedChrVarinat, vcfSet, geneType);
     }
     std::cerr<< "tag read " << difftime(time(NULL), begin) << "s\n";
@@ -273,64 +299,70 @@ void HaplotagProcess::printAlignmentStaristics(){
     std::cerr<< "-------------------------------------------\n";
 }
 
+GermlineTagLog::GermlineTagLog(const HaplotagParameters& params) 
+    : params(params), tagReadLog(nullptr) {
+    tagReadLog = new std::ofstream(params.resultPrefix+".out");
+    if(!tagReadLog->is_open()){
+        std::cerr<< "Fail to open write file: " << params.resultPrefix+".out" << "\n";
+        exit(1);
+    }
+}
+
+GermlineTagLog::~GermlineTagLog(){
+    tagReadLog->close();
+    delete tagReadLog;
+}
+
+void GermlineTagLog::writeTagReadLog(TagReadLog& data){
+
+    // write tag log file
+    (*tagReadLog) << bam_get_qname(&data.aln) << "\t"
+                << data.bamHdr.target_name[data.aln.core.tid] << "\t"
+                << data.aln.core.pos << "\t"
+                << data.norHPsimilarity << "\t"
+                << "H" << data.hpResultStr << "\t"
+                << data.psResultStr << "\t"
+                << data.hpCount[SnpHP::GERMLINE_H1] + data.hpCount[SnpHP::GERMLINE_H2] << "\t"
+                << data.hpCount[SnpHP::GERMLINE_H1] << "\t"
+                << data.hpCount[SnpHP::GERMLINE_H2] << "\t"
+                << data.pqValue << "\t";
+
+    // print position and HP
+    for (const auto& v : data.variantsHP) {
+        (*tagReadLog) << " " << v.first << "," << v.second;
+    }
+
+    (*tagReadLog) << "\t";
+
+    // belong PS, number of variant
+    for (const auto& v : data.norCountPS) {
+        (*tagReadLog) << " " << v.first << "," << v.second;
+    }
+
+    (*tagReadLog) << "\n"; 
+}
+
+
 GermlineHaplotagBamParser::GermlineHaplotagBamParser(
     ParsingBamMode mode,
     bool writeOutputBam,
     bool mappingQualityFilter,
-    ReadStatistics& readStats,
-    HaplotagParameters& params
+    ReadStatistics& readStats
 ):HaplotagBamParser(mode, writeOutputBam, mappingQualityFilter),
     readStats(readStats), tagResult(nullptr)
-{
+{}
+
+void GermlineHaplotagBamParser::createTagLog(const HaplotagParameters& params){
+    // Read log can only be written in single thread mode, which is enforced when writeOutputBam is true.
+    // This is because log writing requires sequential processing of reads.
     if(params.writeReadLog && writeOutputBam){
-        tagResult = new std::ofstream(params.resultPrefix+".out");
-        if(!tagResult->is_open()){
-            std::cerr<< "Fail to open write file: " << params.resultPrefix+".out" << "\n";
-            exit(1);
-        }
-        else{
-            (*tagResult) << "##snpFile:"                 << params.snpFile                    << "\n";
-            if(params.tagTumorSnp)
-            (*tagResult) << "##TumorSnpFile:"            << params.tumorSnpFile               << "\n"; //new
-            (*tagResult) << "##svFile:"                  << params.svFile                     << "\n";
-            (*tagResult) << "##bamFile:"                 << params.bamFile                    << "\n";
-            if(params.tagTumorSnp)
-            (*tagResult) << "##tumorBamFile:"            << params.tumorBamFile               << "\n"; //new
-            (*tagResult) << "##resultPrefix:"            << params.resultPrefix               << "\n";
-            (*tagResult) << "##numThreads:"              << params.numThreads                 << "\n";
-            (*tagResult) << "##region:"                  << params.region                     << "\n";
-            if(params.tagTumorSnp)
-            (*tagResult) << "##tagTumor:"                << params.tagTumorSnp                << "\n";  //new
-            if(params.tagTumorSnp)
-            (*tagResult) << "##somaticCallingThreshold:" << params.somaticCallingMpqThreshold << "\n";  //new
-            (*tagResult) << "##qualityThreshold:"        << params.qualityThreshold           << "\n";
-            (*tagResult) << "##percentageThreshold:"     << params.percentageThreshold        << "\n";
-            (*tagResult) << "##tagSupplementary:"        << params.tagSupplementary           << "\n";
-            (*tagResult) << "#ReadID\t"
-                         << "CHROM\t"
-                         << "ReadStart\t"
-                         << "Confidnet(%)\t";
-            if(params.tagTumorSnp)
-            (*tagResult) << "deriveByHpSimilarity\t";
-            (*tagResult) << "Haplotype\t"
-                         << "PhaseSet\t"
-                         << "TotalAllele\t"
-                         << "HP1Allele\t"
-                         << "HP2Allele\t";
-            if(params.tagTumorSnp){
-                (*tagResult) << "HP3Allele\t"
-                             << "HP4Allele\t";
-            }
-            (*tagResult) << "phasingQuality(PQ)\t"
-                         << "(Variant,HP)\t"
-                         << "(PhaseSet,Variantcount)\n";
-        }
+        tagResult = createTagReadLog(params);
+        tagResult->writeHeader();
     }
 }
 
 GermlineHaplotagBamParser::~GermlineHaplotagBamParser(){
     if(tagResult){
-        tagResult->close();
         delete tagResult;
     }
 }
@@ -341,7 +373,7 @@ GermlineHaplotagChrProcessor::GermlineHaplotagChrProcessor(
     bool writeOutputBam,
     bool mappingQualityFilter,
     ReadStatistics& readStats,
-    std::ofstream *tagResult
+    GermlineTagLog *tagResult
 ):ChromosomeProcessor(writeOutputBam, mappingQualityFilter),
     readStats(readStats),
     tagResult(tagResult) 
@@ -429,52 +461,6 @@ void GermlineHaplotagChrProcessor::processRead(
     localReadStats.totalAlignment++;
 }
 
-void GermlineHaplotagChrProcessor::writeTagReadLog(
-    std::ofstream& tagResult,
-    const bam1_t& aln,
-    const bam_hdr_t& bamHdr,
-    int& hpResult,
-    double& max,
-    double& min,
-    std::map<int, int>& hpCount,
-    int& pqValue,
-    const std::map<int, int>& variantsHP,
-    const std::map<int, int>& countPS
-){
-    // write tag log file
-    std::string hpResultStr = ((hpResult == ReadHP::unTag) ? "." : std::to_string(hpResult));
-    std::string psResultStr = ".";
-
-    if (hpResultStr != ".") {
-        auto psIter = countPS.begin();
-        psResultStr = std::to_string(psIter->first);
-    }
-
-    (tagResult) << bam_get_qname(&aln) << "\t"
-                << bamHdr.target_name[aln.core.tid] << "\t"
-                << aln.core.pos << "\t"
-                << max / (max + min) << "\t"
-                << "H" << hpResultStr << "\t"
-                << psResultStr << "\t"
-                << hpCount[SnpHP::GERMLINE_H1] + hpCount[SnpHP::GERMLINE_H2] << "\t"
-                << hpCount[SnpHP::GERMLINE_H1] << "\t"
-                << hpCount[SnpHP::GERMLINE_H2] << "\t"
-                << pqValue << "\t";
-
-    // print position and HP
-    for (const auto& v : variantsHP) {
-        (tagResult) << " " << v.first << "," << v.second;
-    }
-
-    (tagResult) << "\t";
-
-    // belong PS, number of variant
-    for (const auto& v : countPS) {
-        (tagResult) << " " << v.first << "," << v.second;
-    }
-
-    (tagResult) << "\n"; 
-}
 
 void GermlineHaplotagChrProcessor::addAuxiliaryTags(bam1_t *aln, int& haplotype, int& pqValue, int& psValue){
     bam_aux_append(aln, "HP", 'i', sizeof(haplotype), (uint8_t*) &haplotype);
@@ -487,7 +473,7 @@ int GermlineHaplotagChrProcessor::judgeHaplotype(
     const bam1_t &aln,
     std::string chrName,
     double percentageThreshold,
-    std::ofstream *tagResult,
+    GermlineTagLog *tagResult,
     int &pqValue,
     int &psValue,
     const int tagGeneType,
@@ -529,7 +515,30 @@ int GermlineHaplotagChrProcessor::judgeHaplotype(
      
     //write tag log file
     if(tagResult != nullptr){
-        writeTagReadLog(*tagResult, aln, bamHdr, hpResult, max, min, hpCount, pqValue, variantsHP, countPS);
+        std::string hpResultStr = ((hpResult == ReadHP::unTag) ? "." : std::to_string(hpResult));
+        std::string psResultStr = ".";
+
+        if (hpResultStr != ".") {
+            auto psIter = countPS.begin();
+            psResultStr = std::to_string(psIter->first);
+        }
+
+        double norHPsimilarity = (max / (max + min));
+
+        TagReadLog data{
+            .aln = aln,
+            .bamHdr = bamHdr,
+            .norHPsimilarity = norHPsimilarity,
+            .hpResultStr = hpResultStr,
+            .psResultStr = psResultStr,
+            .hpCount = hpCount,
+            .pqValue = pqValue,
+            .variantsHP = variantsHP,
+            .norCountPS = countPS,
+            .tumCountPS = nullptr,
+            .deriveByHpSimilarity = 0.0
+        };
+        tagResult->writeTagReadLog(data);
     }
 
     return hpResult;
@@ -602,11 +611,10 @@ SomaticHaplotagBamParser::SomaticHaplotagBamParser(
     bool writeOutputBam,
     bool mappingQualityFilter,
     ReadStatistics& readStats,
-    HaplotagParameters& params,
     SomaticReadBenchmark& highConSomaticData,
     ReadHpDistriLog& hpBeforeInheritance,
     ReadHpDistriLog& hpAfterInheritance
-):GermlineHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats, params),
+):GermlineHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats),
     highConSomaticData(highConSomaticData),
     hpBeforeInheritance(hpBeforeInheritance),
     hpAfterInheritance(hpAfterInheritance)
@@ -622,7 +630,7 @@ SomaticHaplotagChrProcessor::SomaticHaplotagChrProcessor(
     bool writeOutputBam,
     bool mappingQualityFilter,
     ReadStatistics& readStats,
-    std::ofstream *tagResult,
+    GermlineTagLog *tagResult,
     SomaticReadBenchmark& highConSomaticData,
     ReadHpDistriLog& hpBeforeInheritance,
     ReadHpDistriLog& hpAfterInheritance,
@@ -647,7 +655,7 @@ SomaticHaplotagChrProcessor::SomaticHaplotagChrProcessor(
 
 SomaticHaplotagChrProcessor::~SomaticHaplotagChrProcessor(){
     delete somaticReadCounter;
-    std::cerr<< "(finish)" << chr << " : " << difftime(time(NULL), begin) << "s\n";
+    std::cerr << chr << " : " << difftime(time(NULL), begin) << "s\n";
 }
 
 int SomaticHaplotagChrProcessor::judgeHaplotype(
@@ -655,7 +663,7 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
     const bam1_t &aln,
     std::string chrName,
     double percentageThreshold,
-    std::ofstream *tagResult,
+    GermlineTagLog *tagResult,
     int &pqValue,
     int &psValue,
     const int tagGeneType,
@@ -788,40 +796,21 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
     //write tag log file
     if(tagResult!=NULL){
 
-        (*tagResult)<< readID                                       << "\t"
-                    << bamHdr.target_name[aln.core.tid]             << "\t"
-                    << aln.core.pos                                 << "\t"
-                    << norHPsimilarity                              << "\t"
-                    << deriveByHpSimilarity                         << "\t"
-                    << "H" << hpResultStr                           << "\t"
-                    << psResultStr                                  << "\t"
-                    << hpCount[1]+hpCount[2]+hpCount[3]+hpCount[4]  << "\t"
-                    << hpCount[1]                                   << "\t"
-                    << hpCount[2]                                   << "\t"
-                    << hpCount[3]                                   << "\t"
-                    << hpCount[4]                                   << "\t"
-                    << pqValue                                      << "\t\t";
+        TagReadLog data{
+            .aln = aln,
+            .bamHdr = bamHdr,
+            .norHPsimilarity = norHPsimilarity,
+            .hpResultStr = hpResultStr,
+            .psResultStr = psResultStr,
+            .hpCount = hpCount,
+            .pqValue = pqValue,
+            .variantsHP = variantsHP,
+            .norCountPS = norCountPS,
+            .tumCountPS = &tumCountPS,
+            .deriveByHpSimilarity = deriveByHpSimilarity
+        };
 
-        // print position and HP
-        for(auto v : variantsHP ){
-            (*tagResult)<< " " << (v.first + 1) << "," << v.second ;
-        }
-
-        (*tagResult) << "\t";
-
-        // belong PS, number of variant
-        (*tagResult)<< "NorPS:";
-        for(auto v : norCountPS){
-            (*tagResult)<< " " << v.first << "," << v.second ;
-        }
-
-        (*tagResult)<< " TumPS:";
-        for(auto v : tumCountPS){
-            (*tagResult)<< " " << v.first << "," << v.second ;
-        }
-
-        (*tagResult)<< "\n";
-
+        tagResult->writeTagReadLog(data);
     }
 
     return hpResult;
@@ -890,6 +879,48 @@ int SomaticHaplotagChrProcessor::inheritHaplotype(
     }
 
     return hpResult;
+}
+
+void SomaticTagLog::writeTagReadLog(TagReadLog& data) {
+
+    if (data.tumCountPS == nullptr){
+        std::cerr << "ERROR (writeTagReadLog) => Tumor PS count is nullptr" << std::endl;
+        exit(1);
+    }
+
+    (*tagReadLog)<< bam_get_qname(&data.aln)                                                    << "\t"
+                << data.bamHdr.target_name[data.aln.core.tid]                                   << "\t"
+                << data.aln.core.pos                                                            << "\t"
+                << data.norHPsimilarity                                                         << "\t"
+                << data.deriveByHpSimilarity                                                    << "\t"
+                << "H" << data.hpResultStr                                                      << "\t"
+                << data.psResultStr                                                             << "\t"
+                << data.hpCount.at(1)+data.hpCount.at(2)+data.hpCount.at(3)+data.hpCount.at(4)  << "\t"
+                << data.hpCount.at(1)                                                           << "\t"
+                << data.hpCount.at(2)                                                           << "\t"
+                << data.hpCount.at(3)                                                           << "\t"
+                << data.hpCount.at(4)                                                           << "\t"
+                << data.pqValue                                                                 << "\t\t";
+
+    // print position and HP
+    for(auto v : data.variantsHP ){
+        (*tagReadLog)<< " " << (v.first + 1) << "," << v.second ;
+    }
+
+    (*tagReadLog) << "\t";
+
+    // belong PS, number of variant
+    (*tagReadLog)<< "NorPS:";
+    for(auto v : data.norCountPS){
+        (*tagReadLog)<< " " << v.first << "," << v.second ;
+    }
+
+    (*tagReadLog)<< " TumPS:";
+    for(auto v : *data.tumCountPS){
+        (*tagReadLog)<< " " << v.first << "," << v.second ;
+    }
+
+    (*tagReadLog)<< "\n";
 }
 
 void SomaticHaplotagChrProcessor::addAuxiliaryTags(bam1_t *aln, int& haplotype, int& pqValue, int& psValue){

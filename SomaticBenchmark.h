@@ -56,10 +56,21 @@ class SomaticReadBenchmark: public VcfParser{
     private:
         
         bool openTestingFunc;
-
         // chr, metrics
         std::map<std::string, SomaticReadMetrics> chrMetrics;
+
         void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        void setChrSomaticReadVecPtr(
+            const std::string &chr,
+            std::map<std::string, std::vector<SomaticReadLog>*> &somaticReadVecMap,
+            std::vector<SomaticReadLog> &somaticReadVec
+        );
+        void writeReadLog(
+            const std::vector<std::string>& chrVec,
+            HaplotagParameters &params,
+            std::string logPosfix,
+            std::map<std::string, std::vector<SomaticReadLog>*> &somaticReadVecMap
+        );
     public:
 
         SomaticReadBenchmark();
@@ -69,13 +80,30 @@ class SomaticReadBenchmark: public VcfParser{
         void loadChrKey(const std::string &chr);
         void loadHighConSomatic(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         
+        // get metrics pointer for multiple threads parallel processing
         SomaticReadMetrics* getMetricsPtr(const std::string &chr);
 
-        void writePosAlleleCountLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
-        void writeTaggedSomaticReadLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix);
-        void writeCrossHighConSnpReadLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix);
-        void writeTaggedReadLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix);
-        void writeReadLog(std::vector<std::string> &chrVec, HaplotagParameters &params, std::string logPosfix, std::vector<SomaticReadLog> &somaticReadVec);
+        void writePosAlleleCountLog(
+            std::vector<std::string>& chrVec,
+            HaplotagParameters &params,
+            std::string logPosfix,
+            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat
+        );
+        void writeTaggedSomaticReadLog(
+            const std::vector<std::string>& chrVec,
+            HaplotagParameters &params,
+            std::string logPosfix
+        );
+        void writeCrossHighConSnpReadLog(
+            const std::vector<std::string>& chrVec,
+            HaplotagParameters &params,
+            std::string logPosfix
+        );
+        void writeTaggedReadLog(
+            const std::vector<std::string>& chrVec,
+            HaplotagParameters &params,
+            std::string logPosfix
+        );
         
         void displaySomaticVarCount(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
 };

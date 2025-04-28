@@ -294,6 +294,75 @@ struct chrReadHpResult{
     void recordAlignCoverRegion(int& curVarPos, int &startPos, int &endPos);
 };
 
+class LogEntry {
+    public:
+        std::string key;
+        std::string value;
+        size_t order;
+
+        LogEntry(const std::string& k, const std::string& v, size_t o) 
+            : key(k), value(v), order(o) {}
+};
+
+class MessageManager{
+    protected:
+        std::vector<LogEntry> entries;
+        size_t currentOrder;
+
+        // Insert entry after a specific order
+        template<typename T>
+        void insertByIndex(const std::string& key, const T& value, size_t insertIndex) {
+            // move the order of the entries after the insertIndex
+            for (auto& entry : entries) {
+                if (entry.order >= insertIndex) {
+                    entry.order ++;
+                }
+            }
+            std::string valueStr = transformValueToString(value);
+            entries.emplace_back(key, valueStr, insertIndex);
+            // std::cerr << "Inserted entry: " << key << ":" << valueStr << " at index " << insertIndex << std::endl;
+        }
+
+        //Generally add entry (add at the end)
+        template<typename T>
+        void addEntry(const std::string& key, const T& value) {
+            std::string valueStr = transformValueToString(value);
+
+            entries.emplace_back(key, valueStr, currentOrder);
+            // std::cerr << "Added entry: " << key << ":" << valueStr << " at index " << currentOrder << std::endl;
+            currentOrder++;
+        }
+
+        void printMessage(){
+            // Write all entries
+            for (const auto& entry : entries) {
+                std::cout << entry.key << ":" << entry.value << "\n";
+            }
+        }
+
+        // basic type
+        template<typename T>
+        std::string transformValueToString(const T& value) {
+            return std::to_string(value);
+        }
+
+        // Template Specialization
+        std::string transformValueToString(const std::string& value) {
+            return value;
+        }
+
+        // Template Specialization
+        std::string transformValueToString(const bool& value) {
+            return value ? "1" : "0";
+        }
+
+    public:
+        MessageManager() : currentOrder(0) {}
+
+        virtual ~MessageManager() = default;
+
+};
+
 class BamFileRAII {
     private:
         bool writeOutputBam;
@@ -317,6 +386,7 @@ class BamFileRAII {
         ~BamFileRAII();
 
         bool validateState();
+        void samWriteBam();
 
         void destroy();
 };
@@ -484,8 +554,6 @@ class ChromosomeProcessor : public GermlineJudgeBase{
             const std::string &chr,
             std::map<int, MultiGenomeVar> &currentVariants
         ){};
-
-        virtual void samWriteBam(BamFileRAII& bamRAII);
         
         void calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase);
 

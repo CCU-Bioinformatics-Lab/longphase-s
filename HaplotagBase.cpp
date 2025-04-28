@@ -16,8 +16,7 @@ writeOutputBam(writeOutputBam), isReleased(false), in(nullptr), out(nullptr), ba
 
         // load reference file
         if (hts_set_fai_filename(in, fastaFile.c_str()) != 0) {
-            std::cerr << "Cannot set FASTA index file for " + fastaFile << std::endl;
-            exit(1);
+            throw std::runtime_error("Cannot set FASTA index file for " + fastaFile);
         }
 
         // input reader
@@ -33,8 +32,7 @@ writeOutputBam(writeOutputBam), isReleased(false), in(nullptr), out(nullptr), ba
 
         // set thread
         if (hts_set_opt(in, HTS_OPT_THREAD_POOL, &threadPool) != 0) {
-            std::cerr << "Cannot set thread pool for input bam file " + BamFile << std::endl;
-            exit(1);
+            throw std::runtime_error("Cannot set thread pool for input bam file " + BamFile);
         }
 
         if (writeOutputBam) {
@@ -48,20 +46,18 @@ writeOutputBam(writeOutputBam), isReleased(false), in(nullptr), out(nullptr), ba
             // output writer
             int result = sam_hdr_write(out, bamHdr);
             if (result < 0) {
-                std::cerr << "Cannot write header to output bam file " + writeBamFile << std::endl;
-                exit(1);
+                throw std::runtime_error("Cannot write header to output bam file " + writeBamFile);
             }
             // set thread pool for output bam file
             if (hts_set_opt(out, HTS_OPT_THREAD_POOL, &threadPool) != 0) {
-                std::cerr << "Cannot set thread pool for output bam file " + BamFile << std::endl;
-                exit(1);
+                throw std::runtime_error("Cannot set thread pool for output bam file " + BamFile);
             }
         }
 
         // initialize an alignment
         aln = bam_init1();
         checkNullPointer(aln, "Cannot initialize alignment for bam file " + BamFile);
-    }catch(const std::runtime_error& e){
+    }catch(const std::exception& e){
         std::cerr << "[ERROR](BamFileRAII): " << e.what() << std::endl;
         exit(1);
     }
@@ -90,6 +86,18 @@ bool BamFileRAII::validateState(){
     }
 }
 
+void BamFileRAII::samWriteBam(){
+    try{
+        int result = sam_write1(out, bamHdr, aln);
+        if (result < 0) {
+            throw std::runtime_error("write output bam file failed");
+        }
+    }catch(const std::exception& e){
+        std::cerr << "[ERROR](BamFileRAII): " << e.what() << std::endl;
+        exit(1);
+    }
+}
+
 BamFileRAII::~BamFileRAII(){
     if (!isReleased) {
         destroy();
@@ -105,8 +113,11 @@ void BamFileRAII::destroy(){
     isReleased = true;
 }
 
-HaplotagBamParser::HaplotagBamParser(ParsingBamMode mode, bool writeOutputBam, bool mappingQualityFilter)
-: mode(mode), writeOutputBam(writeOutputBam), mappingQualityFilter(mappingQualityFilter)
+HaplotagBamParser::HaplotagBamParser(
+    ParsingBamMode mode,
+    bool writeOutputBam,
+    bool mappingQualityFilter
+): mode(mode), writeOutputBam(writeOutputBam), mappingQualityFilter(mappingQualityFilter)
 {
 
 }
@@ -125,7 +136,6 @@ void HaplotagBamParser::parsingBam(
     const Genome& genmoeType
 ){
     try{
-        std::time_t begin = time(NULL);
 
         if(mode == ParsingBamMode::MULTI_THREAD && writeOutputBam) {
             throw std::runtime_error("Cannot set Multi Thread mode when writeOutputBam is true");
@@ -170,8 +180,7 @@ void HaplotagBamParser::parsingBam(
         }
 
         hts_tpool_destroy(threadPool.pool);
-        std::cerr<< difftime(time(NULL), begin) << "s\n";
-    }catch(const std::runtime_error& e){
+    }catch(const std::exception& e){
         std::cerr << "[ERROR](HaplotagBamParser): " << e.what() << std::endl;
         exit(1);
     }
@@ -337,26 +346,13 @@ void ChromosomeProcessor::processSingleChromosome(
 
         //for write all reads in bam file
         if(writeOutputBam){
-            samWriteBam(bamRAII);
+            bamRAII.samWriteBam();
         }
     }
 
     postProcess(chr, currentVariants);
     
     hts_itr_destroy(iter);
-}
-
-void ChromosomeProcessor::samWriteBam(BamFileRAII& bamRAII){
-    if(bamRAII.validateState()){
-        int result = sam_write1(bamRAII.out, bamRAII.bamHdr, bamRAII.aln);
-        if (result < 0) {
-            std::cerr << "ERROR(samWriteBam): write output bam file failed" << std::endl;
-            exit(1);
-        }
-    }else{
-        std::cerr << "ERROR(samWriteBam): Bam file resource allocation failed" << std::endl;
-        exit(1);
-    }
 }
 
 void ChromosomeProcessor::calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase){
@@ -748,7 +744,7 @@ void GermlineJudgeBase::germlineJudgeDeletionHap(
 
 void GermlineJudgeBase::germlineJudgeSVHap(const bam1_t &aln, std::map<Genome, VCF_Info> &vcfSet, std::map<int, int>& hpCount, const int& genmoeType){
     auto readIter = vcfSet[Genome::NORMAL].readSVHapCount.find(bam_get_qname(&aln));
-    if( readIter != vcfSet[Genome::NORMAL].readSVHapCount.end() ){
+    if( readIter != vcfSet[Genome::NORMAL].readSVHapCount.end()){
         hpCount[SnpHP::GERMLINE_H1] += vcfSet[Genome::NORMAL].readSVHapCount[bam_get_qname(&aln)][0];
         hpCount[SnpHP::GERMLINE_H2] += vcfSet[Genome::NORMAL].readSVHapCount[bam_get_qname(&aln)][1];
     }

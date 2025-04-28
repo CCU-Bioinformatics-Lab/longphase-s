@@ -33,6 +33,126 @@ struct ReadStatistics {
                         totalEmptyVariant(0), totalWithOutVaraint(0){}
 };
 
+struct TagReadLog{
+    const bam1_t& aln;
+    const bam_hdr_t& bamHdr;
+    double& norHPsimilarity;
+    const std::string& hpResultStr;
+    const std::string& psResultStr;
+    std::map<int, int>& hpCount;
+    int& pqValue;
+    const std::map<int, int>& variantsHP;
+    const std::map<int, int>& norCountPS;
+    
+    //Somatic Read Log
+    const std::map<int, int>* tumCountPS;
+    double deriveByHpSimilarity;
+};
+
+// Normal header
+class GermlineTagLog : public MessageManager {
+    protected:
+        const HaplotagParameters& params;
+
+        void checkStreamStatus() {
+            if (!tagReadLog || !tagReadLog->is_open()) {
+                throw std::runtime_error("Output stream is not valid");
+            }
+        }
+
+        void addCommonBasicEntries(){
+            addEntry("snpFile", params.snpFile);       
+            addEntry("svFile", params.svFile);       
+            addEntry("bamFile", params.bamFile);    
+            addEntry("resultPrefix", params.resultPrefix);
+            addEntry("numThreads", params.numThreads);  
+            addEntry("region", params.region);  
+            addEntry("qualityThreshold", params.qualityThreshold);         
+            addEntry("percentageThreshold", params.percentageThreshold); 
+            addEntry("tagSupplementary", params.tagSupplementary); 
+        }
+        virtual void addBasicEntries(){
+            addCommonBasicEntries();
+        }
+
+        virtual void writeBasicColumns(){
+            *tagReadLog << "#ReadID\t"
+                    << "CHROM\t"
+                    << "ReadStart\t"
+                    << "Confidnet(%)\t"
+                    << "Haplotype\t"
+                    << "PhaseSet\t"
+                    << "TotalAllele\t"
+                    << "HP1Allele\t"
+                    << "HP2Allele\t"
+                    << "phasingQuality(PQ)\t"
+                    << "(Variant,HP)\t"
+                    << "(PhaseSet,Variantcount)\n";
+        }
+
+    public:
+        std::ofstream* tagReadLog;
+
+        GermlineTagLog(const HaplotagParameters& params);
+        ~GermlineTagLog();
+
+        virtual void writeHeader() {
+            addBasicEntries();
+            // Sort entries by order
+            std::sort(entries.begin(), entries.end(), 
+                    [](const LogEntry& a, const LogEntry& b) {
+                        return a.order < b.order;
+                    });
+
+            // Write all entries
+            for (const auto& entry : entries) {
+                *tagReadLog << "##" << entry.key << ":" << entry.value << "\n";
+            }
+            
+            writeBasicColumns();
+            // printMessage();
+        }
+
+        virtual void writeTagReadLog(TagReadLog& data);
+};
+
+// Tumor specific header
+class SomaticTagLog : public GermlineTagLog {
+    public:
+        SomaticTagLog(const HaplotagParameters& params) : GermlineTagLog(params){}
+        ~SomaticTagLog(){};
+
+        void addBasicEntries() override {
+            // add basic entries
+            addCommonBasicEntries();
+            // add tumor specific entries
+            insertByIndex("TumorSnpFile", params.tumorSnpFile, 1);
+            insertByIndex("tumorBamFile", params.tumorBamFile, 4);
+            insertByIndex("tagTumor", params.tagTumorSnp, 8);
+            insertByIndex("somaticCallingThreshold", params.somaticCallingMpqThreshold, 9);
+        }
+
+        void writeBasicColumns() override {
+            *tagReadLog << "#ReadID\t"
+                        << "CHROM\t"
+                        << "ReadStart\t"
+                        << "Confidnet(%)\t"
+                        << "deriveByHpSimilarity\t"
+                        << "Haplotype\t"
+                        << "PhaseSet\t"
+                        << "TotalAllele\t"
+                        << "HP1Allele\t"
+                        << "HP2Allele\t"
+                        << "HP3Allele\t"
+                        << "HP4Allele\t"
+                        << "phasingQuality(PQ)\t"
+                        << "(Variant,HP)\t"
+                        << "(PhaseSet,Variantcount)\n";
+        }
+
+        void writeTagReadLog(TagReadLog& data) override;
+};
+
 class GermlineHaplotagCigarParser: public CigarParser{
     protected:
         void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base) override;
@@ -47,7 +167,8 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
 
     protected:
         ReadStatistics& readStats;
-        std::ofstream *tagResult;
+        // std::ofstream *tagResult;
+        GermlineTagLog* tagResult;
 
         ReadStatistics localReadStats;
         
@@ -75,7 +196,7 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
             const bam1_t &aln,
             std::string chrName,
             double percentageThreshold,
-            std::ofstream *tagResult,
+            GermlineTagLog *tagResult,
             int &pqValue,
             int &psValue,
             const int tagGeneType,
@@ -85,20 +206,6 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
             std::map<int, MultiGenomeVar> &currentChrVariants,
             std::map<Genome, VCF_Info> &vcfSet
         );
-
-        void writeTagReadLog(
-            std::ofstream& tagResult,
-            const bam1_t& aln,
-            const bam_hdr_t& bamHdr,
-            int& hpResult,
-            double& max,
-            double& min,
-            std::map<int, int>& hpCount,
-            int& pqValue,
-            const std::map<int, int>& variantsHP,
-            const std::map<int, int>& countPS
-        );
-
 
         void initFlag(bam1_t *aln, std::string flag);
 
@@ -114,7 +221,7 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
             bool writeOutputBam,
             bool mappingQualityFilter,
             ReadStatistics& readStats,
-            std::ofstream *tagResult
+            GermlineTagLog *tagResult
         );
         ~GermlineHaplotagChrProcessor() override;
 };
@@ -123,19 +230,28 @@ class GermlineHaplotagBamParser: public HaplotagBamParser{
     private:
     protected:
         ReadStatistics& readStats;
-        std::ofstream *tagResult;
+        GermlineTagLog *tagResult;
+
         std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) override{
             return std::unique_ptr<ChromosomeProcessor>(new GermlineHaplotagChrProcessor(writeOutputBam, mappingQualityFilter, readStats, tagResult));
         };
+
+        // create tag read log
+        virtual GermlineTagLog* createTagReadLog(const HaplotagParameters& params){
+            std::cout << "create germline tag read log" << std::endl;
+            return new GermlineTagLog(params);
+        };
+
     public:
         GermlineHaplotagBamParser(
             ParsingBamMode mode,
             bool writeOutputBam,
             bool mappingQualityFilter,
-            ReadStatistics& readStats,
-            HaplotagParameters& params
+            ReadStatistics& readStats
         );
         ~GermlineHaplotagBamParser() override;
+
+        void createTagLog(const HaplotagParameters& params);
 };
 
 class SomaticHaplotagCigarParser: public CigarParser, public SomaticJudgeBase{
@@ -185,7 +301,7 @@ class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor, public S
             const bam1_t &aln,
             std::string chrName,
             double percentageThreshold,
-            std::ofstream *tagResult,
+            GermlineTagLog *tagResult,
             int &pqValue,
             int &psValue,
             const int tagGeneType,
@@ -212,7 +328,7 @@ class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor, public S
             bool writeOutputBam,
             bool mappingQualityFilter,
             ReadStatistics& readStats,
-            std::ofstream *tagResult,
+            GermlineTagLog *tagResult,
             SomaticReadBenchmark& highConSomaticData,
             ReadHpDistriLog& hpBeforeInheritance,
             ReadHpDistriLog& hpAfterInheritance,
@@ -239,13 +355,19 @@ class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
                 chr
             ));
         };
+
+        // create somatic tag read log
+        virtual GermlineTagLog* createTagReadLog(const HaplotagParameters& params) override {
+            std::cout << "create somatic tag read log" << std::endl;
+            return new SomaticTagLog(params);
+        }
+
     public:
         SomaticHaplotagBamParser(
             ParsingBamMode mode,
             bool writeOutputBam,
             bool mappingQualityFilter,
             ReadStatistics& readStats,
-            HaplotagParameters& params,
             SomaticReadBenchmark& highConSomaticData,
             ReadHpDistriLog& hpBeforeInheritance,
             ReadHpDistriLog& hpAfterInheritance
@@ -255,7 +377,7 @@ class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
 
 class HaplotagProcess: public SomaticJudgeBase
 {
-    private:
+    protected:
         HaplotagParameters &params;
 
         std::vector<std::string> *chrVec;
@@ -283,7 +405,22 @@ class HaplotagProcess: public SomaticJudgeBase
         
         std::time_t processBegin;
 
-        void tagRead(HaplotagParameters &params, const Genome& geneType);
+        virtual void parseVariantFiles(VcfParser& vcfParser);
+        // load SNP, SV, MOD vcf file
+        void parseCommonVariantFiles(VcfParser& vcfParser);
+
+        // decide which genome type chrVec and chrLength belong to
+        void setChrVecAndChrLength(Genome tagGeneType);
+
+        // update chromosome processing based on region
+        void setProcessingChromRegion();
+
+        // calculate SNP counts
+        void calculateSnpCounts();
+
+        virtual void prepareForHaplotag();
+
+        virtual void tagRead(HaplotagParameters &params, const Genome& geneType);
         void printAlignmentStaristics();
     public:
         HaplotagProcess(HaplotagParameters &params);
@@ -291,6 +428,5 @@ class HaplotagProcess: public SomaticJudgeBase
         virtual ~HaplotagProcess();
 
 };
-
 
 #endif
