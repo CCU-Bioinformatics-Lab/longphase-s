@@ -291,8 +291,14 @@ int HaplotagMain(int argc, char** argv, std::string in_version)
     ecParams.outputFormat=opt::outputFormat;
     ecParams.benchmarkVcf=opt::highConSnp;
     ecParams.enableFilter=opt::enableFilter;
-    HaplotagProcess processor(ecParams);
-    processor.taggingProcess();
+    
+    if(ecParams.tagTumorSnp){
+        SomaticHaplotagProcess processor(ecParams);
+        processor.taggingProcess();
+    }else{
+        HaplotagProcess processor(ecParams);
+        processor.taggingProcess();
+    }
 
     return 0;
 }

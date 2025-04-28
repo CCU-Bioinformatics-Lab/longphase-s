@@ -49,6 +49,51 @@ struct TagReadLog{
     double deriveByHpSimilarity;
 };
 
+class HaplotagParamsMessage : public MessageManager{
+    protected:
+        const HaplotagParameters& params;
+    public:
+        HaplotagParamsMessage(const HaplotagParameters& params):params(params){}
+
+        void printParamsMessage(){
+            addEntry("phased SNP file", params.snpFile);
+            if(params.tagTumorSnp) {
+                addEntry("tumor SNP file", params.tumorSnpFile);
+            }
+            addEntry("phased SV file", params.svFile);
+            addEntry("phased MOD file", params.modFile);
+            addEntry("input bam file", params.bamFile);
+            if(params.tagTumorSnp) {
+                addEntry("input tumor bam file", params.tumorBamFile);
+            }
+            addEntry("input ref file", params.fastaFile);
+            addEntry("output bam file", params.resultPrefix + "." + params.outputFormat);
+            addEntry("number of threads", params.numThreads);
+            addEntry("write log file", params.writeReadLog);
+            addEntry("log file", params.writeReadLog ? (params.resultPrefix+".out") : "");
+            addEntry("separator", "-------------------------------------------");
+            addEntry("somatic mode", params.tagTumorSnp);
+            addEntry("enable somatic variant filter", params.enableFilter);
+            addEntry("tag region", !params.region.empty() ? params.region : "all");
+            if(params.tagTumorSnp) {
+                addEntry("somatic calling mapping quality", params.somaticCallingMpqThreshold);
+            }
+            addEntry("filter mapping quality below", params.qualityThreshold);
+            addEntry("percentage threshold", params.percentageThreshold);
+            addEntry("tag supplementary", params.tagSupplementary);
+            addEntry("separator", "-------------------------------------------");
+
+            // Print all entries with proper formatting
+            for (const auto& entry : entries) {
+                if (entry.key == "separator") {
+                    std::cerr << entry.value << "\n";
+                } else {
+                    std::cerr << std::left << std::setw(31) << entry.key << ": " << entry.value << "\n";
+                }
+            }
+        }
+};
+
 // Normal header
 class GermlineTagLog : public MessageManager {
     protected:
@@ -379,6 +424,7 @@ class HaplotagProcess: public SomaticJudgeBase
 {
     protected:
         HaplotagParameters &params;
+        HaplotagParamsMessage paramsMessage;
 
         std::vector<std::string> *chrVec;
         std::map<std::string, int> *chrLength;
@@ -394,39 +440,82 @@ class HaplotagProcess: public SomaticJudgeBase
         std::map<Genome, VCF_Info> vcfSet;
 
         //--------------------verification parameter---------------------
-        bool tagTumorMode;
 
         ReadStatistics readStats;
-
-        ReadHpDistriLog *hpBeforeInheritance;
-        ReadHpDistriLog *hpAfterInheritance;
-        
-        SomaticReadBenchmark highConSomaticData;
         
         std::time_t processBegin;
 
         virtual void parseVariantFiles(VcfParser& vcfParser);
         // load SNP, SV, MOD vcf file
         void parseCommonVariantFiles(VcfParser& vcfParser);
-
         // decide which genome type chrVec and chrLength belong to
-        void setChrVecAndChrLength(Genome tagGeneType);
-
+        virtual void setChrVecAndChrLength();
         // update chromosome processing based on region
         void setProcessingChromRegion();
-
         // calculate SNP counts
         void calculateSnpCounts();
-
-        virtual void prepareForHaplotag();
-
+        virtual void prepareForHaplotag(){};
         virtual void tagRead(HaplotagParameters &params, const Genome& geneType);
+        virtual void postprocessForHaplotag(){};
         void printAlignmentStaristics();
+
+        virtual GermlineHaplotagBamParser* createHaplotagBamParser(
+            ParsingBamMode mode,
+            bool writeOutputBam,
+            bool mappingQualityFilter,
+            ReadStatistics& readStats
+        ){
+            return new GermlineHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats);
+        }
+
+        virtual std::string getNormalSnpParsingMessage(){
+            return "parsing SNP VCF ... ";
+        };
+
+        virtual std::string getTagReadStartMessage(){
+            return "tag read start ...\n";
+        };
+
     public:
         HaplotagProcess(HaplotagParameters &params);
         void taggingProcess();
         virtual ~HaplotagProcess();
 
+};
+
+class SomaticHaplotagProcess: public HaplotagProcess{
+    protected:
+        ReadHpDistriLog *hpBeforeInheritance;
+        ReadHpDistriLog *hpAfterInheritance;
+        
+        SomaticReadBenchmark highConSomaticData;
+
+        void parseVariantFiles(VcfParser& vcfParser) override;
+        void setChrVecAndChrLength() override;
+        void prepareForHaplotag() override;
+
+        void postprocessForHaplotag() override;
+
+        GermlineHaplotagBamParser* createHaplotagBamParser(
+            ParsingBamMode mode,
+            bool writeOutputBam,
+            bool mappingQualityFilter,
+            ReadStatistics& readStats
+        ) override{
+            return new SomaticHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats, highConSomaticData, *hpBeforeInheritance, *hpAfterInheritance);
+        }
+
+        virtual std::string getNormalSnpParsingMessage() override{
+            return "parsing normal SNP VCF ... ";
+        };
+
+        virtual std::string getTagReadStartMessage() override{
+            return "somatic tagging start ...\n";
+        };
+
+    public:
+        SomaticHaplotagProcess(HaplotagParameters &params);
+        ~SomaticHaplotagProcess() override;
 };
 
 #endif

@@ -1451,8 +1451,8 @@ void ReadHpDistriLog::removeNotDeriveByH1andH2pos(const std::vector<std::string>
 }
 
 
-VcfParser::VcfParser(bool tagTumorMode){
-    this->tagTumorMode = tagTumorMode;
+VcfParser::VcfParser(Genome tagGeneType){
+    this->tagGeneType = tagGeneType;
     reset();
 }
 
@@ -1769,7 +1769,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
             }
         }
         // record unphased tumor SNPs
-        else if((tagTumorMode == true)){
+        else if((tagGeneType == Genome::TUMOR)){
             //homozygous SNPs
             if( fields[9][modifu_start] == '1' && fields[9][modifu_start+1] == '/' && fields[9][modifu_start+2] == '1' ){
                 if(parseSnpFile){

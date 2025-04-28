@@ -20,7 +20,7 @@ struct HaplotagParameters
     
     double percentageThreshold;
     // Filter the read mapping quality below than threshold
-    float somaticCallingMpqThreshold;  
+    int somaticCallingMpqThreshold;  
     
     std::string snpFile;
     std::string tumorSnpFile;   
@@ -346,14 +346,39 @@ class MessageManager{
             return std::to_string(value);
         }
 
-        // Template Specialization
+        // Template Specialization for std::string
         std::string transformValueToString(const std::string& value) {
             return value;
         }
 
-        // Template Specialization
+        // Template Specialization for bool
         std::string transformValueToString(const bool& value) {
-            return value ? "1" : "0";
+            return value ? "true" : "false";
+        }
+
+        // Template Specialization for const char*
+        std::string transformValueToString(const char* value) {
+            return value;
+        }
+
+        // Template Specialization for char[]
+        template<size_t N>
+        std::string transformValueToString(const char (&value)[N]) {
+            return std::string(value);
+        }
+
+        // Template Specialization for double
+        std::string transformValueToString(const double& value) {
+            std::ostringstream oss;
+            oss << std::fixed << std::setprecision(2) << value;
+            return oss.str();
+        }
+
+        // Template Specialization for float
+        std::string transformValueToString(const float& value) {
+            std::ostringstream oss;
+            oss << std::fixed << std::setprecision(2) << value;
+            return oss.str();
         }
 
     public:
@@ -634,12 +659,13 @@ class CigarParser : public GermlineJudgeBase{
         
 class VcfParser{
     private:
+        Genome tagGeneType;
         bool parseSnpFile;
         bool parseSVFile;
         bool parseMODFile;
-        bool tagTumorMode;
         bool integerPS;
         std::map<std::string, int> psIndex;
+
         void compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         void unCompressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         virtual void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
@@ -648,7 +674,7 @@ class VcfParser{
 
     public:
         VcfParser();
-        VcfParser(bool tagTumorMode);
+        VcfParser(Genome tagGeneType);
         virtual ~VcfParser();
         void setParseSnpFile(bool parseSnpFile);
         void setParseSVFile(bool parseSVFile);
