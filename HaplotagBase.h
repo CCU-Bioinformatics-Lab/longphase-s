@@ -309,6 +309,16 @@ class MessageManager{
         std::vector<LogEntry> entries;
         size_t currentOrder;
 
+        //Generally add entry (add at the end)
+        template<typename T>
+        void addEntry(const std::string& key, const T& value) {
+            std::string valueStr = transformValueToString(value);
+
+            entries.emplace_back(key, valueStr, currentOrder);
+            // std::cerr << "Added entry: " << key << ":" << valueStr << " at index " << currentOrder << std::endl;
+            currentOrder++;
+        }
+
         // Insert entry after a specific order
         template<typename T>
         void insertByIndex(const std::string& key, const T& value, size_t insertIndex) {
@@ -323,14 +333,40 @@ class MessageManager{
             // std::cerr << "Inserted entry: " << key << ":" << valueStr << " at index " << insertIndex << std::endl;
         }
 
-        //Generally add entry (add at the end)
-        template<typename T>
-        void addEntry(const std::string& key, const T& value) {
-            std::string valueStr = transformValueToString(value);
 
-            entries.emplace_back(key, valueStr, currentOrder);
-            // std::cerr << "Added entry: " << key << ":" << valueStr << " at index " << currentOrder << std::endl;
-            currentOrder++;
+        // Insert a new message after a specific key
+        // If the target key is not found, append the message at the end
+        template<typename T>
+        void insertAfterKey(const std::string& newKey, const T& newValue, const std::string& targetKey) {
+            // Find the position of the target key
+            auto it = std::find_if(entries.begin(), entries.end(),
+                [&targetKey](const LogEntry& entry) { return entry.key == targetKey; });
+            
+            if (it == entries.end()) {
+                // If target key not found, append to the end
+                std::cerr << "Target key not found: " << targetKey << std::endl;
+                exit(1);
+            }
+            
+            // Calculate insertion position (target key's order + 1)
+            size_t insertIndex = it->order + 1;
+            
+            // Increment order for all entries after the insertion point
+            for (auto& entry : entries) {
+                if (entry.order >= insertIndex) {
+                    entry.order++;
+                }
+            }
+            
+            // Insert the new entry
+            std::string valueStr = transformValueToString(newValue);
+            entries.emplace_back(newKey, valueStr, insertIndex);
+        }
+
+        void sortEntries(){
+            std::sort(entries.begin(), entries.end(), [](const LogEntry& a, const LogEntry& b) {
+                return a.order < b.order;
+            });
         }
 
         void printMessage(){

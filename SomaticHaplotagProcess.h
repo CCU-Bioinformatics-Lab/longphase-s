@@ -6,6 +6,20 @@
 #include "HaplotagProcess.h"
 #include "SomaticBenchmark.h"
 
+class SomaticHaplotagParamsMessage : public HaplotagParamsMessage{
+    public:
+        SomaticHaplotagParamsMessage(const HaplotagParameters& params):HaplotagParamsMessage(params){}
+
+        virtual void addParamsMessage() override {
+            addCommonParamsMessage();
+            insertAfterKey("tumor SNP file", params.tumorSnpFile, "phased SNP file");
+            insertAfterKey("input tumor bam file", params.tumorBamFile, "input bam file");
+            insertAfterKey("somatic calling mapping quality", params.somaticCallingMpqThreshold, "tag region");
+            // sort the entries by order
+            sortEntries();
+        } 
+};
+
 // Tumor specific header
 class SomaticTagLog : public GermlineTagLog {
     public:
@@ -16,10 +30,10 @@ class SomaticTagLog : public GermlineTagLog {
             // add basic entries
             addCommonBasicEntries();
             // add tumor specific entries
-            insertByIndex("TumorSnpFile", params.tumorSnpFile, 1);
-            insertByIndex("tumorBamFile", params.tumorBamFile, 4);
-            insertByIndex("tagTumor", params.tagTumorSnp, 8);
-            insertByIndex("somaticCallingThreshold", params.somaticCallingMpqThreshold, 9);
+            insertAfterKey("tumorSnpFile", params.tumorSnpFile, "snpFile");
+            insertAfterKey("tumorBamFile", params.tumorBamFile, "bamFile");
+            insertAfterKey("tagTumor", params.tagTumorSnp, "region");
+            insertAfterKey("somaticCallingThreshold", params.somaticCallingMpqThreshold, "tagTumor");
         }
 
         void writeBasicColumns() override {
@@ -147,7 +161,6 @@ class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
 
         // create somatic tag read log
         virtual GermlineTagLog* createTagReadLog(const HaplotagParameters& params) override {
-            std::cout << "create somatic tag read log" << std::endl;
             return new SomaticTagLog(params);
         }
 
@@ -166,6 +179,9 @@ class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
 
 class SomaticHaplotagProcess: public HaplotagProcess, public SomaticJudgeBase{
     protected:
+
+        SomaticHaplotagParamsMessage somaticParamsMessage;
+
         ReadHpDistriLog *hpBeforeInheritance;
         ReadHpDistriLog *hpAfterInheritance;
         
@@ -173,7 +189,9 @@ class SomaticHaplotagProcess: public HaplotagProcess, public SomaticJudgeBase{
 
         void parseVariantFiles(VcfParser& vcfParser) override;
         void setChrVecAndChrLength() override;
-        void prepareForHaplotag() override;
+        
+        // calculate SNP counts
+        void calculateSnpCounts();
 
         void postprocessForHaplotag() override;
 
@@ -197,6 +215,8 @@ class SomaticHaplotagProcess: public HaplotagProcess, public SomaticJudgeBase{
     public:
         SomaticHaplotagProcess(HaplotagParameters &params);
         ~SomaticHaplotagProcess() override;
+
+        virtual void taggingProcess() override;
 };
 
 #endif

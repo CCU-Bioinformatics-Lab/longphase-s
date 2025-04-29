@@ -21,16 +21,12 @@ HaplotagProcess::~HaplotagProcess(){
 
 void HaplotagProcess::taggingProcess()
 {
+  
+    paramsMessage.addParamsMessage();
     paramsMessage.printParamsMessage();
     
     // decide on the type of tagging for VCF and BAM files
-    Genome tagGeneType;
-
-    if(params.tagTumorSnp){
-        tagGeneType = TUMOR;
-    }else{
-        tagGeneType = NORMAL;
-    }
+    Genome tagGeneType = NORMAL;
 
     VcfParser vcfParser(tagGeneType);
     // load SNP, SV, MOD vcf file
@@ -39,13 +35,8 @@ void HaplotagProcess::taggingProcess()
     setChrVecAndChrLength();
     // update chromosome processing based on region
     setProcessingChromRegion();
-    // calculate SNP counts
-    calculateSnpCounts();
-    // preprocess before haplotag
-    prepareForHaplotag();
     // tag read
     tagRead(params, tagGeneType);
-
     // postprocess after haplotag
     postprocessForHaplotag();
 
@@ -114,29 +105,6 @@ void HaplotagProcess::setProcessingChromRegion(){
     }
 }
 
-void HaplotagProcess::calculateSnpCounts(){
-    int tumor_snp_count = 0;
-    int normal_snp_count = 0;
-    int overlap_snp_count = 0;
-    for(auto& chrIter : (*chrVec)){
-        auto chrVarIter = (*mergedChrVarinat)[chrIter].begin();
-        while(chrVarIter != (*mergedChrVarinat)[chrIter].end()){
-            if((*chrVarIter).second.isExists(TUMOR)){
-                tumor_snp_count++;
-            }
-            if((*chrVarIter).second.isExists(NORMAL)){
-                normal_snp_count++;
-            }
-            if((*chrVarIter).second.isExists(TUMOR) && (*chrVarIter).second.isExists(NORMAL)){
-                overlap_snp_count++;
-            }
-            chrVarIter++;
-        }
-    }
-    std::cerr << "Normal SNP count: " << normal_snp_count << std::endl;
-    std::cerr << "Tumor SNP count: " << tumor_snp_count << std::endl;
-    std::cerr << "Overlap SNP count: " << overlap_snp_count << std::endl;
-}
 
 void HaplotagProcess::tagRead(HaplotagParameters &params, const Genome& geneType){
 
@@ -149,10 +117,10 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const Genome& geneType
         openBamFile = params.bamFile;
     }
 
-    ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;
-    bool writeOutputBam = false;
-    // ParsingBamMode mode = ParsingBamMode::SINGLE_THREAD;
-    // bool writeOutputBam = true;
+    // ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;
+    // bool writeOutputBam = false;
+    ParsingBamMode mode = ParsingBamMode::SINGLE_THREAD;
+    bool writeOutputBam = true;
     bool mappingQualityFilter = true;
 
     // tag read

@@ -50,20 +50,12 @@ struct TagReadLog{
 class HaplotagParamsMessage : public MessageManager{
     protected:
         const HaplotagParameters& params;
-    public:
-        HaplotagParamsMessage(const HaplotagParameters& params):params(params){}
 
-        void printParamsMessage(){
+        void addCommonParamsMessage(){
             addEntry("phased SNP file", params.snpFile);
-            if(params.tagTumorSnp) {
-                addEntry("tumor SNP file", params.tumorSnpFile);
-            }
             addEntry("phased SV file", params.svFile);
             addEntry("phased MOD file", params.modFile);
             addEntry("input bam file", params.bamFile);
-            if(params.tagTumorSnp) {
-                addEntry("input tumor bam file", params.tumorBamFile);
-            }
             addEntry("input ref file", params.fastaFile);
             addEntry("output bam file", params.resultPrefix + "." + params.outputFormat);
             addEntry("number of threads", params.numThreads);
@@ -73,14 +65,20 @@ class HaplotagParamsMessage : public MessageManager{
             addEntry("somatic mode", params.tagTumorSnp);
             addEntry("enable somatic variant filter", params.enableFilter);
             addEntry("tag region", !params.region.empty() ? params.region : "all");
-            if(params.tagTumorSnp) {
-                addEntry("somatic calling mapping quality", params.somaticCallingMpqThreshold);
-            }
             addEntry("filter mapping quality below", params.qualityThreshold);
             addEntry("percentage threshold", params.percentageThreshold);
             addEntry("tag supplementary", params.tagSupplementary);
-            addEntry("separator", "-------------------------------------------");
+            addEntry("separator", "-------------------------------------------");    
+        }
 
+    public:
+        HaplotagParamsMessage(const HaplotagParameters& params):params(params){}
+
+        virtual void addParamsMessage(){
+            addCommonParamsMessage();
+        }
+
+        void printParamsMessage(){
             // Print all entries with proper formatting
             for (const auto& entry : entries) {
                 if (entry.key == "separator") {
@@ -142,10 +140,7 @@ class GermlineTagLog : public MessageManager {
         virtual void writeHeader() {
             addBasicEntries();
             // Sort entries by order
-            std::sort(entries.begin(), entries.end(), 
-                    [](const LogEntry& a, const LogEntry& b) {
-                        return a.order < b.order;
-                    });
+            sortEntries();
 
             // Write all entries
             for (const auto& entry : entries) {
@@ -244,7 +239,6 @@ class GermlineHaplotagBamParser: public HaplotagBamParser{
 
         // create tag read log
         virtual GermlineTagLog* createTagReadLog(const HaplotagParameters& params){
-            std::cout << "create germline tag read log" << std::endl;
             return new GermlineTagLog(params);
         };
 
@@ -279,8 +273,6 @@ class HaplotagProcess
         // record the VCF files
         std::map<Genome, VCF_Info> vcfSet;
 
-        //--------------------verification parameter---------------------
-
         ReadStatistics readStats;
         
         std::time_t processBegin;
@@ -292,9 +284,7 @@ class HaplotagProcess
         virtual void setChrVecAndChrLength();
         // update chromosome processing based on region
         void setProcessingChromRegion();
-        // calculate SNP counts
-        void calculateSnpCounts();
-        virtual void prepareForHaplotag(){};
+
         virtual void tagRead(HaplotagParameters &params, const Genome& geneType);
         virtual void postprocessForHaplotag(){};
         void printAlignmentStaristics();
@@ -318,7 +308,7 @@ class HaplotagProcess
 
     public:
         HaplotagProcess(HaplotagParameters &params);
-        void taggingProcess();
+        virtual void taggingProcess();
         virtual ~HaplotagProcess();
 
 };

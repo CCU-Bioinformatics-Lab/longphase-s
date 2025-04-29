@@ -2,7 +2,7 @@
 
 
 SomaticHaplotagProcess::SomaticHaplotagProcess(HaplotagParameters &params)
-    : HaplotagProcess(params)
+    : HaplotagProcess(params), somaticParamsMessage(params)
 {
     hpBeforeInheritance = new ReadHpDistriLog();
     hpAfterInheritance = new ReadHpDistriLog();
@@ -12,6 +12,40 @@ SomaticHaplotagProcess::~SomaticHaplotagProcess(){
     delete hpBeforeInheritance;
     delete hpAfterInheritance;
 }
+
+void SomaticHaplotagProcess::taggingProcess()
+{
+    somaticParamsMessage.addParamsMessage();
+    somaticParamsMessage.printParamsMessage();
+
+    // decide on the type of tagging for VCF and BAM files
+    Genome tagGeneType = TUMOR;
+
+    VcfParser vcfParser(tagGeneType);
+    // load SNP, SV, MOD vcf file
+    parseVariantFiles(vcfParser);
+    //decide which genome type chrVec and chrLength belong to
+    setChrVecAndChrLength();
+    // update chromosome processing based on region
+    setProcessingChromRegion();
+    // calculate SNP counts
+    calculateSnpCounts();
+
+    //somatic variant calling
+    SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(*chrVec, params);
+    somaticVarCaller->VariantCalling(params, *chrVec, *chrLength, (*mergedChrVarinat), vcfSet, Genome::TUMOR);
+    somaticVarCaller->getSomaticFlag(*chrVec, *mergedChrVarinat);
+    delete somaticVarCaller;
+    // return;
+
+    // tag read
+    tagRead(params, tagGeneType);
+
+    // postprocess after haplotag
+    postprocessForHaplotag();
+
+    return;
+};
 
 void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
     // parse common variant files
@@ -62,14 +96,28 @@ void SomaticHaplotagProcess::setChrVecAndChrLength(){
     }
 }
 
-void SomaticHaplotagProcess::prepareForHaplotag(){
-    //somatic variant calling
-    SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(*chrVec, params);
-    somaticVarCaller->VariantCalling(params, *chrVec, *chrLength, (*mergedChrVarinat), vcfSet, Genome::TUMOR);
-    somaticVarCaller->getSomaticFlag(*chrVec, *mergedChrVarinat);
-
-    delete somaticVarCaller;
-    // return;
+void SomaticHaplotagProcess::calculateSnpCounts(){
+    int tumor_snp_count = 0;
+    int normal_snp_count = 0;
+    int overlap_snp_count = 0;
+    for(auto& chrIter : (*chrVec)){
+        auto chrVarIter = (*mergedChrVarinat)[chrIter].begin();
+        while(chrVarIter != (*mergedChrVarinat)[chrIter].end()){
+            if((*chrVarIter).second.isExists(TUMOR)){
+                tumor_snp_count++;
+            }
+            if((*chrVarIter).second.isExists(NORMAL)){
+                normal_snp_count++;
+            }
+            if((*chrVarIter).second.isExists(TUMOR) && (*chrVarIter).second.isExists(NORMAL)){
+                overlap_snp_count++;
+            }
+            chrVarIter++;
+        }
+    }
+    std::cerr << "Normal SNP count: " << normal_snp_count << std::endl;
+    std::cerr << "Tumor SNP count: " << tumor_snp_count << std::endl;
+    std::cerr << "Overlap SNP count: " << overlap_snp_count << std::endl;
 }
 
 void SomaticHaplotagProcess::postprocessForHaplotag(){
