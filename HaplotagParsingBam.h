@@ -73,6 +73,16 @@ class SomaticJudgeBase{
             std::vector<int> *tumorAllelePosVec
         );
 
+        void normalSNPjudgeHP(
+            const std::string& chrName, 
+            int& curPos,
+            MultiGenomeVar& curVar,
+            std::string& base,
+            std::map<int, int>& hpCount, 
+            std::map<int, int>& norCountPS,
+            std::map<int, int> *variantsHP
+        );
+
         virtual void OnlyTumorSNPjudgeHP(
             const std::string &chrName,
             int &curPos, MultiGenomeVar &curVar,
@@ -81,7 +91,7 @@ class SomaticJudgeBase{
             std::map<int, int> *tumCountPS,
             std::map<int, int> *variantsHP,
             std::vector<int> *tumorAllelePosVec
-        );
+        ){};
 
         int determineReadHP(
             std::map<int, int> &hpCount,

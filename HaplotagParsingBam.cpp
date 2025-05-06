@@ -816,123 +816,25 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator
     // normal & tumor SNP at the current position (base on normal phased SNPs)
     // both normal and tumor samples that do not exist in the high-confidence set
     if(curVar.isExists(NORMAL) && curVar.isExists(TUMOR)){
-
         // the tumor & normal SNP GT are phased heterozygous 
-        if((curVar.Variant[NORMAL].is_phased_hetero) && (curVar.Variant[TUMOR].is_phased_hetero)){   
-            if(curVar.Variant[NORMAL].allele.Ref == base || curVar.Variant[NORMAL].allele.Alt == base){
-                if(!curVar.Variant[NORMAL].isExistPhasedSet()){
-                    std::cerr<< "Unable to locate the phase set of the current normal SNP\n"
-                             << curPos << "\t"
-                             << curVar.Variant[NORMAL].allele.Ref << "\t"
-                             << curVar.Variant[NORMAL].allele.Alt  << "\n";
-                    exit(EXIT_SUCCESS);
-                }
+        if((curVar.Variant[NORMAL].is_phased_hetero) && (curVar.Variant[TUMOR].is_phased_hetero)){ 
+            normalSNPjudgeHP(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
 
-                std::string& norHP1 = curVar.Variant[NORMAL].HP1;
-                std::string& norHP2 = curVar.Variant[NORMAL].HP2;
-
-                if(norHP1 == base){
-                    hpCount[1]++;
-                    //Germline mutation
-                    if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::GERMLINE_H1;
-                }else if(norHP2 == base){                
-                    hpCount[2]++;
-                    //Germline mutation
-                    if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::GERMLINE_H2;
-
-                }else{
-                    std::cerr<< "ERROR : (phased hetero)normal & (phased hetero)tumor not match base at position => chr:" << chrName << " pos: " << curPos << "\n";
-                    exit(1);
-                }
-                norCountPS[curVar.Variant[NORMAL].PhasedSet]++;
-            }
+        }
         //the normal SNP GT is phased heterozgous & the tumor SNP GT is unphased heterozgous 
-        }else if((curVar.Variant[NORMAL].is_phased_hetero) && (curVar.Variant[TUMOR].is_unphased_hetero)){   
-            if(curVar.Variant[NORMAL].allele.Ref == base || curVar.Variant[NORMAL].allele.Alt == base){
+        else if((curVar.Variant[NORMAL].is_phased_hetero) && (curVar.Variant[TUMOR].is_unphased_hetero)){   
+            normalSNPjudgeHP(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
 
-                if(!curVar.Variant[NORMAL].isExistPhasedSet()){
-                    std::cerr<< "Unable to locate the phase set of the current normal SNP\n"
-                             << curPos << "\t"
-                             << curVar.Variant[NORMAL].allele.Ref << "\t"
-                             << curVar.Variant[NORMAL].allele.Alt  << "\n";
-                    exit(EXIT_SUCCESS);
-                }
-
-                std::string& norHP1 = curVar.Variant[NORMAL].HP1;
-                std::string& norHP2 = curVar.Variant[NORMAL].HP2;
-
-                if(norHP1 == base){
-                    hpCount[1]++;
-                    //Germline mutation
-                    if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::GERMLINE_H1;
-                }else if(norHP2 == base){                
-                    hpCount[2]++;
-                    //Germline mutation
-                    if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::GERMLINE_H2;
-                }else{
-                    std::cerr<< "ERROR : (phased hetero)normal & (unphased hetero)tumor not match base at position => chr:" << chrName << " pos: " << curPos << "\n";
-                    exit(1);
-                }
-                norCountPS[curVar.Variant[NORMAL].PhasedSet]++;
-            }
-
+        }
         //the normal SNP GT is phased heterozgous & the tumor SNP GT is homozygous 
-        }else if((curVar.Variant[NORMAL].is_phased_hetero) && (curVar.Variant[TUMOR].is_homozygous)){   
-            if(curVar.Variant[NORMAL].allele.Ref == base || curVar.Variant[NORMAL].allele.Alt == base){
-
-                if(!curVar.Variant[NORMAL].isExistPhasedSet()){
-                    std::cerr<< "Unable to locate the phase set of the current normal SNP\n"
-                             << curPos << "\t"
-                             << curVar.Variant[NORMAL].allele.Ref << "\t"
-                             << curVar.Variant[NORMAL].allele.Alt  << "\n";
-                    exit(EXIT_SUCCESS);
-                }
-
-                std::string& norHP1 = curVar.Variant[NORMAL].HP1;
-                std::string& norHP2 = curVar.Variant[NORMAL].HP2;
-
-                if(norHP1 == base){
-                    hpCount[1]++;
-                    //Germline mutation
-                    if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::GERMLINE_H1;
-                }else if(norHP2 == base){                
-                    hpCount[2]++;
-                    //Germline mutation
-                    if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::GERMLINE_H2;
-                }else{
-                    std::cerr<< "ERROR : (phased hetero)normal & (Homo)tumor not match base at position => chr:" << chrName << " pos: " << curPos << "\n";
-                    exit(1);
-                }
-                norCountPS[curVar.Variant[NORMAL].PhasedSet]++;
-            }
+        else if((curVar.Variant[NORMAL].is_phased_hetero) && (curVar.Variant[TUMOR].is_homozygous)){ 
+            normalSNPjudgeHP(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
         }
     // only normal SNP at the current position
     }else if(curVar.isExists(NORMAL)){
         // the normal SNP GT is phased heterozgous SNP
         if((curVar.Variant[NORMAL].is_phased_hetero)){
-            if(curVar.Variant[NORMAL].allele.Ref == base || curVar.Variant[NORMAL].allele.Alt == base){
-
-                if(!curVar.Variant[NORMAL].isExistPhasedSet()){
-                    std::cerr<< "Unable to locate the phase set of the current normal SNP\n"
-                             << curPos << "\t"
-                             << curVar.Variant[NORMAL].allele.Ref << "\t"
-                             << curVar.Variant[NORMAL].allele.Alt  << "\n";
-                    exit(EXIT_SUCCESS);
-                }
-
-                std::string& norHP1 = curVar.Variant[NORMAL].HP1;
-                std::string& norHP2 = curVar.Variant[NORMAL].HP2;
-
-                if( base == norHP1){
-                    hpCount[1]++;
-                    if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::GERMLINE_H1;
-                }
-                if(base == norHP2){
-                    hpCount[2]++;
-                    if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::GERMLINE_H2;
-                }
-                norCountPS[curVar.Variant[NORMAL].PhasedSet]++;
-            }
+            normalSNPjudgeHP(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
         }
     // only tumor SNP at the current position
     }else if(curVar.isExists(TUMOR)){
@@ -962,8 +864,38 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator
     }
 }
 
-void SomaticJudgeBase::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){
+void SomaticJudgeBase::normalSNPjudgeHP(
+    const std::string& chrName, 
+    int& curPos,
+    MultiGenomeVar& curVar,
+    std::string& base,
+    std::map<int, int>& hpCount, 
+    std::map<int, int>& norCountPS,
+    std::map<int, int> *variantsHP
+){
+    if(curVar.Variant[NORMAL].allele.Ref == base || curVar.Variant[NORMAL].allele.Alt == base){
 
+        if(!curVar.Variant[NORMAL].isExistPhasedSet()){
+            std::cerr<< "Unable to locate the phase set of the current normal SNP\n"
+                        << curPos << "\t"
+                        << curVar.Variant[NORMAL].allele.Ref << "\t"
+                        << curVar.Variant[NORMAL].allele.Alt  << "\n";
+            exit(EXIT_SUCCESS);
+        }
+
+        std::string& norHP1 = curVar.Variant[NORMAL].HP1;
+        std::string& norHP2 = curVar.Variant[NORMAL].HP2;
+
+        if( base == norHP1){
+            hpCount[1]++;
+            if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::GERMLINE_H1;
+        }
+        if(base == norHP2){
+            hpCount[2]++;
+            if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::GERMLINE_H2;
+        }
+        norCountPS[curVar.Variant[NORMAL].PhasedSet]++;
+    }
 }
 
 int SomaticJudgeBase::determineReadHP(std::map<int, int> &hpCount, int &pqValue, std::map<int, int> &norCountPS, double &norHPsimilarity, double &tumHPsimilarity, double percentageThreshold, int *totalHighSimilarity, int *totalCrossTwoBlock, int *totalWithOutVaraint){
