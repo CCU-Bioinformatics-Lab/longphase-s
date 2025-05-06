@@ -22,6 +22,7 @@ enum HaplotagOption {
     TUM_SNP,
     TUM_BAM,
     BENCHMARK_VCF,
+    BENCHMARK_BED,
     DISABLE_FILTER
 };
 

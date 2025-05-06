@@ -202,6 +202,207 @@ void SomaticReadBenchmark::parserProcess(std::string &input, VCF_Info &Info, std
     }
 }
 
+void SomaticReadBenchmark::parseBedFile(const std::string& bedFile) {
+    std::ifstream file(bedFile);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open BED file: " << bedFile << std::endl;
+        return;
+    }
+    
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        processBedLine(line);
+    }
+}
+
+void SomaticReadBenchmark::processBedLine(const std::string& line) {
+    std::istringstream iss(line);
+    std::string chr;
+    int start, end;
+    iss >> chr >> start >> end;
+    
+    bedRegions[chr].push_back(BedRegion{start, end - 1});
+}
+
+void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat) {
+    int tumorInBedRegionCount = 0;
+    int tumorOutBedRegionCount = 0;
+    int normalInBedRegionCount = 0;
+    int normalOutBedRegionCount = 0;
+    int benchmarkInBedRegionCount = 0;
+    int benchmarkOutBedRegionCount = 0;
+
+    for (auto& chr : chrVec) {
+        auto& chrPosVariants = mergedChrVarinat[chr];
+        
+        // check if this chromosome has bed regions
+        auto bedIt = bedRegions.find(chr);
+        if (bedIt == bedRegions.end()) {
+            // if this chromosome has no bed regions, mark all points as false
+            for (auto& curVar : chrPosVariants) {
+                curVar.second.isInBedRegion = false;
+                if(curVar.second.isExists(Genome::TUMOR)) {
+                    tumorOutBedRegionCount++;
+                }
+                if(curVar.second.isExists(Genome::NORMAL)) {
+                    normalOutBedRegionCount++;
+                }
+                if(curVar.second.isExists(Genome::HIGH_CON_SOMATIC)){
+                    benchmarkOutBedRegionCount++;
+                }
+            }
+            continue;
+        }
+
+        const auto& regions = bedIt->second;
+        if (regions.empty()) {
+            // If there are no bed regions, mark all points as false
+            for (auto& curVar : chrPosVariants) {
+                curVar.second.isInBedRegion = false;
+                if(curVar.second.isExists(Genome::TUMOR)) {
+                    tumorOutBedRegionCount++;
+                }
+                if(curVar.second.isExists(Genome::NORMAL)) {
+                    normalOutBedRegionCount++;
+                }
+                if(curVar.second.isExists(Genome::HIGH_CON_SOMATIC)){
+                    benchmarkOutBedRegionCount++;
+                }
+            }
+            continue;
+        }
+
+        auto regionIter = regions.begin();
+        auto varPosIter = chrPosVariants.begin();
+        
+        // traverse bed regions and variants at the same time
+        while (varPosIter != chrPosVariants.end()) {
+            int variantPos = varPosIter->first;
+            
+            // if variant position is out of current bed region range
+            while (regionIter != regions.end() && variantPos > regionIter->end) {
+                ++regionIter;
+            }
+            
+            // check if variant is in current bed region
+            if (regionIter != regions.end() && 
+                variantPos >= regionIter->start && 
+                variantPos <= regionIter->end) {
+                varPosIter->second.isInBedRegion = true;
+                if(varPosIter->second.isExists(Genome::TUMOR)) {
+                    tumorInBedRegionCount++;
+                }
+                if(varPosIter->second.isExists(Genome::NORMAL)) {
+                    normalInBedRegionCount++;
+                }
+                if(varPosIter->second.isExists(Genome::HIGH_CON_SOMATIC)){
+                    benchmarkInBedRegionCount++;
+                }
+            } else {
+                varPosIter->second.isInBedRegion = false;
+                if(varPosIter->second.isExists(Genome::TUMOR)) {
+                    tumorOutBedRegionCount++;
+                }
+                if(varPosIter->second.isExists(Genome::NORMAL)) {
+                    normalOutBedRegionCount++;
+                }
+                if(varPosIter->second.isExists(Genome::HIGH_CON_SOMATIC)){
+                    benchmarkOutBedRegionCount++;
+                }
+            }
+            
+            ++varPosIter;
+        }
+    }
+    
+    std::cout << "Tumor in bed region count: " << tumorInBedRegionCount << "\n";
+    std::cout << "Tumor out bed region count: " << tumorOutBedRegionCount << "\n";
+    std::cout << "Normal in bed region count: " << normalInBedRegionCount << "\n";
+    std::cout << "Normal out bed region count: " << normalOutBedRegionCount << "\n";
+    std::cout << "Benchmark in bed region count: " << benchmarkInBedRegionCount << "\n";
+    std::cout << "Benchmark out bed region count: " << benchmarkOutBedRegionCount << "\n";
+}
+
+void SomaticReadBenchmark::removeVariantsOutBedRegion(std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+    //remove variants out bed region
+    for (auto& chrPair : mergedChrVarinat) {
+        auto& chrPosVariants = chrPair.second;
+        
+        auto varPosIter = chrPosVariants.begin();
+        while (varPosIter != chrPosVariants.end()) {
+            if (!varPosIter->second.isInBedRegion) {
+                bool hasTumor = varPosIter->second.isExists(Genome::TUMOR);
+                bool hasHighCon = varPosIter->second.isExists(Genome::HIGH_CON_SOMATIC);
+                
+                if (hasTumor || hasHighCon) {
+                    // if no exist NORMAL data, remove the whole position
+                    if (!varPosIter->second.isExists(Genome::NORMAL)) {
+                        varPosIter = chrPosVariants.erase(varPosIter);
+                        continue;
+                    } else {
+                        // if there is NORMAL data, only remove the data to be cleared
+                        if (hasTumor) {
+                            varPosIter->second.Variant.erase(Genome::TUMOR);
+                        }
+                        if (hasHighCon) {
+                            varPosIter->second.Variant.erase(Genome::HIGH_CON_SOMATIC);
+                        }
+                        ++varPosIter;
+                    }
+                } else {
+                    ++varPosIter;
+                }
+            } else {
+                ++varPosIter;
+            }
+        }
+    }
+}
+
+void SomaticReadBenchmark::writeBedRegionLog(const std::vector<std::string>& chrVec,
+                                           const std::map<std::string, std::map<int, MultiGenomeVar>>& mergedChrVarinat,
+                                           const std::string& outPrefix) {
+    std::ofstream inBedLog(outPrefix + "_in_bed.out");
+    std::ofstream outBedLog(outPrefix + "_out_bed.out");
+    
+    std::string header = "#Chr\tPosition\tRef\tAlt\tVariant_Type\n";
+    inBedLog << header;
+    outBedLog << header;
+
+    for (const auto& chr : chrVec) {
+        auto chrPosVariants = mergedChrVarinat.at(chr);
+
+        auto varPosIter = chrPosVariants.begin();
+
+        while(varPosIter != chrPosVariants.end()){
+            int pos = varPosIter->first + 1;
+            
+            std::string baseInfo = chr + "\t" + std::to_string(pos) + "\t";
+            
+            if(varPosIter->second.isExists(Genome::TUMOR)){
+                auto& tumorVar = varPosIter->second.Variant.at(TUMOR);
+                std::string varInfo = baseInfo + 
+                                    tumorVar.allele.Ref + "\t" + 
+                                    tumorVar.allele.Alt + "\t" +
+                                    "TUMOR\n";
+
+                if (varPosIter->second.isInBedRegion) {
+                    inBedLog << varInfo;
+                } else {
+                    outBedLog << varInfo;
+                }
+            }
+
+            varPosIter++;
+        }
+    }
+    
+    inBedLog.close();
+    outBedLog.close();
+
+}
+
 SomaticReadMetrics* SomaticReadBenchmark::getMetricsPtr(const std::string &chr){
     return &(chrMetrics[chr]);
 }
@@ -411,5 +612,11 @@ void SomaticReadBenchmark::displaySomaticVarCount(std::vector<std::string> &chrV
             chrVariantIter++;
         }
     }
+
+    int totalBedRegionCount = 0;
+    for(auto &chr : chrVec){
+        totalBedRegionCount += bedRegions[chr].size();
+    }
     std::cout << "Total somatic variants: " << totalVariantCount << "\n";
+    std::cout << "Total bed regions: " << totalBedRegionCount << "\n";
 }

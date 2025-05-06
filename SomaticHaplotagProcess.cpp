@@ -26,10 +26,10 @@ void SomaticHaplotagProcess::taggingProcess()
     parseVariantFiles(vcfParser);
     //decide which genome type chrVec and chrLength belong to
     setChrVecAndChrLength();
-    // update chromosome processing based on region
-    setProcessingChromRegion();
     // calculate SNP counts
     calculateSnpCounts();
+    // update chromosome processing based on region
+    setProcessingChromRegion();
 
     //somatic variant calling
     SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(*chrVec, params);
@@ -66,10 +66,25 @@ void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
     if(params.benchmarkVcf != ""){
         std::time_t begin = time(NULL);
         std::cerr<< "loading high confidence SNP ... ";
-        highConSomaticData.setTestingFunc(true);
-        highConSomaticData.loadHighConSomatic(params.benchmarkVcf, vcfSet[Genome::HIGH_CON_SOMATIC], *mergedChrVarinat);
+        somaticBenchmark.setTestingFunc(true);
+        somaticBenchmark.loadHighConSomatic(params.benchmarkVcf, vcfSet[Genome::HIGH_CON_SOMATIC], *mergedChrVarinat);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
-        highConSomaticData.displaySomaticVarCount(vcfSet[HIGH_CON_SOMATIC].chrVec, *mergedChrVarinat);
+        somaticBenchmark.parseBedFile(params.benchmarkBedFile);
+        somaticBenchmark.displaySomaticVarCount(vcfSet[HIGH_CON_SOMATIC].chrVec, *mergedChrVarinat);
+    }
+
+    if(params.benchmarkBedFile != ""){
+        std::time_t begin = time(NULL);
+        std::cerr<< "marking variants in bed regions ... \n";
+        somaticBenchmark.markVariantsInBedRegions(vcfSet[TUMOR].chrVec, *mergedChrVarinat);
+        std::cerr<< difftime(time(NULL), begin) << "s\n";
+
+        somaticBenchmark.writeBedRegionLog(vcfSet[TUMOR].chrVec, *mergedChrVarinat, params.resultPrefix);
+
+        // std::cerr<< "removing variants out bed regions ... \n";
+        // begin = time(NULL);
+        // somaticBenchmark.removeVariantsOutBedRegion(*mergedChrVarinat);
+        // std::cerr<< difftime(time(NULL), begin) << "s\n";
     }
 }
 
@@ -130,10 +145,10 @@ void SomaticHaplotagProcess::postprocessForHaplotag(){
         //write read cover region in whole genome
         hpAfterInheritance->writeTagReadCoverRegionLog(params, "_readCoverRegion.bed", *chrVec, *chrLength);
         //write somatic read log
-        highConSomaticData.writeTaggedReadLog(*chrVec, params, "_totalRead.out");
-        highConSomaticData.writeTaggedSomaticReadLog(*chrVec, params, "_somaticRead.out");
-        highConSomaticData.writeCrossHighConSnpReadLog(*chrVec, params, "_crossHighConSnpRead.out");
-        highConSomaticData.writePosAlleleCountLog(*chrVec, params, "_alleleCount.out", *mergedChrVarinat);
+        somaticBenchmark.writeTaggedReadLog(*chrVec, params, "_totalRead.out");
+        somaticBenchmark.writeTaggedSomaticReadLog(*chrVec, params, "_somaticRead.out");
+        somaticBenchmark.writeCrossHighConSnpReadLog(*chrVec, params, "_crossHighConSnpRead.out");
+        somaticBenchmark.writePosAlleleCountLog(*chrVec, params, "_alleleCount.out", *mergedChrVarinat);
     }
 }
 
@@ -142,11 +157,11 @@ SomaticHaplotagBamParser::SomaticHaplotagBamParser(
     bool writeOutputBam,
     bool mappingQualityFilter,
     ReadStatistics& readStats,
-    SomaticReadBenchmark& highConSomaticData,
+    SomaticReadBenchmark& somaticBenchmark,
     ReadHpDistriLog& hpBeforeInheritance,
     ReadHpDistriLog& hpAfterInheritance
 ):GermlineHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats),
-    highConSomaticData(highConSomaticData),
+    somaticBenchmark(somaticBenchmark),
     hpBeforeInheritance(hpBeforeInheritance),
     hpAfterInheritance(hpAfterInheritance)
 {
@@ -162,7 +177,7 @@ SomaticHaplotagChrProcessor::SomaticHaplotagChrProcessor(
     bool mappingQualityFilter,
     ReadStatistics& readStats,
     GermlineTagLog *tagResult,
-    SomaticReadBenchmark& highConSomaticData,
+    SomaticReadBenchmark& somaticBenchmark,
     ReadHpDistriLog& hpBeforeInheritance,
     ReadHpDistriLog& hpAfterInheritance,
     const std::string &chr
@@ -170,15 +185,15 @@ SomaticHaplotagChrProcessor::SomaticHaplotagChrProcessor(
     somaticReadCounter(nullptr)
 {
 
-    bool openTestingFunc = highConSomaticData.getTestingFunc();
+    bool openTestingFunc = somaticBenchmark.getTestingFunc();
     #pragma omp critical
     {
         hpBeforeInheritance.loadChrKey(chr);
         hpAfterInheritance.loadChrKey(chr);
-        highConSomaticData.loadChrKey(chr);
+        somaticBenchmark.loadChrKey(chr);
         localHpBeforeInheritance = hpBeforeInheritance.getChrHpResultsPtr(chr);
         localHpAfterInheritance = hpAfterInheritance.getChrHpResultsPtr(chr);
-        somaticReadCounter = new SomaticReadVerifier(openTestingFunc, highConSomaticData.getMetricsPtr(chr));
+        somaticReadCounter = new SomaticReadVerifier(openTestingFunc, somaticBenchmark.getMetricsPtr(chr));
     }
     this->chr = chr;
     begin = time(NULL);

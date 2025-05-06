@@ -21,6 +21,7 @@ void SomaticHaplotagOptionManager::extendOptions() {
     addOption({"tumor-snp-file", required_argument, NULL, TUM_SNP});
     addOption({"tumor-bam-file", required_argument, NULL, TUM_BAM});
     addOption({"highCon-snp", required_argument, NULL, BENCHMARK_VCF});
+    addOption({"benchmark-bed", required_argument, NULL, BENCHMARK_BED});
     addOption({"disableFilter", no_argument, NULL, DISABLE_FILTER});
 }
 
@@ -29,6 +30,7 @@ bool SomaticHaplotagOptionManager::validateExtendFiles() {
     isValid &= validateRequiredFile(ecParams.tumorSnpFile, "tumor SNP file");
     isValid &= validateRequiredFile(ecParams.tumorBamFile, "tumor BAM file");
     isValid &= validateOptionalFile(ecParams.benchmarkVcf, "benchmark VCF file");
+    isValid &= validateOptionalFile(ecParams.benchmarkBedFile, "benchmark BED file");
     return isValid;
 }
 
@@ -39,6 +41,7 @@ bool SomaticHaplotagOptionManager::loadExtendOptions(char& opt, std::istringstre
         case HaplotagOption::TUM_SNP: arg >> ecParams.tumorSnpFile; break;
         case HaplotagOption::TUM_BAM: arg >> ecParams.tumorBamFile; break;
         case HaplotagOption::BENCHMARK_VCF: arg >> ecParams.benchmarkVcf; break;
+        case HaplotagOption::BENCHMARK_BED: arg >> ecParams.benchmarkBedFile; break;
         case HaplotagOption::DISABLE_FILTER: ecParams.enableFilter = false; break;
         default: isLoaded = false; break;
     }

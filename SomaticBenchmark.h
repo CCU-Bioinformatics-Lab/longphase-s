@@ -55,10 +55,17 @@ class SomaticReadVerifier{
 
 class SomaticReadBenchmark: public VcfParser{
     private:
+
+        struct BedRegion {
+            int start;
+            int end;
+        };
         
         bool openTestingFunc;
         // chr, metrics
         std::map<std::string, SomaticReadMetrics> chrMetrics;
+
+        std::map<std::string, std::vector<BedRegion>> bedRegions;
 
         void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         void setChrSomaticReadVecPtr(
@@ -72,6 +79,9 @@ class SomaticReadBenchmark: public VcfParser{
             std::string logPosfix,
             std::map<std::string, std::vector<SomaticReadLog>*> &somaticReadVecMap
         );
+
+        void processBedLine(const std::string& line);
+
     public:
 
         SomaticReadBenchmark();
@@ -81,6 +91,23 @@ class SomaticReadBenchmark: public VcfParser{
         void loadChrKey(const std::string &chr);
         void loadHighConSomatic(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         
+        // parse benchmark bed file
+        void parseBedFile(const std::string& bedFile);
+
+        // mark variants in bed regions
+        void markVariantsInBedRegions(
+            std::vector<std::string> &chrVec,
+            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        
+        // remove variants out bed regions
+        void removeVariantsOutBedRegion(
+            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat
+        );
+
+        void writeBedRegionLog(const std::vector<std::string>& chrVec, 
+                        const std::map<std::string, std::map<int, MultiGenomeVar>>& mergedChrVarinat,
+                        const std::string& outPrefix);
+
         // get metrics pointer for multiple threads parallel processing
         SomaticReadMetrics* getMetricsPtr(const std::string &chr);
 

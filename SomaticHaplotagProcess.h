@@ -146,7 +146,7 @@ class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor, public S
 
 class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
     private:
-        SomaticReadBenchmark& highConSomaticData;
+        SomaticReadBenchmark& somaticBenchmark;
         ReadHpDistriLog& hpBeforeInheritance;
         ReadHpDistriLog& hpAfterInheritance;
     protected:
@@ -156,7 +156,7 @@ class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
                 mappingQualityFilter,
                 readStats,
                 tagResult,
-                highConSomaticData,
+                somaticBenchmark,
                 hpBeforeInheritance,
                 hpAfterInheritance,
                 chr
@@ -189,7 +189,7 @@ class SomaticHaplotagProcess: public HaplotagProcess, public SomaticJudgeBase{
         ReadHpDistriLog *hpBeforeInheritance;
         ReadHpDistriLog *hpAfterInheritance;
         
-        SomaticReadBenchmark highConSomaticData;
+        SomaticReadBenchmark somaticBenchmark;
 
         void parseVariantFiles(VcfParser& vcfParser) override;
         void setChrVecAndChrLength() override;
@@ -205,7 +205,7 @@ class SomaticHaplotagProcess: public HaplotagProcess, public SomaticJudgeBase{
             bool mappingQualityFilter,
             ReadStatistics& readStats
         ) override{
-            return new SomaticHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats, highConSomaticData, *hpBeforeInheritance, *hpAfterInheritance);
+            return new SomaticHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats, somaticBenchmark, *hpBeforeInheritance, *hpAfterInheritance);
         }
 
         virtual std::string getNormalSnpParsingMessage() override{

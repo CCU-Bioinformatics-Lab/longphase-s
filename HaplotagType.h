@@ -29,6 +29,8 @@ struct HaplotagParameters
     std::string outputFormat;
 
     std::string benchmarkVcf;
+    std::string benchmarkBedFile;
+
     bool enableFilter;
 
     bool tagSupplementary;
@@ -127,6 +129,8 @@ struct MultiGenomeVar{
     std::map<Genome, VarData> Variant;
     bool isSomaticVariant;
     int somaticReadDeriveByHP;
+    bool isInBedRegion;
+
     bool isExists(Genome type){
         return Variant.find(type) != Variant.end();
     }
@@ -135,7 +139,7 @@ struct MultiGenomeVar{
         return Variant[type];
     }
     
-    MultiGenomeVar(): isSomaticVariant(false), somaticReadDeriveByHP(0){}
+    MultiGenomeVar(): isSomaticVariant(false), somaticReadDeriveByHP(0), isInBedRegion(true){}
 };
 
 //record each type of base in specific position
