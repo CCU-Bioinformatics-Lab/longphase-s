@@ -2,8 +2,10 @@
 #define SOMATIC_VAR_CALLER_H
 
 #include "Util.h" 
-#include "HaplotagBase.h"
+#include "HaplotagType.h"
+#include "HaplotagParsingBam.h"
 #include "TumorPurityPredictor.h"
+#include "HaplotagLogging.h"
 
 
 struct ReadVarHpCount{

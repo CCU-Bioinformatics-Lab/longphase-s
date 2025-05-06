@@ -2,7 +2,7 @@
 #define TUMOR_PURITY_PREDICTOR_H
 
 #include "Util.h" 
-#include "HaplotagBase.h"
+#include "HaplotagType.h"
 
 
 enum PeakTrend{

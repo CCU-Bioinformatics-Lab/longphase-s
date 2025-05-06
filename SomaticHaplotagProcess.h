@@ -1,10 +1,13 @@
 #ifndef SOMATICHAPLOTAGPROCESS_H
 #define SOMATICHAPLOTAGPROCESS_H
 
-#include "HaplotagBase.h"
-#include "SomaticVarCaller.h"
+#include "HaplotagType.h"
 #include "HaplotagProcess.h"
+#include "HaplotagParsingBam.h"
+#include "HaplotagVcfParser.h"
+#include "SomaticVarCaller.h"
 #include "SomaticBenchmark.h"
+#include "HaplotagLogging.h"
 
 class SomaticHaplotagParamsMessage : public HaplotagParamsMessage{
     public:

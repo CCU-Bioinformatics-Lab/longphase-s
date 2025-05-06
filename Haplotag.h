@@ -1,7 +1,8 @@
 #ifndef HAPLOTAG_H
 #define HAPLOTAG_H
+
 #include "Util.h"
-#include "HaplotagBase.h"  // Include the header that defines HaplotagParameters
+#include "HaplotagType.h"  // Include the header that defines HaplotagParameters
 #include <getopt.h>
 #include <vector>
 #include <string>

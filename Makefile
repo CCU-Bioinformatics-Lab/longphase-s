@@ -18,11 +18,14 @@ OBJ = Haplotag.o \
 	  ModCallParsingBam.o \
 	  ModCallProcess.o \
 	  SomaticVarCaller.o \
-	  HaplotagBase.o \
+	  HaplotagType.o \
 	  TumorPurityPredictor.o \
 	  SomaticBenchmark.o \
 	  SomaticHaplotagProcess.o \
 	  SomaticHaplotag.o \
+	  HaplotagParsingBam.o \
+	  HaplotagVcfParser.o \
+	  HaplotagLogging.o \
 	  main.o 
 
 PROGRAMS = longphase

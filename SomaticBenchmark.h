@@ -2,7 +2,8 @@
 #define SOMATIC_BENCHMARK_H
 
 #include "Util.h"
-#include "HaplotagBase.h"
+#include "HaplotagType.h"
+#include "HaplotagVcfParser.h"
 
 struct SomaticReadLog{
     std::string chr;

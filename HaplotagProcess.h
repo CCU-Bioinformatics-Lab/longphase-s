@@ -1,9 +1,10 @@
 #ifndef HAPLOTAGPROCESS_H
 #define HAPLOTAGPROCESS_H
 
-#include "Util.h"
-#include "ParsingBam.h"
-#include "HaplotagBase.h"
+#include "HaplotagType.h"
+#include "HaplotagParsingBam.h"
+#include "HaplotagVcfParser.h"
+#include "HaplotagLogging.h"
 
 struct ReadStatistics {
     // reads HP count
