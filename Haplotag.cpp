@@ -4,6 +4,8 @@
 #include "Util.h"
 #include <getopt.h>
 
+#define SUBPROGRAM "haplotag"
+
 void HaplotagHelpManager::buildBaseMessage() {
     // Usage
     addSection("Usage: " + programName + " [OPTION] ... READSFILE");
@@ -11,20 +13,10 @@ void HaplotagHelpManager::buildBaseMessage() {
     
     // Required arguments - General mode
     addSection("required arguments:");
-    addItem("   [General mode]");
     addItem("      -s, --snp-file=NAME             input SNP vcf file.");
     addItem("      -b, --bam-file=NAME             input bam file.");
     addItem("      -r, --reference=NAME            reference FASTA.\n");
-    
-    // Required arguments - Somatic mode
-    addItem("   [Somatic mode] (tumor/normal pair data):");
-    addItem("      --somaticMode                   enable somatic mutation tagging. default: false (disabled)");
-    addItem("      -s, --snp-file=NAME             input normal sample SNP VCF file.");
-    addItem("      -b, --bam-file=NAME             input normal sample BAM file (used as a reference for comparison).");
-    addItem("      --tumor-snp-file=NAME           input tumor sample SNP VCF file.");
-    addItem("      --tumor-bam-file=NAME           input tumor sample BAM file for mutation tagging.");
-    addItem("      -r, --reference=NAME            reference FASTA.\n");
-    
+        
     // Optional arguments
     addSection("optional arguments:");
     addItem("      --tagSupplementary              tag supplementary alignment. default:false");
@@ -43,6 +35,20 @@ void HaplotagHelpManager::buildBaseMessage() {
     addItem("      --log                           an additional log file records the result of each read. default:false");
 }
 
+HaplotagOptionManager::HaplotagOptionManager() : OptionManager() {
+
+}
+
+void HaplotagOptionManager::setHelpMessage() {
+    helpManager = createHelpManager(SUBPROGRAM);
+    helpManager->modifyMessage();
+}
+
+HaplotagOptionManager::~HaplotagOptionManager() {
+   if(helpManager) delete helpManager;
+}
+
+
 void HaplotagOptionManager::setOptions() {
     // Initialize short options string
     shortOpts = "s:b:o:t:q:p:r:";
@@ -56,14 +62,8 @@ void HaplotagOptionManager::setOptions() {
     addOption({"reference", required_argument, NULL, 'r'});
     addOption({"out-prefix", required_argument, NULL, 'o'});
     
-    // Tumor-specific options
-    addOption({"tumor-snp-file", required_argument, NULL, TUM_SNP});
-    addOption({"tumor-bam-file", required_argument, NULL, TUM_BAM});
-    addOption({"somaticMode", no_argument, NULL, TAG_TUM});
-    
     // Processing options
     addOption({"tagSupplementary", no_argument, NULL, TAG_SUP});
-    addOption({"disableFilter", no_argument, NULL, DISABLE_FILTER});
     addOption({"sv-file", required_argument, NULL, SV_FILE});
     addOption({"mod-file", required_argument, NULL, MOD_FILE});
     addOption({"cram", no_argument, NULL, CRAM});
@@ -72,68 +72,78 @@ void HaplotagOptionManager::setOptions() {
     addOption({"threads", required_argument, NULL, 't'});
     addOption({"qualityThreshold", required_argument, NULL, 'q'});
     addOption({"percentageThreshold", required_argument, NULL, 'p'});
-    addOption({"somaticCallingMPQ", required_argument, NULL, SC_MPQ});
     addOption({"region", required_argument, NULL, REGION});
     addOption({"log", no_argument, NULL, LOG});
-    addOption({"highCon-snp", required_argument, NULL, HIGH_CON});
     
     // Add terminator
     addOption({NULL, 0, NULL, 0});
-}
 
+    //extend haplotag options
+    extendOptions();
+}
 
 void HaplotagOptionManager::parseOptions(int argc, char** argv)
 {
-    static HaplotagHelpManager helpManager;
 
     // Initialize default values
     ecParams.numThreads = 1;
     ecParams.qualityThreshold = 1;
-    ecParams.somaticCallingMpqThreshold = 1;
     ecParams.percentageThreshold = 0.6;
     ecParams.resultPrefix = "result";
     ecParams.outputFormat = "bam";
     ecParams.tagSupplementary = false;
     ecParams.writeReadLog = false;
-    ecParams.tagTumorSnp = false;
     ecParams.command = "longphase ";
     ecParams.enableFilter = true;
 
     optind = 1;    // Reset getopt
-    
+
     bool die = false;
     for (char c; (c = getopt_long(argc, argv, getShortOpts(), getLongOpts(), NULL)) != -1;)
     {
         std::istringstream arg(optarg != NULL ? optarg : "");
-        switch (c)
-        {
-            case 's': arg >> ecParams.snpFile; break;
-            case 't': arg >> ecParams.numThreads; break;
-            case 'b': arg >> ecParams.bamFile; break;
-            case 'r': arg >> ecParams.fastaFile; break; 
-            case 'o': arg >> ecParams.resultPrefix; break;
-            case 'q': arg >> ecParams.qualityThreshold; break;
-            case 'p': arg >> ecParams.percentageThreshold; break;
-            case HaplotagOption::SV_FILE:  arg >> ecParams.svFile; break;
-            case HaplotagOption::MOD_FILE: arg >> ecParams.modFile; break;     
-            case HaplotagOption::TUM_SNP: arg >> ecParams.tumorSnpFile; break;
-            case HaplotagOption::TUM_BAM: arg >> ecParams.tumorBamFile; break;
-            case HaplotagOption::REGION:   arg >> ecParams.region; break;        
-            case HaplotagOption::TAG_TUM: ecParams.tagTumorSnp = true; break;
-            case HaplotagOption::TAG_SUP:  ecParams.tagSupplementary = true; break;
-            case HaplotagOption::SC_MPQ: arg >> ecParams.somaticCallingMpqThreshold; break;
-            case HaplotagOption::HIGH_CON: arg >> ecParams.benchmarkVcf; break;
-            case HaplotagOption::DISABLE_FILTER: ecParams.enableFilter = false; break;
-            case HaplotagOption::CRAM:     ecParams.outputFormat = "cram"; break;
-            case HaplotagOption::LOG:      ecParams.writeReadLog = true; break;
-            case HaplotagOption::OPT_HELP:
-                helpManager.printHelp();
-                exit(EXIT_SUCCESS);
-            default: die = true; break;
+        // switch (c)
+        // {
+        //     case 's': arg >> ecParams.snpFile; break;
+        //     case 't': arg >> ecParams.numThreads; break;
+        //     case 'b': arg >> ecParams.bamFile; break;
+        //     case 'r': arg >> ecParams.fastaFile; break; 
+        //     case 'o': arg >> ecParams.resultPrefix; break;
+        //     case 'q': arg >> ecParams.qualityThreshold; break;
+        //     case 'p': arg >> ecParams.percentageThreshold; break;
+        //     case HaplotagOption::SV_FILE:  arg >> ecParams.svFile; break;
+        //     case HaplotagOption::MOD_FILE: arg >> ecParams.modFile; break;     
+        //     case HaplotagOption::TAG_SUP:  ecParams.tagSupplementary = true; break;
+        //     case HaplotagOption::REGION:   arg >> ecParams.region; break;        
+        //     case HaplotagOption::CRAM:     ecParams.outputFormat = "cram"; break;
+        //     case HaplotagOption::LOG:      ecParams.writeReadLog = true; break;
+        //     // Somatic mode
+        //     case HaplotagOption::TAG_TUM: ecParams.tagTumorSnp = true; break;
+        //     case HaplotagOption::TUM_SNP: arg >> ecParams.tumorSnpFile; break;
+        //     case HaplotagOption::TUM_BAM: arg >> ecParams.tumorBamFile; break;
+        //     case HaplotagOption::HIGH_CON: arg >> ecParams.benchmarkVcf; break;
+        //     case HaplotagOption::DISABLE_FILTER: ecParams.enableFilter = false; break;
+        //     case HaplotagOption::OPT_HELP:
+        //         helpManager.printHelp();
+        //         exit(EXIT_SUCCESS);
+        //     default: die = true; break;
+        // }
+
+        if(loadHaplotagOptions(c, arg)){
+            continue;
+        }
+
+        if(loadExtendOptions(c, arg)){
+            continue;
+        }
+        
+        if(c == HaplotagOption::OPT_HELP){
+            helpManager->printHelp();
+            exit(EXIT_SUCCESS);
+        }else{
+            die = true;
         }
     }
-
-    ecParams.somaticCallingMpqThreshold = ecParams.qualityThreshold;
 
     // Build command string
     for(int i = 0; i < argc; ++i){
@@ -143,151 +153,145 @@ void HaplotagOptionManager::parseOptions(int argc, char** argv)
 
     // Validate arguments
     if (argc - optind < 0) {
-        std::cerr << SUBPROGRAM ": missing arguments\n";
+        std::cerr << "[ERROR] " << SUBPROGRAM << ": missing arguments\n";
         die = true;
     }
     
-    // Validate input files
-    if(ecParams.snpFile != "") {
-        std::ifstream openFile(ecParams.snpFile.c_str());
-        if(!openFile.is_open()) {
-            std::cerr << "File " << ecParams.snpFile << " not exist.\n\n";
-            die = true;
-        }
-    } else {
-        std::cerr << SUBPROGRAM ": missing SNP file.\n";
-        die = true;
-    }
-    
-    if(ecParams.svFile != "")
-    {
-        std::ifstream openFile(ecParams.svFile.c_str());
-        if(!openFile.is_open())
-        {
-            std::cerr<< "File " << ecParams.svFile << " not exist.\n\n";
-            die = true;
-        }
-    }
-    
-    if(ecParams.modFile != "")
-    {
-        std::ifstream openFile(ecParams.modFile.c_str());
-        if(!openFile.is_open())
-        {
-            std::cerr<< "File " << ecParams.modFile << " not exist.\n\n";
-            die = true;
-        }
-    }
-    
-    if(ecParams.bamFile != "")
-    {
-        std::ifstream openFile(ecParams.bamFile.c_str());
-        if(!openFile.is_open())
-        {
-            std::cerr<< "File " << ecParams.bamFile << " not exist.\n\n";
-            die = true;
-        }
-    }
-    else{
-        std::cerr << SUBPROGRAM ": missing bam file.\n";
-        die = true;
-    }
-    
-    if(ecParams.fastaFile != "")
-    {
-        std::ifstream openFile(ecParams.snpFile.c_str());
-        if(!openFile.is_open())
-        {
-            std::cerr<< "File " << ecParams.fastaFile << " not exist.\n\n";
-            die = true;
-        }
-    }
-    else{
-        std::cerr << SUBPROGRAM ": missing reference.\n";
+    // Validate all input files
+    if (!validateFiles()) {
         die = true;
     }
 
-    //somatic mode  
-    if(ecParams.tagTumorSnp == true){
-        // tumor vcf
-        if(ecParams.tumorSnpFile != "")
-        {
-            std::ifstream openFile(ecParams.tumorSnpFile.c_str());
-            if(!openFile.is_open())
-            {
-                std::cerr<< "File " << ecParams.tumorSnpFile << " not exist.\n\n";
-                die = true;
-            }
-        }else{
-            std::cerr << SUBPROGRAM ": missing tumor genome SNP file.\n";
-            die = true;
-        }
-
-        //tumor bam
-        if(ecParams.tumorBamFile != "")
-        {
-            std::ifstream openFile(ecParams.tumorBamFile.c_str());
-            if(!openFile.is_open())
-            {
-                std::cerr<< "File " << ecParams.tumorBamFile << " not exist.\n\n";
-                die = true;
-            }
-        }else{
-            std::cerr << SUBPROGRAM ": missing tumor bam file.\n";
-            die = true;
-        }
-
-        //benchmarking
-        if(ecParams.benchmarkVcf != ""){
-            std::ifstream openFile(ecParams.benchmarkVcf.c_str());
-            if(!openFile.is_open())
-            {
-                std::cerr<< "File " << ecParams.benchmarkVcf << " not exist.\n\n";
-                die = true;
-            }
-        }
-    }  
-    
-    if (ecParams.numThreads < 1){
-        std::cerr << SUBPROGRAM " invalid threads. value: " 
-                  << ecParams.numThreads 
-                  << "\nplease check -t, --threads=Num\n";
+    if (!validateExtendFiles()) {
         die = true;
     }
     
-    if (ecParams.percentageThreshold > 1 || ecParams.percentageThreshold < 0){
-        std::cerr << SUBPROGRAM " invalid percentage threshold. value: " 
-                  << ecParams.percentageThreshold
-                  << "\nthis value need: 0~1, please check -p, --percentageThreshold=Num\n";
+    // Validate numeric parameters
+    if (!validateNumericParameter()) {
         die = true;
     }
     
     if (die)
     {
         std::cerr << "\n";
-        helpManager.printHelp();
+        helpManager->printHelp();
         exit(EXIT_FAILURE);
+    } 
+}
+
+bool HaplotagOptionManager::loadHaplotagOptions(char& opt, std::istringstream& arg) {
+    bool isLoaded = true;
+    switch (opt)
+    {
+        case 's': arg >> ecParams.snpFile; break;
+        case 't': arg >> ecParams.numThreads; break;
+        case 'b': arg >> ecParams.bamFile; break;
+        case 'r': arg >> ecParams.fastaFile; break; 
+        case 'o': arg >> ecParams.resultPrefix; break;
+        case 'q': arg >> ecParams.qualityThreshold; break;
+        case 'p': arg >> ecParams.percentageThreshold; break;
+        case HaplotagOption::SV_FILE:  arg >> ecParams.svFile; break;
+        case HaplotagOption::MOD_FILE: arg >> ecParams.modFile; break;     
+        case HaplotagOption::TAG_SUP:  ecParams.tagSupplementary = true; break;
+        case HaplotagOption::REGION:   arg >> ecParams.region; break;        
+        case HaplotagOption::CRAM:     ecParams.outputFormat = "cram"; break;
+        case HaplotagOption::LOG:      ecParams.writeReadLog = true; break;
+        default: isLoaded = false; break;
+    }
+    return isLoaded;
+}
+
+
+bool HaplotagOptionManager::validateFiles() {
+    bool isValid = true;
+    
+    // Required files
+    isValid &= validateRequiredFile(ecParams.snpFile, "SNP file");
+    isValid &= validateRequiredFile(ecParams.bamFile, "BAM file");
+    isValid &= validateRequiredFile(ecParams.fastaFile, "reference file");
+    
+    // Optional files
+    isValid &= validateOptionalFile(ecParams.svFile, "SV file");
+    isValid &= validateOptionalFile(ecParams.modFile, "MOD file");
+    
+    return isValid;
+}
+
+bool HaplotagOptionManager::loadExtendOptions(char& opt, std::istringstream& arg) {
+    return false;
+}
+
+bool HaplotagOptionManager::validateExtendFiles() {
+    return true;
+}
+
+bool HaplotagOptionManager::validateNumericParameter() {
+    bool isValid = true;
+    
+    if (ecParams.numThreads < 1) {
+        std::cerr << "[ERROR] " << SUBPROGRAM << ": invalid threads. value: " 
+                << ecParams.numThreads 
+                << "\nplease check -t, --threads=Num\n";
+        isValid = false;
+    }
+    
+    if (ecParams.percentageThreshold > 1 || ecParams.percentageThreshold < 0) {
+        std::cerr << "[ERROR] " << SUBPROGRAM << ": invalid percentage threshold. value: " 
+                << ecParams.percentageThreshold
+                << "\nthis value need: 0~1, please check -p, --percentageThreshold=Num\n";
+        isValid = false;
     }
 
-    return;
+    return isValid;
 }
+
+
+// Validate if a required file exists
+bool OptionManager::validateRequiredFile(const std::string& filePath, const std::string& fileDescription) {
+    if(filePath.empty()) {
+        std::cerr << "[ERROR] " << SUBPROGRAM  << ": missing " << fileDescription << ".\n";
+
+        return false;
+    }
+    
+    std::ifstream openFile(filePath.c_str());
+    if(!openFile.is_open()) {
+        std::cerr << "[ERROR] " << SUBPROGRAM  << ": File " << filePath << " not exist.\n\n";
+        return false;
+    }
+    return true;
+}
+
+// Validate if an optional file exists (if specified)
+bool OptionManager::validateOptionalFile(const std::string& filePath, const std::string& fileDescription) {
+    if(filePath.empty()) {
+        // Optional file not specified, that's OK
+        return true;  
+    }
+    
+    std::ifstream openFile(filePath.c_str());
+    if(!openFile.is_open()) {
+        std::cerr << "[ERROR] " << SUBPROGRAM  << " File " << filePath << " not exist.\n\n";
+        return false;
+    }
+    return true;
+}
+
 
 int HaplotagMain(int argc, char** argv, std::string in_version)
 {
     HaplotagOptionManager optionManager;
+
+    optionManager.setOptions();
+    optionManager.setHelpMessage();
 
     optionManager.parseOptions(argc, argv);
     optionManager.setVersion(in_version);
 
     HaplotagParameters ecParams = optionManager.getParams();
     
-    if(ecParams.tagTumorSnp){
-        SomaticHaplotagProcess processor(ecParams);
-        processor.taggingProcess();
-    }else{
-        HaplotagProcess processor(ecParams);
-        processor.taggingProcess();
-    }
+    HaplotagProcess processor(ecParams);
+    processor.taggingProcess();
 
     return 0;
 }

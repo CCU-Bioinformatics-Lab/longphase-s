@@ -62,8 +62,6 @@ class HaplotagParamsMessage : public MessageManager{
             addEntry("write log file", params.writeReadLog);
             addEntry("log file", params.writeReadLog ? (params.resultPrefix+".out") : "");
             addEntry("separator", "-------------------------------------------");
-            addEntry("somatic mode", params.tagTumorSnp);
-            addEntry("enable somatic variant filter", params.enableFilter);
             addEntry("tag region", !params.region.empty() ? params.region : "all");
             addEntry("filter mapping quality below", params.qualityThreshold);
             addEntry("percentage threshold", params.percentageThreshold);

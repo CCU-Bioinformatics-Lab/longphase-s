@@ -75,7 +75,7 @@ void ExtractNorDataChrProcessor::processRead(
     delete cigarParser;
 
     // get the number of SVs occurring on different haplotypes in a read
-    if( aln.core.qual >= params.somaticCallingMpqThreshold ){
+    if( aln.core.qual >= params.qualityThreshold ){
         germlineJudgeSVHap(aln, vcfSet, hpCount, genmoeType);
     }
 
@@ -145,7 +145,7 @@ void ExtractNorDataCigarParser::processMatchOperation(int& length, uint32_t* cig
             tumVarPosVec.push_back(curPos);
 
             //counting current tumor SNP base and depth           
-            countBaseNucleotide(variantBase[curPos], base, *aln, params->somaticCallingMpqThreshold);
+            countBaseNucleotide(variantBase[curPos], base, *aln, params->qualityThreshold);
         }
         // the indel(deletion) SNP position is the start position, and the deletion occurs at the next position
         else if(curVar.variantType == VariantType::DELETION){
@@ -156,7 +156,7 @@ void ExtractNorDataCigarParser::processMatchOperation(int& length, uint32_t* cig
         }
     }       
 
-    if ( aln->core.qual >= params->somaticCallingMpqThreshold && (*currentVariantIter).second.isExists(NORMAL)){
+    if ( aln->core.qual >= params->qualityThreshold && (*currentVariantIter).second.isExists(NORMAL)){
         // only judge the heterozygous SNP
         if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
             auto norVar = (*currentVariantIter).second.Variant[NORMAL];
@@ -187,7 +187,7 @@ void ExtractNorDataCigarParser::processDeletionOperation(int& length, uint32_t* 
     }
 
     // only execute at the first phased normal snp
-    if ( aln->core.qual >= params->somaticCallingMpqThreshold && (*currentVariantIter).second.isExists(NORMAL) && !alreadyJudgeDel){
+    if ( aln->core.qual >= params->qualityThreshold && (*currentVariantIter).second.isExists(NORMAL) && !alreadyJudgeDel){
         if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
             // longphase v1.73 only execute once
             alreadyJudgeDel = true;
@@ -503,7 +503,7 @@ ExtractTumDataCigarParser::~ExtractTumDataCigarParser(){
 
 void ExtractTumDataCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base){
     //waring : using ref length to split SNP and indel that will be effect case ratio result 
-    if ( aln->core.qual >= params->somaticCallingMpqThreshold ){
+    if ( aln->core.qual >= params->qualityThreshold ){
         SomaticJudgeSnpHP(currentVariantIter, *chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, &tumorAllelePosVec);
         if((*currentVariantIter).second.isExists(TUMOR)){
             tumorSnpPosVec.push_back((*currentVariantIter).first);
@@ -517,7 +517,7 @@ void ExtractTumDataCigarParser::processMatchOperation(int& length, uint32_t* cig
 
         if(curVar.variantType == VariantType::SNP){
             //counting current tumor SNP base and depth           
-            countBaseNucleotide(somaticPosInfo[(*currentVariantIter).first].base, base, *aln, params->somaticCallingMpqThreshold);
+            countBaseNucleotide(somaticPosInfo[(*currentVariantIter).first].base, base, *aln, params->qualityThreshold);
         }
     }
 }
@@ -1517,13 +1517,12 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                  << "##qualityThreshold:"    << params.qualityThreshold    << "\n"
                  << "##percentageThreshold:" << params.percentageThreshold << "\n"
                  << "##tagSupplementary:"    << params.tagSupplementary    << "\n"
-                 << "##tagTumor:"            << params.tagTumorSnp         << "\n"
                  << "##\n";
 
     //write filter parameter
     (*tagHP3Log) << "##======== Filter Parameters =========\n"
                  << "##Enable filter : " << somaticParams.applyFilter << "\n"
-                 << "##Calling mapping quality :" << params.somaticCallingMpqThreshold << "\n"
+                 << "##Calling mapping quality :" << params.qualityThreshold << "\n"
                  << "##Tumor purity : " << somaticParams.tumorPurity << "\n"
                  << "##Normal VAF maximum threshold : " << somaticParams.norVAF_maxThr << "\n"
                  << "##Normal depth minimum threshold : " << somaticParams.norDepth_minThr << "\n"

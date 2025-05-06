@@ -3,6 +3,7 @@
 #include "Phasing.h"
 #include "Haplotag.h"
 #include "ModCall.h"
+#include "SomaticHaplotag.h"
 
 
 #define PROGRAM_BIN "main"
@@ -18,7 +19,7 @@ static const char *STRIDE_USAGE_MESSAGE =
 "               phase      run phasing algorithm.\n"
 "               haplotag   tag reads by haplotype.\n"
 "               modcall    convert bam file to modification vcf file.\n"
-
+"               somatichaplotag   tag reads by somatichaplotype.\n"
 "\n";
 
 int main(int argc, char** argv)
@@ -38,6 +39,10 @@ int main(int argc, char** argv)
     else if(command=="haplotag")
     {
         HaplotagMain(argc - 1, argv + 1, version);
+    }
+    else if(command=="somaticHaplotag")
+    {
+        SomaticHaplotagMain(argc - 1, argv + 1, version);
     }
     else if(command=="modcall")
     {

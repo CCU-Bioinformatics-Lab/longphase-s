@@ -14,7 +14,9 @@ class SomaticHaplotagParamsMessage : public HaplotagParamsMessage{
             addCommonParamsMessage();
             insertAfterKey("tumor SNP file", params.tumorSnpFile, "phased SNP file");
             insertAfterKey("input tumor bam file", params.tumorBamFile, "input bam file");
-            insertAfterKey("somatic calling mapping quality", params.somaticCallingMpqThreshold, "tag region");
+            insertAfterKey("somatic calling mapping quality", params.qualityThreshold, "percentage threshold");
+            insertAfterKey("enable somatic variant filter", params.enableFilter, "somatic calling mapping quality");
+
             // sort the entries by order
             sortEntries();
         } 
@@ -32,8 +34,7 @@ class SomaticTagLog : public GermlineTagLog {
             // add tumor specific entries
             insertAfterKey("tumorSnpFile", params.tumorSnpFile, "snpFile");
             insertAfterKey("tumorBamFile", params.tumorBamFile, "bamFile");
-            insertAfterKey("tagTumor", params.tagTumorSnp, "region");
-            insertAfterKey("somaticCallingThreshold", params.somaticCallingMpqThreshold, "tagTumor");
+            insertAfterKey("somaticCallingThreshold", params.qualityThreshold, "region");
         }
 
         void writeBasicColumns() override {

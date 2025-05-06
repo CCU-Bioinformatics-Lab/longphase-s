@@ -19,8 +19,6 @@ struct HaplotagParameters
     int qualityThreshold;
     
     double percentageThreshold;
-    // Filter the read mapping quality below than threshold
-    int somaticCallingMpqThreshold;  
     
     std::string snpFile;
     std::string tumorSnpFile;   
@@ -40,7 +38,6 @@ struct HaplotagParameters
 
     bool tagSupplementary;
     bool writeReadLog;
-    bool tagTumorSnp; 
 };
 
 enum Genome
@@ -283,7 +280,8 @@ struct ReadHpResult{
     int deriveHP;
     int coverRegionStartPos;
     int coverRegionEndPos;
-    ReadHpResult(): somaticSnpH3count(0), existDeriveByH1andH2(false), deriveHP(0), coverRegionStartPos(INT_MAX), coverRegionEndPos(INT_MIN){}
+    ReadHpResult(): somaticSnpH3count(0), existDeriveByH1andH2(false), deriveHP(0),
+                    coverRegionStartPos(INT_MAX), coverRegionEndPos(INT_MIN){}
 };
 
 struct chrReadHpResult{
@@ -344,7 +342,7 @@ class MessageManager{
             
             if (it == entries.end()) {
                 // If target key not found, append to the end
-                std::cerr << "Target key not found: " << targetKey << std::endl;
+                std::cerr << "[ERROR](insertAfterKey) Target key not found: " << targetKey << std::endl;
                 exit(1);
             }
             
@@ -491,29 +489,49 @@ class GermlineJudgeBase{
     private:
 
     protected:
-        void germlineJudgeSnpHap(const std::string& chrName,
-                                 VarData& norVar, const std::string& base,
-                                 int& ref_pos,
-                                 int& length,
-                                 int& i,
-                                 int& aln_core_n_cigar,
-                                 uint32_t* cigar,
-                                 std::map<int, MultiGenomeVar>::iterator& currentVariantIter,
-                                 std::map<int, int>& hpCount,
-                                 std::map<int, int>& variantsHP,
-                                 std::map<int, int>& countPS);
+        void germlineJudgeSnpHap(
+            const std::string& chrName,
+            VarData& norVar, const std::string& base,
+            int& ref_pos,
+            int& length,
+            int& i,
+            int& aln_core_n_cigar,
+            uint32_t* cigar,
+            std::map<int, MultiGenomeVar>::iterator& currentVariantIter,
+            std::map<int, int>& hpCount,
+            std::map<int, int>& variantsHP,
+            std::map<int, int>& countPS
+        );
 
-        void germlineJudgeDeletionHap(const std::string& chrName
-                                    , const std::string& ref_string
-                                    , int& ref_pos
-                                    , int& length
-                                    , int& query_pos
-                                    , std::map<int, MultiGenomeVar>::iterator &currentVariantIter
-                                    , const bam1_t* aln, std::map<int, int>& hpCount
-                                    , std::map<int, int>& variantsHP
-                                    , std::map<int, int>& countPS);
-        void germlineJudgeSVHap(const bam1_t &aln, std::map<Genome, VCF_Info> &vcfSet, std::map<int, int>& hpCount, const int& tagGeneType);
-        int germlineDetermineReadHap(std::map<int, int>& hpCount, double& min, double& max, double& percentageThreshold, int& pqValue, int& psValue, std::map<int, int>& countPS, int* totalHighSimilarity, int* totalWithOutVaraint);
+        void germlineJudgeDeletionHap(
+            const std::string& chrName,
+            const std::string& ref_string,
+            int& ref_pos,
+            int& length,
+            int& query_pos,
+            std::map<int, MultiGenomeVar>::iterator &currentVariantIter,
+            const bam1_t* aln, std::map<int, int>& hpCount,
+            std::map<int, int>& variantsHP,
+            std::map<int, int>& countPS
+        );
+        void germlineJudgeSVHap(
+            const bam1_t &aln,
+            std::map<Genome, VCF_Info> &vcfSet,
+            std::map<int, int>& hpCount,
+            const int& tagGeneType
+        );
+
+        int germlineDetermineReadHap(
+            std::map<int, int>& hpCount,
+            double& min,
+            double& max,
+            double& percentageThreshold,
+            int& pqValue,
+            int& psValue,
+            std::map<int, int>& countPS,
+            int* totalHighSimilarity,
+            int* totalWithOutVaraint
+        );
     public:
 };
 
@@ -521,12 +539,38 @@ class SomaticJudgeBase{
     private :
 
     protected:
-        void SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount
-        , std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP
-        , std::vector<int> *tumorAllelePosVec);
+        void SomaticJudgeSnpHP(
+            std::map<int, MultiGenomeVar>::iterator &currentVariantIter,
+            std::string chrName,
+            std::string base,
+            std::map<int, int> &hpCount,
+            std::map<int, int> &norCountPS,
+            std::map<int, int> &tumCountPS,
+            std::map<int, int> *variantsHP,
+            std::vector<int> *tumorAllelePosVec
+        );
 
-        virtual void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec);
-        int determineReadHP(std::map<int, int> &hpCount, int &pqValue,std::map<int, int> &norCountPS, double &norHPsimilarity, double &tumHPsimilarity,  double percentageThreshold, int *totalHighSimilarity, int *totalCrossTwoBlock, int *totalWithOutVaraint);
+        virtual void OnlyTumorSNPjudgeHP(
+            const std::string &chrName,
+            int &curPos, MultiGenomeVar &curVar,
+            std::string base,
+            std::map<int, int> &hpCount,
+            std::map<int, int> *tumCountPS,
+            std::map<int, int> *variantsHP,
+            std::vector<int> *tumorAllelePosVec
+        );
+
+        int determineReadHP(
+            std::map<int, int> &hpCount,
+            int &pqValue,
+            std::map<int, int> &norCountPS,
+            double &norHPsimilarity,
+            double &tumHPsimilarity,
+            double percentageThreshold,
+            int *totalHighSimilarity,
+            int *totalCrossTwoBlock,
+            int *totalWithOutVaraint
+        );
 
     public:
 };
@@ -565,7 +609,13 @@ class HaplotagBamParser{
         bool mappingQualityFilter;
         // Factory method to create a chromosome processor
         virtual std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) = 0;
-        void getLastVarPos(std::vector<int>& last_pos, const std::vector<std::string>& chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, const Genome& geneType);
+
+        void getLastVarPos(
+            std::vector<int>& last_pos,
+            const std::vector<std::string>& chrVec,
+            std::map<std::string,std::map<int, MultiGenomeVar>> &mergedChrVarinat,
+            const Genome& geneType
+        );
 
     public:
         HaplotagBamParser(

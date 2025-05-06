@@ -22,6 +22,7 @@ OBJ = Haplotag.o \
 	  TumorPurityPredictor.o \
 	  SomaticBenchmark.o \
 	  SomaticHaplotagProcess.o \
+	  SomaticHaplotag.o \
 	  main.o 
 
 PROGRAMS = longphase

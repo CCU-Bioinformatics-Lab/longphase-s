@@ -38,7 +38,6 @@ writeOutputBam(writeOutputBam), isReleased(false), in(nullptr), out(nullptr), ba
         if (writeOutputBam) {
             // output file mangement
             std::string writeBamFile = params.resultPrefix + "." + params.outputFormat;
-            std::cerr << "set output bam file : " + writeBamFile << std::endl;
             // open output bam file
             out = hts_open(writeBamFile.c_str(), (params.outputFormat == "bam" ? "wb" : "wc" ));
             // load reference file
