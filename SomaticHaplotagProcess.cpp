@@ -38,6 +38,14 @@ void SomaticHaplotagProcess::taggingProcess()
     delete somaticVarCaller;
     // return;
 
+    // remove tumor & benchmark variants out bed regions
+    if(params.benchmarkBedFile != ""){
+        std::cerr<< "removing tumor & benchmark variants out bed regions ... ";
+        std::time_t begin = time(NULL);
+        somaticBenchmark.removeVariantsOutBedRegion(*mergedChrVarinat);
+        std::cerr<< difftime(time(NULL), begin) << "s\n";
+    }
+
     // tag read
     tagRead(params, tagGeneType);
 
@@ -62,7 +70,7 @@ void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
         std::cerr<< difftime(time(NULL), begin) << "s\n";
     }
 
-    //load benchmark file for benchmarking
+    //parse benchmark vcf for benchmarking
     if(params.benchmarkVcf != ""){
         std::time_t begin = time(NULL);
         std::cerr<< "parsing benchmark VCF ... ";
@@ -73,6 +81,7 @@ void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
         somaticBenchmark.displaySomaticVarCount(vcfSet[Genome::HIGH_CON_SOMATIC].chrVec, *mergedChrVarinat);
     }
 
+    // parse benchmark bed file
     if(params.benchmarkBedFile != ""){
         std::time_t begin = time(NULL);
         std::cerr<< "parsing benchmark bed file ... ";
@@ -87,12 +96,6 @@ void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
         std::cerr<< difftime(time(NULL), begin) << "s\n";
 
         somaticBenchmark.writeBedRegionLog(vcfSet[TUMOR].chrVec, *mergedChrVarinat, params.resultPrefix);
-
-        std::cerr<< "removing tumor & benchmark variants out bed regions ... ";
-        begin = time(NULL);
-        somaticBenchmark.removeVariantsOutBedRegion(*mergedChrVarinat);
-        std::cerr<< difftime(time(NULL), begin) << "s\n";
-
     }
 }
 

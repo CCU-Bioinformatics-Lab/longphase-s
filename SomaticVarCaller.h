@@ -292,7 +292,16 @@ class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
         void releaseMemory();
 
     protected:
-        void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *readPosHP3){};
+        void OnlyTumorSNPjudgeHP(
+            const std::string &chrName,
+            int &curPos,
+            MultiGenomeVar &curVar,
+            std::string base,
+            std::map<int, int> &hpCount,
+            std::map<int, int> *tumCountPS,
+            std::map<int, int> *variantsHP,
+            std::vector<int> *readPosHP3
+        ){};
     public:
         SomaticVarCaller(const std::vector<std::string> &chrVec, const HaplotagParameters &params);
         virtual ~SomaticVarCaller();
