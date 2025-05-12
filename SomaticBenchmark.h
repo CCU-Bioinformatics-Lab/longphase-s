@@ -134,6 +134,7 @@ class SomaticReadBenchmark: public VcfParser{
         );
         
         void displaySomaticVarCount(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        void displayBedRegionCount(std::vector<std::string> &chrVec);
 };
 
 #endif

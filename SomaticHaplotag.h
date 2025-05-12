@@ -6,29 +6,30 @@
 
 
 class SomaticHaplotagHelpManager : public HaplotagHelpManager {
-public:
-    SomaticHaplotagHelpManager(const std::string& program) : HaplotagHelpManager(program) {}
+    public:
+        SomaticHaplotagHelpManager(const std::string& program) : HaplotagHelpManager(program) {}
 
-    virtual void modifyMessage() override;
+        virtual void modifyMessage() override;
     
 };
 
 class SomaticHaplotagOptionManager : public HaplotagOptionManager {
-public:
-    SomaticHaplotagOptionManager() : HaplotagOptionManager() {
-        //extend somatic haplotag options
-        extendOptions();
-    }
+    protected:
+        virtual HelpMessageManager* createHelpManager(const std::string& program) override {
+            return new SomaticHaplotagHelpManager(program);
+        }
 
-    virtual HelpMessageManager* createHelpManager(const std::string& program) override {
-        return new SomaticHaplotagHelpManager(program);
-    }
+        virtual void extendOptions() override;
 
-    virtual void extendOptions() override;
+        virtual bool loadExtendOptions(char& opt, std::istringstream& arg) override;
+        virtual bool validateExtendFiles() override;
 
-    virtual bool loadExtendOptions(char& opt, std::istringstream& arg) override;
-    virtual bool validateExtendFiles() override;
-    
+    public:
+        SomaticHaplotagOptionManager(const std::string& program) : HaplotagOptionManager(program) {
+            //extend somatic haplotag options
+            extendOptions();
+        }
+        virtual ~SomaticHaplotagOptionManager() = default;
 };
 
 

@@ -318,8 +318,8 @@ void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &ch
     
     std::cout << "Tumor in bed region count: " << tumorInBedRegionCount << "\n";
     std::cout << "Tumor out bed region count: " << tumorOutBedRegionCount << "\n";
-    std::cout << "Normal in bed region count: " << normalInBedRegionCount << "\n";
-    std::cout << "Normal out bed region count: " << normalOutBedRegionCount << "\n";
+    // std::cout << "Normal in bed region count: " << normalInBedRegionCount << "\n";
+    // std::cout << "Normal out bed region count: " << normalOutBedRegionCount << "\n";
     std::cout << "Benchmark in bed region count: " << benchmarkInBedRegionCount << "\n";
     std::cout << "Benchmark out bed region count: " << benchmarkOutBedRegionCount << "\n";
 }
@@ -537,21 +537,36 @@ void SomaticReadBenchmark::writeReadLog(
     somaticReadLog=new std::ofstream(params.resultPrefix + logPosfix);
 
     int totalTruthSomaticReads = 0;
-    int totalTaggedSomaticReads = 0;
+    std::map<std::string, int> truthSomaticReadsMap;
+
+    int totalTaggedTruthSomaticReads = 0;
+    std::map<std::string, int> taggedTruthSomaticReadsMap;
+
     int totalReads = 0;
+    int totalTaggedSomaticReads = 0;
+    std::map<std::string, int> taggedReadsMap;
+
     for(auto chr: chrVec){
         for(auto readIter :chrMetrics[chr].readsCrossingHighConSnpVec){
             if(readIter.hpResult == "1-1" || readIter.hpResult == "2-1" || readIter.hpResult == "3"){
+                truthSomaticReadsMap[readIter.hpResult]++;
                 totalTruthSomaticReads++;
             }
         }
 
         for(auto readIter :chrMetrics[chr].taggedSomaticReadVec){
             if(readIter.hpResult == "1-1" || readIter.hpResult == "2-1" || readIter.hpResult == "3"){
-                totalTaggedSomaticReads++;
+                totalTaggedTruthSomaticReads++;
+                taggedTruthSomaticReadsMap[readIter.hpResult]++;
             }
         }
-        totalReads += chrMetrics[chr].totalReadVec.size();
+        for(auto readIter :chrMetrics[chr].totalReadVec){
+            if(readIter.hpResult == "1-1" || readIter.hpResult == "2-1" || readIter.hpResult == "3"){
+                taggedReadsMap[readIter.hpResult]++;
+                totalTaggedSomaticReads++;
+            }
+            totalReads++;
+        }
     }
 
 
@@ -565,9 +580,26 @@ void SomaticReadBenchmark::writeReadLog(
         (*somaticReadLog) << "##High confidence VCF: "  << params.benchmarkVcf << "\n";
         (*somaticReadLog) << "##MappingQualityThreshold: "  << params.qualityThreshold << "\n";
         (*somaticReadLog) << "##Tatal reads: "  << totalReads << "\n";
-        (*somaticReadLog) << "##Tatal tagged somatic reads: "  << totalTaggedSomaticReads << "\n";
         (*somaticReadLog) << "##Tatal truth somatic reads: "  << totalTruthSomaticReads << "\n";
-        (*somaticReadLog) << "##Truth somatic read ratio: "  << (float)totalTaggedSomaticReads / (float)totalTruthSomaticReads << "\n";
+        (*somaticReadLog) << "##Tatal truth H1-1: "  << truthSomaticReadsMap["1-1"] << "\n";
+        (*somaticReadLog) << "##Tatal truth H2-1: "  << truthSomaticReadsMap["2-1"] << "\n";
+        (*somaticReadLog) << "##Tatal truth H3: "  << truthSomaticReadsMap["3"] << "\n";
+        (*somaticReadLog) << "##Tatal tagged truth somatic reads: "  << totalTaggedTruthSomaticReads << "\n";
+        (*somaticReadLog) << "##Tatal tagged truth H1-1: "  << taggedTruthSomaticReadsMap["1-1"] << "\n";
+        (*somaticReadLog) << "##Tatal tagged truth H2-1: "  << taggedTruthSomaticReadsMap["2-1"] << "\n";
+        (*somaticReadLog) << "##Tatal tagged truth H3: "  << taggedTruthSomaticReadsMap["3"] << "\n";
+        (*somaticReadLog) << "##Tatal tagged somatic reads: "  << totalTaggedSomaticReads << "\n";
+        (*somaticReadLog) << "##Tatal tagged H1-1: "  << taggedReadsMap["1-1"] << "\n";
+        (*somaticReadLog) << "##Tatal tagged H2-1: "  << taggedReadsMap["2-1"] << "\n";
+        (*somaticReadLog) << "##Tatal tagged H3: "  << taggedReadsMap["3"] << "\n";
+        (*somaticReadLog) << "##Recall: "  << (float)totalTaggedTruthSomaticReads / (float)totalTruthSomaticReads << "\n";
+        (*somaticReadLog) << "##H1-1 Recall: "  << (float)taggedTruthSomaticReadsMap["1-1"] / (float)truthSomaticReadsMap["1-1"] << "\n";
+        (*somaticReadLog) << "##H2-1 Recall: "  << (float)taggedTruthSomaticReadsMap["2-1"] / (float)truthSomaticReadsMap["2-1"] << "\n";
+        (*somaticReadLog) << "##H3 Recall: "  << (float)taggedTruthSomaticReadsMap["3"] / (float)truthSomaticReadsMap["3"] << "\n";
+        (*somaticReadLog) << "##Precision: "  << (float)totalTaggedTruthSomaticReads / (float)totalTaggedSomaticReads << "\n";
+        (*somaticReadLog) << "##H1-1 Precision: "  << (float)taggedTruthSomaticReadsMap["1-1"] / (float)taggedReadsMap["1-1"] << "\n";
+        (*somaticReadLog) << "##H2-1 Precision: "  << (float)taggedTruthSomaticReadsMap["2-1"] / (float)taggedReadsMap["2-1"] << "\n";
+        (*somaticReadLog) << "##H3 Precision: "  << (float)taggedTruthSomaticReadsMap["3"] / (float)taggedReadsMap["3"] << "\n";
         (*somaticReadLog) << "#CHROM\t"
                           << "ReadID\t"
                           << "germlineVarSimilarity\t"
@@ -613,10 +645,13 @@ void SomaticReadBenchmark::displaySomaticVarCount(std::vector<std::string> &chrV
         }
     }
 
+    std::cout << "Total somatic variants: " << totalVariantCount << "\n";
+}
+
+void SomaticReadBenchmark::displayBedRegionCount(std::vector<std::string> &chrVec){
     int totalBedRegionCount = 0;
     for(auto &chr : chrVec){
         totalBedRegionCount += bedRegions[chr].size();
     }
-    std::cout << "Total somatic variants: " << totalVariantCount << "\n";
     std::cout << "Total bed regions: " << totalBedRegionCount << "\n";
 }

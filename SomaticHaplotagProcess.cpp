@@ -62,29 +62,37 @@ void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
         std::cerr<< difftime(time(NULL), begin) << "s\n";
     }
 
-    //load seqc high con file for benchmarking
+    //load benchmark file for benchmarking
     if(params.benchmarkVcf != ""){
         std::time_t begin = time(NULL);
-        std::cerr<< "loading high confidence SNP ... ";
+        std::cerr<< "parsing benchmark VCF ... ";
         somaticBenchmark.setTestingFunc(true);
         somaticBenchmark.loadHighConSomatic(params.benchmarkVcf, vcfSet[Genome::HIGH_CON_SOMATIC], *mergedChrVarinat);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
-        somaticBenchmark.parseBedFile(params.benchmarkBedFile);
-        somaticBenchmark.displaySomaticVarCount(vcfSet[HIGH_CON_SOMATIC].chrVec, *mergedChrVarinat);
+
+        somaticBenchmark.displaySomaticVarCount(vcfSet[Genome::HIGH_CON_SOMATIC].chrVec, *mergedChrVarinat);
     }
 
     if(params.benchmarkBedFile != ""){
         std::time_t begin = time(NULL);
+        std::cerr<< "parsing benchmark bed file ... ";
+        somaticBenchmark.parseBedFile(params.benchmarkBedFile);
+        std::cerr<< difftime(time(NULL), begin) << "s\n";
+
+        somaticBenchmark.displayBedRegionCount(vcfSet[TUMOR].chrVec);
+
+        begin = time(NULL);
         std::cerr<< "marking variants in bed regions ... \n";
         somaticBenchmark.markVariantsInBedRegions(vcfSet[TUMOR].chrVec, *mergedChrVarinat);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
 
         somaticBenchmark.writeBedRegionLog(vcfSet[TUMOR].chrVec, *mergedChrVarinat, params.resultPrefix);
 
-        // std::cerr<< "removing variants out bed regions ... \n";
-        // begin = time(NULL);
-        // somaticBenchmark.removeVariantsOutBedRegion(*mergedChrVarinat);
-        // std::cerr<< difftime(time(NULL), begin) << "s\n";
+        std::cerr<< "removing tumor & benchmark variants out bed regions ... ";
+        begin = time(NULL);
+        somaticBenchmark.removeVariantsOutBedRegion(*mergedChrVarinat);
+        std::cerr<< difftime(time(NULL), begin) << "s\n";
+
     }
 }
 

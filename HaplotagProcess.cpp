@@ -117,10 +117,10 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const Genome& geneType
         openBamFile = params.bamFile;
     }
 
-    // ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;
-    // bool writeOutputBam = false;
-    ParsingBamMode mode = ParsingBamMode::SINGLE_THREAD;
-    bool writeOutputBam = true;
+    ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;
+    bool writeOutputBam = false;
+    // ParsingBamMode mode = ParsingBamMode::SINGLE_THREAD;
+    // bool writeOutputBam = true;
     bool mappingQualityFilter = true;
 
     // tag read

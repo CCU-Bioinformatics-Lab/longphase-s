@@ -116,6 +116,7 @@ class HelpMessageManager {
 // Class to manage command line option definitions
 class OptionManager {
     protected:
+        std::string programName;
         std::vector<struct option> longOpts;
         std::string shortOpts;
         
@@ -148,7 +149,7 @@ class OptionManager {
         virtual void extendOptions() {};
 
 
-        OptionManager() {};
+        OptionManager(const std::string& program) : programName(program) {};
         
         virtual ~OptionManager() = default;
 };
@@ -165,7 +166,6 @@ public:
 // Haplotag-specific option definition manager
 class HaplotagOptionManager : public OptionManager {
     protected:
-
         HaplotagParameters ecParams;
 
         HelpMessageManager* helpManager;
@@ -186,7 +186,7 @@ class HaplotagOptionManager : public OptionManager {
 
 
     public:
-        HaplotagOptionManager();
+        HaplotagOptionManager(const std::string& program);
         virtual ~HaplotagOptionManager();
 
         void setOptions() override;

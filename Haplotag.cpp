@@ -34,12 +34,11 @@ void HaplotagHelpManager::buildBaseMessage() {
     addItem("      --log                           an additional log file records the result of each read. default:false");
 }
 
-HaplotagOptionManager::HaplotagOptionManager() : OptionManager() {
-
+HaplotagOptionManager::HaplotagOptionManager(const std::string& program) : OptionManager(program) {
 }
 
 void HaplotagOptionManager::setHelpMessage() {
-    helpManager = createHelpManager(SUBPROGRAM);
+    helpManager = createHelpManager(programName);
     helpManager->modifyMessage();
 }
 
@@ -101,32 +100,6 @@ void HaplotagOptionManager::parseOptions(int argc, char** argv)
     for (char c; (c = getopt_long(argc, argv, getShortOpts(), getLongOpts(), NULL)) != -1;)
     {
         std::istringstream arg(optarg != NULL ? optarg : "");
-        // switch (c)
-        // {
-        //     case 's': arg >> ecParams.snpFile; break;
-        //     case 't': arg >> ecParams.numThreads; break;
-        //     case 'b': arg >> ecParams.bamFile; break;
-        //     case 'r': arg >> ecParams.fastaFile; break; 
-        //     case 'o': arg >> ecParams.resultPrefix; break;
-        //     case 'q': arg >> ecParams.qualityThreshold; break;
-        //     case 'p': arg >> ecParams.percentageThreshold; break;
-        //     case HaplotagOption::SV_FILE:  arg >> ecParams.svFile; break;
-        //     case HaplotagOption::MOD_FILE: arg >> ecParams.modFile; break;     
-        //     case HaplotagOption::TAG_SUP:  ecParams.tagSupplementary = true; break;
-        //     case HaplotagOption::REGION:   arg >> ecParams.region; break;        
-        //     case HaplotagOption::CRAM:     ecParams.outputFormat = "cram"; break;
-        //     case HaplotagOption::LOG:      ecParams.writeReadLog = true; break;
-        //     // Somatic mode
-        //     case HaplotagOption::TAG_TUM: ecParams.tagTumorSnp = true; break;
-        //     case HaplotagOption::TUM_SNP: arg >> ecParams.tumorSnpFile; break;
-        //     case HaplotagOption::TUM_BAM: arg >> ecParams.tumorBamFile; break;
-        //     case HaplotagOption::HIGH_CON: arg >> ecParams.benchmarkVcf; break;
-        //     case HaplotagOption::DISABLE_FILTER: ecParams.enableFilter = false; break;
-        //     case HaplotagOption::OPT_HELP:
-        //         helpManager.printHelp();
-        //         exit(EXIT_SUCCESS);
-        //     default: die = true; break;
-        // }
 
         if(loadHaplotagOptions(c, arg)){
             continue;
@@ -152,7 +125,7 @@ void HaplotagOptionManager::parseOptions(int argc, char** argv)
 
     // Validate arguments
     if (argc - optind < 0) {
-        std::cerr << "[ERROR] " << SUBPROGRAM << ": missing arguments\n";
+        std::cerr << "[ERROR] " << programName << ": missing arguments\n";
         die = true;
     }
     
@@ -228,14 +201,14 @@ bool HaplotagOptionManager::validateNumericParameter() {
     bool isValid = true;
     
     if (ecParams.numThreads < 1) {
-        std::cerr << "[ERROR] " << SUBPROGRAM << ": invalid threads. value: " 
+        std::cerr << "[ERROR] " << programName << ": invalid threads. value: " 
                 << ecParams.numThreads 
                 << "\nplease check -t, --threads=Num\n";
         isValid = false;
     }
     
     if (ecParams.percentageThreshold > 1 || ecParams.percentageThreshold < 0) {
-        std::cerr << "[ERROR] " << SUBPROGRAM << ": invalid percentage threshold. value: " 
+        std::cerr << "[ERROR] " << programName << ": invalid percentage threshold. value: " 
                 << ecParams.percentageThreshold
                 << "\nthis value need: 0~1, please check -p, --percentageThreshold=Num\n";
         isValid = false;
@@ -248,14 +221,14 @@ bool HaplotagOptionManager::validateNumericParameter() {
 // Validate if a required file exists
 bool OptionManager::validateRequiredFile(const std::string& filePath, const std::string& fileDescription) {
     if(filePath.empty()) {
-        std::cerr << "[ERROR] " << SUBPROGRAM  << ": missing " << fileDescription << ".\n";
+        std::cerr << "[ERROR] " << programName  << ": missing " << fileDescription << ".\n";
 
         return false;
     }
     
     std::ifstream openFile(filePath.c_str());
     if(!openFile.is_open()) {
-        std::cerr << "[ERROR] " << SUBPROGRAM  << ": File " << filePath << " not exist.\n\n";
+        std::cerr << "[ERROR] " << programName  << ": " << fileDescription << ": " << filePath << " not exist.\n\n";
         return false;
     }
     return true;
@@ -270,7 +243,7 @@ bool OptionManager::validateOptionalFile(const std::string& filePath, const std:
     
     std::ifstream openFile(filePath.c_str());
     if(!openFile.is_open()) {
-        std::cerr << "[ERROR] " << SUBPROGRAM  << " File " << filePath << " not exist.\n\n";
+        std::cerr << "[ERROR] " << programName << ": " << fileDescription << ": " << filePath << " not exist.\n\n";
         return false;
     }
     return true;
@@ -279,7 +252,7 @@ bool OptionManager::validateOptionalFile(const std::string& filePath, const std:
 
 int HaplotagMain(int argc, char** argv, std::string in_version)
 {
-    HaplotagOptionManager optionManager;
+    HaplotagOptionManager optionManager(SUBPROGRAM);
 
     optionManager.setOptions();
     optionManager.setHelpMessage();

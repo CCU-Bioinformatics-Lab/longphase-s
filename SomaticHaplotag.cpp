@@ -6,9 +6,7 @@ void SomaticHaplotagHelpManager::modifyMessage() {
     const std::string sectionName = "required arguments:";
     //clear the section item
     clearSectionItem(sectionName);
-
     // Required arguments - Somatic mode
-    addSectionItem(sectionName, "   [Somatic mode] (tumor/normal pair data):");
     addSectionItem(sectionName, "      -s, --snp-file=NAME             input normal sample SNP VCF file.");
     addSectionItem(sectionName, "      -b, --bam-file=NAME             input normal sample BAM file (used as a reference for comparison).");
     addSectionItem(sectionName, "      --tumor-snp-file=NAME           input tumor sample SNP VCF file.");
@@ -20,7 +18,7 @@ void SomaticHaplotagOptionManager::extendOptions() {
     // Tumor-specific options
     addOption({"tumor-snp-file", required_argument, NULL, TUM_SNP});
     addOption({"tumor-bam-file", required_argument, NULL, TUM_BAM});
-    addOption({"highCon-snp", required_argument, NULL, BENCHMARK_VCF});
+    addOption({"benchmark-snp", required_argument, NULL, BENCHMARK_VCF});
     addOption({"benchmark-bed", required_argument, NULL, BENCHMARK_BED});
     addOption({"disableFilter", no_argument, NULL, DISABLE_FILTER});
 }
@@ -51,7 +49,7 @@ bool SomaticHaplotagOptionManager::loadExtendOptions(char& opt, std::istringstre
 
 int SomaticHaplotagMain(int argc, char** argv, std::string in_version){
     
-    SomaticHaplotagOptionManager optionManager;
+    SomaticHaplotagOptionManager optionManager(SUBPROGRAM);
 
     optionManager.setOptions();
     optionManager.setHelpMessage();
