@@ -763,25 +763,25 @@ void SomaticVarCaller::SetFilterParamsWithPurity(SomaticFilterParaemter &somatic
     // tumor purity 1.0
     if (tumorPurity >= 0.9 && tumorPurity <= 1.0) 
     {
-        somaticParams.norVAF_maxThr = 0.084;
+        somaticParams.norVAF_maxThr = 0.13;
         somaticParams.norDepth_minThr = 1;
 
         somaticParams.MessyReadRatioThreshold = 1.0;    
-        somaticParams.ReadCount_minThr = 4.0;
+        somaticParams.ReadCount_minThr = 3.0;
 
         somaticParams.HapConsistency_ReadCount_maxThr = 12.0;
-        somaticParams.HapConsistency_VAF_maxThr = 0.238;
-        somaticParams.HapConsistency_somaticRead_minThr = 1.0;
+        somaticParams.HapConsistency_VAF_maxThr = 0.144;
+        somaticParams.HapConsistency_somaticRead_minThr = 0.0;
 
         somaticParams.IntervalSnpCount_ReadCount_maxThr = 12.0;
-        somaticParams.IntervalSnpCount_VAF_maxThr = 0.286;
+        somaticParams.IntervalSnpCount_VAF_maxThr = 0.189;
         somaticParams.IntervalSnpCount_minThr = 4.0;
-        somaticParams.zScore_maxThr = 4.621;
+        somaticParams.zScore_maxThr = 5.233;
     } 
     // tumor purity 0.8
     else if (tumorPurity >= 0.7 && tumorPurity < 0.9) 
     {
-        somaticParams.norVAF_maxThr = 0.095;
+        somaticParams.norVAF_maxThr = 0.13;
         somaticParams.norDepth_minThr = 1;
 
         somaticParams.MessyReadRatioThreshold = 1.0;    
