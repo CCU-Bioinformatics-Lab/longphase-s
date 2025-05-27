@@ -5,6 +5,7 @@
 #include "SomaticHaplotagProcess.h"
 
 
+
 class SomaticHaplotagHelpManager : public HaplotagHelpManager {
     public:
         SomaticHaplotagHelpManager(const std::string& program) : HaplotagHelpManager(program) {}
@@ -19,10 +20,12 @@ class SomaticHaplotagOptionManager : public HaplotagOptionManager {
             return new SomaticHaplotagHelpManager(program);
         }
 
+        virtual void initializeDefaultValues() override;
         virtual void extendOptions() override;
 
         virtual bool loadExtendOptions(char& opt, std::istringstream& arg) override;
         virtual bool validateExtendFiles() override;
+        virtual bool validateNumericParameter() override;
 
     public:
         SomaticHaplotagOptionManager(const std::string& program) : HaplotagOptionManager(program) {

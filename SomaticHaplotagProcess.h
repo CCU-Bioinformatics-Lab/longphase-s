@@ -17,8 +17,21 @@ class SomaticHaplotagParamsMessage : public HaplotagParamsMessage{
             addCommonParamsMessage();
             insertAfterKey("tumor SNP file", params.tumorSnpFile, "phased SNP file");
             insertAfterKey("input tumor bam file", params.tumorBamFile, "input bam file");
-            insertAfterKey("somatic calling mapping quality", params.qualityThreshold, "percentage threshold");
+            insertAfterKey("[haplotag params]"," ", "#1");
+
+            insertAfterKey("\n[somatic calling params]"," ", "tag supplementary");
+            insertAfterKey("somatic calling mapping quality", params.qualityThreshold, "\n[somatic calling params]");
             insertAfterKey("enable somatic variant filter", params.enableFilter, "somatic calling mapping quality");
+            insertAfterKey("predict tumor purity", params.predictTumorPurity, "enable somatic variant filter");
+
+            std::string tumorPurityStr;
+            if(params.predictTumorPurity){
+                tumorPurityStr = "none";
+            }else{
+                tumorPurityStr = std::to_string(params.tumorPurity);
+            }
+
+            insertAfterKey("tumor purity value", tumorPurityStr, "predict tumor purity");
 
             // sort the entries by order
             sortEntries();

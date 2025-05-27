@@ -62,12 +62,12 @@ class HaplotagParamsMessage : public MessageManager{
             addEntry("number of threads", params.numThreads);
             addEntry("write log file", params.writeReadLog);
             addEntry("log file", params.writeReadLog ? (params.resultPrefix+".out") : "");
-            addEntry("separator", "-------------------------------------------");
+            addEntry("#1", "-------------------------------------------");
             addEntry("tag region", !params.region.empty() ? params.region : "all");
             addEntry("filter mapping quality below", params.qualityThreshold);
             addEntry("percentage threshold", params.percentageThreshold);
             addEntry("tag supplementary", params.tagSupplementary);
-            addEntry("separator", "-------------------------------------------");    
+            addEntry("#2", "-------------------------------------------");
         }
 
     public:
@@ -80,8 +80,10 @@ class HaplotagParamsMessage : public MessageManager{
         void printParamsMessage(){
             // Print all entries with proper formatting
             for (const auto& entry : entries) {
-                if (entry.key == "separator") {
+                if (entry.key.at(0) == '#') {
                     std::cerr << entry.value << "\n";
+                } else if(entry.key.at(0) == '[' || entry.key.at(0) == '\n') {
+                    std::cerr << entry.key << "\n";
                 } else {
                     std::cerr << std::left << std::setw(31) << entry.key << ": " << entry.value << "\n";
                 }

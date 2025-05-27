@@ -58,19 +58,17 @@ void HaplotagOptionManager::setOptions() {
     addOption({"snp-file", required_argument, NULL, 's'});
     addOption({"bam-file", required_argument, NULL, 'b'});
     addOption({"reference", required_argument, NULL, 'r'});
-    addOption({"out-prefix", required_argument, NULL, 'o'});
-    
-    // Processing options
-    addOption({"tagSupplementary", no_argument, NULL, TAG_SUP});
     addOption({"sv-file", required_argument, NULL, SV_FILE});
     addOption({"mod-file", required_argument, NULL, MOD_FILE});
-    addOption({"cram", no_argument, NULL, CRAM});
-    
-    // Configuration options
+        
+    // Processing options
     addOption({"threads", required_argument, NULL, 't'});
     addOption({"qualityThreshold", required_argument, NULL, 'q'});
     addOption({"percentageThreshold", required_argument, NULL, 'p'});
+    addOption({"tagSupplementary", no_argument, NULL, TAG_SUP});
+    addOption({"out-prefix", required_argument, NULL, 'o'});
     addOption({"region", required_argument, NULL, REGION});
+    addOption({"cram", no_argument, NULL, CRAM});
     addOption({"log", no_argument, NULL, LOG});
     
     // Add terminator
@@ -80,9 +78,7 @@ void HaplotagOptionManager::setOptions() {
     extendOptions();
 }
 
-void HaplotagOptionManager::parseOptions(int argc, char** argv)
-{
-
+void HaplotagOptionManager::initializeDefaultValues() {
     // Initialize default values
     ecParams.numThreads = 1;
     ecParams.qualityThreshold = 1;
@@ -92,7 +88,13 @@ void HaplotagOptionManager::parseOptions(int argc, char** argv)
     ecParams.tagSupplementary = false;
     ecParams.writeReadLog = false;
     ecParams.command = "longphase ";
-    ecParams.enableFilter = true;
+}
+
+void HaplotagOptionManager::parseOptions(int argc, char** argv)
+{
+
+    // Initialize default values
+    initializeDefaultValues();
 
     optind = 1;    // Reset getopt
 

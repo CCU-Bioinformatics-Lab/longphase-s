@@ -23,7 +23,8 @@ enum HaplotagOption {
     TUM_BAM,
     BENCHMARK_VCF,
     BENCHMARK_BED,
-    DISABLE_FILTER
+    DISABLE_FILTER,
+    TUMOR_PURITY
 };
 
 // Help message management class
@@ -169,6 +170,8 @@ class HaplotagOptionManager : public OptionManager {
         HaplotagParameters ecParams;
 
         HelpMessageManager* helpManager;
+
+        virtual void initializeDefaultValues();
 
         bool loadHaplotagOptions(char& opt, std::istringstream& arg);
 

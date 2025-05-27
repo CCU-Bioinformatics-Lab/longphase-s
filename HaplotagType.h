@@ -26,25 +26,18 @@ struct HaplotagParameters
     std::string version;
     std::string outputFormat;
 
+    // Somatic haplotag parameters
     std::string tumorSnpFile;   
     std::string tumorBamFile;  
     std::string benchmarkVcf;
     std::string benchmarkBedFile;
+    double tumorPurity;
+    bool predictTumorPurity;
 
     bool enableFilter;
 
     bool tagSupplementary;
     bool writeReadLog;
-};
-
-struct SomaticHaplotagParameters
-{
-    std::string tumorSnpFile;   
-    std::string tumorBamFile;  
-    std::string benchmarkVcf;
-    std::string benchmarkBedFile;
-
-    bool enableFilter; 
 };
 
 enum Genome

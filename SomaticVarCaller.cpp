@@ -627,12 +627,19 @@ void SomaticVarCaller::VariantCalling(
     tumorBamParser.parsingBam(params.tumorBamFile, params, chrVec, chrLength, mergedChrVarinat, vcfSet, Genome::TUMOR);
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 
-    TumorPurityPredictor* tumorPurityPredictor = new TumorPurityPredictor(chrVec, *chrPosNorBase, *chrPosSomaticInfo, params.writeReadLog, params.resultPrefix);
-    // predict tumor purity
-    double tumorPurity = tumorPurityPredictor->predictTumorPurity();
-    //flag the position that is used for purity prediction
-    tumorPurityPredictor->markStatisticFlag(*chrPosSomaticInfo);
-    delete tumorPurityPredictor;
+    double tumorPurity = 0.0;
+
+    if(params.predictTumorPurity){
+        TumorPurityPredictor* tumorPurityPredictor = new TumorPurityPredictor(chrVec, *chrPosNorBase, *chrPosSomaticInfo, params.writeReadLog, params.resultPrefix);
+        // predict tumor purity
+        tumorPurity = tumorPurityPredictor->predictTumorPurity();
+        //flag the position that is used for purity prediction
+        tumorPurityPredictor->markStatisticFlag(*chrPosSomaticInfo);
+        delete tumorPurityPredictor;
+    }else{
+        std::cerr << "using tumor purity from parameters: " << params.tumorPurity << std::endl;
+        tumorPurity = params.tumorPurity;
+    }
 
     // set filter params with tumor purity
     SetFilterParamsWithPurity(somaticParams, tumorPurity);
@@ -828,6 +835,7 @@ void SomaticVarCaller::SetFilterParamsWithPurity(SomaticFilterParaemter &somatic
     // tumor purity 0.2
     else if (tumorPurity > 0 && tumorPurity < 0.3) 
     {
+        std::cerr << "[Warning] tumor purity is less than 0.3: " << tumorPurity << std::endl;
         somaticParams.norVAF_maxThr = 0.130;
         somaticParams.norDepth_minThr = 1;
 
@@ -1591,16 +1599,16 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                  << "H2_1readCount\t"
                  << "H3readCount\t"
                  << "GermlineReadHpCount\t"
-                 << "GermlineReadHpConsistencyRatio\t"
-                 << "SomaticReadHpConsistencyRatio\t"
-                 << "BaseGermlineReadHpConsistencyRatio\t"
+                 << "GermlineReadHpImbalanceRatio\t"
+                 << "SomaticReadHpImbalanceRatio\t"
+                 << "BaseGermlineReadHpImbalanceRatio\t"
                  << "PercentageOfGermlineHp\t"
                  << "H1readCountInNorBam\t"
                  << "H2readCountInNorBam\t"
                  << "GermlineReadHpCountInNorBam\t"
-                 << "GermlineReadHpConsistencyRatioInNorBam\t"
+                 << "GermlineReadHpImbalanceRatioInNorBam\t"
                  << "PercentageOfGermlineHpInNorBam\t"
-                 << "GermlineReadHpConsistencyRatioDifference\t"
+                 << "GermlineReadHpImbalanceRatioDifference\t"
                  << "PercentageOfGermlineHpDifference\t"
                  << "SomaticRead_H1-1\t"
                  << "SomaticRead_H2-1\t"
@@ -1729,9 +1737,9 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
             double percentageOfGermlineHp = (*somaticVarIter).second.base.percentageOfGermlineHp;
 
             // // the ratio of the read count of H1 and H2 based on germline HP
-            double baseOnGermlineReadHpConsistencyRatio = (*somaticVarIter).second.allelicImbalanceRatio;
+            double baseOnGermlineReadHpImbalanceRatio = (*somaticVarIter).second.allelicImbalanceRatio;
 
-            double somaticReadHpConsistencyRatio = (*somaticVarIter).second.somaticHaplotypeImbalanceRatio;
+            double somaticReadHpImbalanceRatio = (*somaticVarIter).second.somaticHaplotypeImbalanceRatio;
 
             //read hp count in the normal bam
             int H1readCountInNorBam = (*chrPosNorBase)[chr][(*somaticVarIter).first].ReadHpCount[ReadHP::H1];
@@ -1808,8 +1816,8 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                         << H3readCount << "\t" //39
                         << germlineReadHpCount << "\t" //40
                         << germlineReadHpImbalanceRatio << "\t" //41
-                        << somaticReadHpConsistencyRatio << "\t" //42
-                        << baseOnGermlineReadHpConsistencyRatio << "\t" //43
+                        << somaticReadHpImbalanceRatio << "\t" //42
+                        << baseOnGermlineReadHpImbalanceRatio << "\t" //43
                         << percentageOfGermlineHp << "\t" //44
                         << H1readCountInNorBam << "\t" //45
                         << H2readCountInNorBam << "\t" //46
@@ -1961,10 +1969,16 @@ void SomaticVarCaller::WriteDenseTumorSnpIntervalLog(const HaplotagParameters &p
 }
 
 void SomaticVarCaller::getSomaticFlag(const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+    int somaticVariantCount = 0;
     for(auto chr: chrVec){
         for(auto somaticVar: (*chrPosSomaticInfo)[chr]){
-            mergedChrVarinat[chr][somaticVar.first].isSomaticVariant = true;
-            mergedChrVarinat[chr][somaticVar.first].somaticReadDeriveByHP = somaticVar.second.somaticReadDeriveByHP;
+            //temporary logic for somatic tagging validcation
+            if(!somaticVar.second.isFilterOut && somaticVar.second.isHighConSomaticSNP){
+                mergedChrVarinat[chr][somaticVar.first].isSomaticVariant = true;
+                mergedChrVarinat[chr][somaticVar.first].somaticReadDeriveByHP = somaticVar.second.somaticReadDeriveByHP;
+                somaticVariantCount++;
+            }
         }
     }
+    std::cerr << "somatic variant count(Flag): " << somaticVariantCount << "\n";
 }
