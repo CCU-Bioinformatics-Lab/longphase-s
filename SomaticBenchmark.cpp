@@ -363,8 +363,8 @@ void SomaticReadBenchmark::removeVariantsOutBedRegion(std::map<std::string, std:
 void SomaticReadBenchmark::writeBedRegionLog(const std::vector<std::string>& chrVec,
                                            const std::map<std::string, std::map<int, MultiGenomeVar>>& mergedChrVarinat,
                                            const std::string& outPrefix) {
-    std::ofstream inBedLog(outPrefix + "_in_bed.out");
-    std::ofstream outBedLog(outPrefix + "_out_bed.out");
+    std::ofstream inBedLog(outPrefix + "_var_in_bed.out");
+    std::ofstream outBedLog(outPrefix + "_var_out_bed.out");
     
     std::string header = "#Chr\tPosition\tRef\tAlt\tVariant_Type\n";
     inBedLog << header;
@@ -497,7 +497,7 @@ void SomaticReadBenchmark::writeTaggedSomaticReadLog(
     writeReadLog(chrVec, params, logPosfix, somaticReadVecMap);
 }
 
-void SomaticReadBenchmark::writeCrossHighConSnpReadLog(
+void SomaticReadBenchmark::writeTaggedTruthSomaticReadLog(
     const std::vector<std::string>& chrVec,
     HaplotagParameters &params,
     std::string logPosfix

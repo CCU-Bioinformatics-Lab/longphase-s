@@ -16,11 +16,9 @@ struct HaplotagParameters
     double percentageThreshold;
     
     std::string snpFile;
-    std::string tumorSnpFile;   
     std::string svFile;
     std::string modFile;
     std::string bamFile;
-    std::string tumorBamFile;  
     std::string fastaFile;
     std::string resultPrefix;
     std::string region;
@@ -28,6 +26,8 @@ struct HaplotagParameters
     std::string version;
     std::string outputFormat;
 
+    std::string tumorSnpFile;   
+    std::string tumorBamFile;  
     std::string benchmarkVcf;
     std::string benchmarkBedFile;
 
@@ -35,6 +35,16 @@ struct HaplotagParameters
 
     bool tagSupplementary;
     bool writeReadLog;
+};
+
+struct SomaticHaplotagParameters
+{
+    std::string tumorSnpFile;   
+    std::string tumorBamFile;  
+    std::string benchmarkVcf;
+    std::string benchmarkBedFile;
+
+    bool enableFilter; 
 };
 
 enum Genome

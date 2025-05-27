@@ -149,17 +149,17 @@ void SomaticHaplotagProcess::calculateSnpCounts(){
 void SomaticHaplotagProcess::postprocessForHaplotag(){
     std::cerr<< "postprocess for haplotag ...\n";
     if(params.writeReadLog){
-        hpBeforeInheritance->writeReadHpDistriLog(params, "_readDistri_beforeInheritance.out", *chrVec);
-        hpAfterInheritance->writeReadHpDistriLog(params, "_readDistri_afterInheritance.out", *chrVec);
+        hpBeforeInheritance->writeReadHpDistriLog(params, "_read_distri_before_inheritance.out", *chrVec);
+        hpAfterInheritance->writeReadHpDistriLog(params, "_read_distri_after_inheritance.out", *chrVec);
         //write snp cover region
-        hpAfterInheritance->writePosCoverRegionLog(params, "_SnpCoverRegion.out", *chrVec);
+        hpAfterInheritance->writePosCoverRegionLog(params, "_snp_cover_region.out", *chrVec);
         //write read cover region in whole genome
-        hpAfterInheritance->writeTagReadCoverRegionLog(params, "_readCoverRegion.bed", *chrVec, *chrLength);
+        hpAfterInheritance->writeTagReadCoverRegionLog(params, "_read_cover_region.bed", *chrVec, *chrLength);
         //write somatic read log
-        somaticBenchmark.writeTaggedReadLog(*chrVec, params, "_totalRead.out");
-        somaticBenchmark.writeTaggedSomaticReadLog(*chrVec, params, "_somaticRead.out");
-        somaticBenchmark.writeCrossHighConSnpReadLog(*chrVec, params, "_crossHighConSnpRead.out");
-        somaticBenchmark.writePosAlleleCountLog(*chrVec, params, "_alleleCount.out", *mergedChrVarinat);
+        somaticBenchmark.writeTaggedReadLog(*chrVec, params, "_total_tagged_read.out");
+        somaticBenchmark.writeTaggedSomaticReadLog(*chrVec, params, "_tagged_somatic_read.out");
+        somaticBenchmark.writeTaggedTruthSomaticReadLog(*chrVec, params, "_tagged_truth_somatic_read.out");
+        somaticBenchmark.writePosAlleleCountLog(*chrVec, params, "_allele_count.out", *mergedChrVarinat);
     }
 }
 

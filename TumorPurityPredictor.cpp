@@ -1,11 +1,12 @@
 #include "TumorPurityPredictor.h"
 
 TumorPurityPredictor::TumorPurityPredictor(
-    const HaplotagParameters& params,
     const std::vector<std::string>& chrVec,
     std::map<std::string, std::map<int, PosBase>>& chrPosNorBase,
-    std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo
-) : params(params), chrVec(chrVec), chrPosNorBase(chrPosNorBase), chrPosSomaticInfo(chrPosSomaticInfo), initial_data_size(0){}
+    std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo,
+    const bool writeLog,
+    const std::string& resultPrefix
+) :chrVec(chrVec), chrPosNorBase(chrPosNorBase), chrPosSomaticInfo(chrPosSomaticInfo), writeLog(writeLog), resultPrefix(resultPrefix), initial_data_size(0){}
 
 TumorPurityPredictor::~TumorPurityPredictor(){
 
@@ -26,14 +27,14 @@ double TumorPurityPredictor::predictTumorPurity(){
         std::cerr << "initial data size: " << initial_data_size << std::endl;
         std::cerr << "\n==========first filter==========" << std::endl;
         std::cerr << "[INFO] Data count: " << purityFeatureValueVec.size() << std::endl;
-        std::cerr << "[INFO] consistencyRatioInNorBam == 0.0: " << filterCounts.consistencyRatioInNorBam << std::endl;
-        std::cerr << "[INFO] consistencyRatio == 0.0: " << filterCounts.consistencyRatio << std::endl;
-        std::cerr << "[INFO] consistencyRatioInNorBam <= 0.7: " << filterCounts.consistencyRatioInNorBamMaxThr << std::endl;
+        std::cerr << "[INFO] imbalanceRatioInNorBam == 0.0: " << filterCounts.imbalanceRatioInNorBam << std::endl;
+        std::cerr << "[INFO] imbalanceRatio == 0.0: " << filterCounts.imbalanceRatio << std::endl;
+        std::cerr << "[INFO] imbalanceRatioInNorBam <= 0.7: " << filterCounts.imbalanceRatioInNorBamMaxThr << std::endl;
         std::cerr << "[INFO] readHpCountInNorBam <= 5: " << filterCounts.readHpCountInNorBam << std::endl;
         std::cerr << "[INFO] percentageOfGermlineHpInNorBam: >= 0.7 " << filterCounts.percentageOfGermlineHp << std::endl;
 
         // find the threshold of germlineReadHpCount for peak valley filter
-        int germlineReadHpCountThreshold = findPeakValleythreshold(params, purityFeatureValueVec);
+        int germlineReadHpCountThreshold = findPeakValleythreshold(purityFeatureValueVec);
 
         // peak valley filter
         peakValleyFilter(purityFeatureValueVec, germlineReadHpCountThreshold);
@@ -81,7 +82,7 @@ double TumorPurityPredictor::predictTumorPurity(){
         std::cerr << "[INFO] outliers: " << plotValue.outliers << std::endl;
         
         // write purity log
-        writePurityLog(params, purity, plotValue, iteration_times, germlineReadHpCountThreshold);
+        writePurityLog(purity, plotValue, iteration_times, germlineReadHpCountThreshold);
     }catch(const std::exception& e){
         std::cerr << "[ERROR] " << e.what() << std::endl;
         std::cerr << "[ERROR] Failed to predict tumor purity, set purity to 0.0" << std::endl;
@@ -117,13 +118,13 @@ void TumorPurityPredictor::buildPurityFeatureValueVec(std::vector<PurityData> &p
             // statistic the filter out data
             if(germlineReadHpImbalanceRatioInNorBam == GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MIN_THR){
                 includeInStatistics = false;
-                filterCounts.consistencyRatioInNorBam++;
+                filterCounts.imbalanceRatioInNorBam++;
             }else if(germlineReadHpImbalanceRatio == GERMLINE_HP_IMBALANCE_RATIO_MIN_THR){
                 includeInStatistics = false;
-                filterCounts.consistencyRatio++;
+                filterCounts.imbalanceRatio++;
             }else if(germlineReadHpImbalanceRatioInNorBam >= GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MAX_THR){
                 includeInStatistics = false;
-                filterCounts.consistencyRatioInNorBamMaxThr++;
+                filterCounts.imbalanceRatioInNorBamMaxThr++;
             }else if(germlineReadHpCountInNorBam <= GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR){
                 includeInStatistics = false;
                 filterCounts.readHpCountInNorBam++;
@@ -135,7 +136,7 @@ void TumorPurityPredictor::buildPurityFeatureValueVec(std::vector<PurityData> &p
                     PurityData{
                         .chr = chr,
                         .pos = (*somaticPosIter).first,
-                        .germlineReadHpConsistencyRatio = germlineReadHpImbalanceRatio,
+                        .germlineReadHpImbalanceRatio = germlineReadHpImbalanceRatio,
                         .germlineReadHpCountInNorBam = germlineReadHpCountInNorBam
                     }
                 );
@@ -152,7 +153,7 @@ void TumorPurityPredictor::buildPurityFeatureValueVec(std::vector<PurityData> &p
 }
 
 
-int TumorPurityPredictor::findPeakValleythreshold(const HaplotagParameters& params, const std::vector<PurityData> &purityFeatureValueVec){
+int TumorPurityPredictor::findPeakValleythreshold(const std::vector<PurityData> &purityFeatureValueVec){
     
     std::cerr << "[INFO] peak valley filter ..." << std::endl;
     int threshold = 0;
@@ -202,16 +203,18 @@ int TumorPurityPredictor::findPeakValleythreshold(const HaplotagParameters& para
         }
 
         //write histogram to file
-        if(params.writeReadLog){
-            peakSet.writePeakValleyLog(params, 
-                                histogram.getHistogram(),  
-                                smoothedHistogram.getHistogram(),  
-                                total_snp_count, 
-                                data_range, 
-                                max_height, 
-                                MIN_PEAK_RATIO, 
-                                peak_threshold,
-                                sigma);
+        if(writeLog){   
+            peakSet.writePeakValleyLog(
+                resultPrefix,
+                histogram.getHistogram(),  
+                smoothedHistogram.getHistogram(),  
+                total_snp_count, 
+                data_range, 
+                max_height, 
+                MIN_PEAK_RATIO, 
+                peak_threshold,
+                sigma
+            );
         }
 
     }catch(const std::exception& e){
@@ -242,7 +245,7 @@ void TumorPurityPredictor::removeOutliers(std::vector<PurityData> &purityFeature
      std::vector<PurityData>::iterator vecIter = purityFeatureValueVec.begin();
 
     while(vecIter != purityFeatureValueVec.end()){
-        if((*vecIter).germlineReadHpConsistencyRatio < plotValue.lowerWhisker || (*vecIter).germlineReadHpConsistencyRatio > plotValue.upperWhisker){
+        if((*vecIter).germlineReadHpImbalanceRatio < plotValue.lowerWhisker || (*vecIter).germlineReadHpImbalanceRatio > plotValue.upperWhisker){
             //remove outliers for reduce noise
             std::string chr = (*vecIter).chr;
             int pos = (*vecIter).pos;
@@ -281,17 +284,17 @@ BoxPlotValue TumorPurityPredictor::statisticPurityData(std::vector<PurityData> &
             
             //check index 
             if (idx + 1 >= plotValue.data_size) {
-                return purityFeatureValueVec[plotValue.data_size - 1].germlineReadHpConsistencyRatio;
+                return purityFeatureValueVec[plotValue.data_size - 1].germlineReadHpImbalanceRatio;
             }
 
             // //element is the last data
             if (idx == plotValue.data_size - 1) {
-                return purityFeatureValueVec[idx].germlineReadHpConsistencyRatio;
+                return purityFeatureValueVec[idx].germlineReadHpImbalanceRatio;
             }
             
             // return linear interplolation
-            return purityFeatureValueVec[idx].germlineReadHpConsistencyRatio * (1.0 - frac) + 
-                purityFeatureValueVec[idx + 1].germlineReadHpConsistencyRatio * frac;
+            return purityFeatureValueVec[idx].germlineReadHpImbalanceRatio * (1.0 - frac) + 
+                purityFeatureValueVec[idx + 1].germlineReadHpImbalanceRatio * frac;
         };
 
         // Calculate quartiles and median
@@ -307,7 +310,7 @@ BoxPlotValue TumorPurityPredictor::statisticPurityData(std::vector<PurityData> &
         // Count outliers (points beyond whiskers)
         plotValue.outliers = 0;
         for (const auto& value : purityFeatureValueVec) {
-            if (value.germlineReadHpConsistencyRatio < plotValue.lowerWhisker || value.germlineReadHpConsistencyRatio > plotValue.upperWhisker) {
+            if (value.germlineReadHpImbalanceRatio < plotValue.lowerWhisker || value.germlineReadHpImbalanceRatio > plotValue.upperWhisker) {
                 plotValue.outliers++;
             }
         }
@@ -335,27 +338,27 @@ void TumorPurityPredictor::markStatisticFlag(std::map<std::string, std::map<int,
     }
 }
 
-void TumorPurityPredictor::writePurityLog(const HaplotagParameters &params, double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold){
+void TumorPurityPredictor::writePurityLog(double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold){
     try{
-        std::ofstream purityLog = std::ofstream(params.resultPrefix+"_purity.out");
+        std::ofstream purityLog = std::ofstream(resultPrefix+"_purity.out");
 
         if(!purityLog.is_open()){
-            throw std::runtime_error("Failed to open purity log file: " + params.resultPrefix+"_purity.out");
+            throw std::runtime_error("Failed to open purity log file: " + resultPrefix+"_purity.out");
         }
 
         purityLog << "#Initial data size: " << initial_data_size << std::endl;
         purityLog << "#==========filter parameters==========" << std::endl;
-        purityLog << "#GERMLINE_HP_CONSISTENCY_RATIO_MIN_THR: " << GERMLINE_HP_IMBALANCE_RATIO_MIN_THR << std::endl;
-        purityLog << "#GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MIN_THR: " << GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MIN_THR << std::endl;
-        purityLog << "#GERMLINE_HP_CONSISTENCY_RATIO_IN_NOR_BAM_MAX_THR: " << GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MAX_THR << std::endl;
+        purityLog << "#GERMLINE_HP_IMBALANCE_RATIO_MIN_THR: " << GERMLINE_HP_IMBALANCE_RATIO_MIN_THR << std::endl;
+        purityLog << "#GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MIN_THR: " << GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MIN_THR << std::endl;
+        purityLog << "#GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MAX_THR: " << GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MAX_THR << std::endl;
         purityLog << "#GERMLINE_HP_PERCENTAGE_IN_NOR_BAM_MAX_THR: " << GERMLINE_HP_PERCENTAGE_IN_NOR_BAM_MAX_THR << std::endl;
         purityLog << "#GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR: " << GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR << std::endl;
         purityLog << "#GERMLINE_HP_READ_COUNT_IN_NOR_BAM_DYNAMIC_THR: " << germlineReadHpCountThreshold << std::endl;
 
         purityLog << "#==========initial filter out data count==========" << std::endl;
-        purityLog << "#consistencyRatioInNorBam: " << filterCounts.consistencyRatioInNorBam << std::endl;
-        purityLog << "#consistencyRatio: " << filterCounts.consistencyRatio << std::endl;
-        purityLog << "#consistencyRatioInNorBam_over_thr: " << filterCounts.consistencyRatioInNorBamMaxThr << std::endl;
+        purityLog << "#imbalanceRatioInNorBam: " << filterCounts.imbalanceRatioInNorBam << std::endl;
+        purityLog << "#imbalanceRatio: " << filterCounts.imbalanceRatio << std::endl;
+        purityLog << "#imbalanceRatioInNorBam_over_thr: " << filterCounts.imbalanceRatioInNorBamMaxThr << std::endl;
         purityLog << "#readHpCountInNorBam: " << filterCounts.readHpCountInNorBam << std::endl;
         purityLog << "#percentageOfGermlineHpInNorBam: " << filterCounts.percentageOfGermlineHp << std::endl;
 
@@ -934,7 +937,7 @@ std::string PeakProcessor::transformTrend(const PeakTrend &trend) {
 }
 
 void PeakProcessor::writePeakValleyLog(
-    const HaplotagParameters &params,
+    const std::string& resultPrefix,
     const std::vector<HistogramData>& histogram,
     const std::vector<HistogramData>& smoothed_histogram,
     size_t &total_snp_count,
@@ -945,9 +948,9 @@ void PeakProcessor::writePeakValleyLog(
     double &sigma) {
 
     std::string postfix = "_germlineReadHpCountInNorBam_histogram.out";
-    std::ofstream histogramFile(params.resultPrefix + postfix);
+    std::ofstream histogramFile(resultPrefix + postfix);
     if(!histogramFile.is_open()){
-        std::cerr << "[WARNING] Failed to open histogram log file: " << params.resultPrefix + postfix << std::endl;        
+        std::cerr << "[WARNING] Failed to open histogram log file: " << resultPrefix + postfix << std::endl;        
         return;
     }
 

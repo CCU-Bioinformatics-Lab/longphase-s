@@ -27,11 +27,11 @@ struct BoxPlotValue {
 struct PurityData{
     std:: string chr;
     int pos;
-    double germlineReadHpConsistencyRatio;
+    double germlineReadHpImbalanceRatio;
     int germlineReadHpCountInNorBam;
 
     static bool compareByGermlineReadHpConsisRatio(const PurityData& a, const PurityData& b){
-        return a.germlineReadHpConsistencyRatio < b.germlineReadHpConsistencyRatio;
+        return a.germlineReadHpImbalanceRatio < b.germlineReadHpImbalanceRatio;
     }
 };
 
@@ -147,7 +147,7 @@ class PeakProcessor {
         std::string transformTrend(const PeakTrend &trend);
         int getThreshold();
 
-        void writePeakValleyLog(const HaplotagParameters &params,
+        void writePeakValleyLog(const std::string& resultPrefix,
                                 const std::vector<HistogramData>& histogram,
                                 const std::vector<HistogramData>& smoothed_histogram,
                                 size_t &total_snp_count,
@@ -164,9 +164,9 @@ class PeakProcessor {
 class TumorPurityPredictor{
     private:
         struct FilterCounts {
-            int consistencyRatioInNorBam = 0;
-            int consistencyRatioInNorBamMaxThr = 0;
-            int consistencyRatio = 0;
+            int imbalanceRatioInNorBam = 0;
+            int imbalanceRatioInNorBamMaxThr = 0;
+            int imbalanceRatio = 0;
             int readHpCountInNorBam = 0;
             int percentageOfGermlineHp = 0;
             int peakValley = 0;
@@ -178,35 +178,39 @@ class TumorPurityPredictor{
         static constexpr float GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MAX_THR = 0.7;
         static constexpr float GERMLINE_HP_PERCENTAGE_IN_NOR_BAM_MAX_THR = 0.7;
         static const int GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR = 5;
-
-        const HaplotagParameters& params;    
+        
         const std::vector<std::string>& chrVec;    
         std::map<std::string, std::map<int, PosBase>>& chrPosNorBase;
         std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo;
         std::map<std::string, std::map<int, SomaticData>> chrPosSomaticFlag;
+
+        const bool writeLog;
+        const std::string& resultPrefix;    
 
         size_t initial_data_size;
         FilterCounts filterCounts;
 
     public:
         TumorPurityPredictor(
-            const HaplotagParameters& params,
             const std::vector<std::string>& chrVec,
             std::map<std::string, std::map<int, PosBase>>& chrPosNorBase,
-            std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo); 
+            std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo,
+            const bool writeLog,
+            const std::string& resultPrefix
+        ); 
 
         ~TumorPurityPredictor();
         double predictTumorPurity();
         void buildPurityFeatureValueVec(std::vector<PurityData> &purityFeatureValueVec);
 
-        int findPeakValleythreshold(const HaplotagParameters& params, const std::vector<PurityData> &purityFeatureValueVec);
+        int findPeakValleythreshold(const std::vector<PurityData> &purityFeatureValueVec);
         void peakValleyFilter(std::vector<PurityData> &purityFeatureValueVec, int &germlineReadHpCountThreshold);
 
         BoxPlotValue statisticPurityData(std::vector<PurityData> &purityFeatureValueVec);
         void removeOutliers(std::vector<PurityData> &purityFeatureValueVec, BoxPlotValue &plotValue);
         void markStatisticFlag(std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo);
 
-        void writePurityLog(const HaplotagParameters &params, double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold);
+        void writePurityLog(double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold);
 };
 
 #endif

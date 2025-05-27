@@ -627,7 +627,7 @@ void SomaticVarCaller::VariantCalling(
     tumorBamParser.parsingBam(params.tumorBamFile, params, chrVec, chrLength, mergedChrVarinat, vcfSet, Genome::TUMOR);
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 
-    TumorPurityPredictor* tumorPurityPredictor = new TumorPurityPredictor(params, chrVec, *chrPosNorBase, *chrPosSomaticInfo);
+    TumorPurityPredictor* tumorPurityPredictor = new TumorPurityPredictor(chrVec, *chrPosNorBase, *chrPosSomaticInfo, params.writeReadLog, params.resultPrefix);
     // predict tumor purity
     double tumorPurity = tumorPurityPredictor->predictTumorPurity();
     //flag the position that is used for purity prediction
@@ -715,13 +715,13 @@ void SomaticVarCaller::VariantCalling(
 
         WriteDenseTumorSnpIntervalLog(params, chrVec);
 
-        callerReadHpDistri->writeReadHpDistriLog(params, "_readDistri_Scaller.out", chrVec);
+        callerReadHpDistri->writeReadHpDistriLog(params, "_read_distri_scaller.out", chrVec);
 
         // remove the position that derived by HP1 or HP2
         callerReadHpDistri->removeNotDeriveByH1andH2pos(chrVec);
 
         // record the position that can't derived because exist H1-1 and H2-1 reads
-        callerReadHpDistri->writeReadHpDistriLog(params, "_readDistri_Scaller_derive_by_H1_H2.out", chrVec);
+        callerReadHpDistri->writeReadHpDistriLog(params, "_read_distri_scaller_derive_by_H1_H2.out", chrVec);
 
     }
     return;
@@ -1492,10 +1492,10 @@ void SomaticVarCaller::StatisticSomaticPosReadHP(
 
 
 void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &params, const SomaticFilterParaemter &somaticParams, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
-    std::ofstream *tagHP3Log = new std::ofstream(params.resultPrefix+"_HP3.out");
+    std::ofstream *tagHP3Log = new std::ofstream(params.resultPrefix+"_somatic_var.out");
 
     if(!tagHP3Log->is_open()){
-        std::cerr<< "Fail to open write file: " << params.resultPrefix+"_HP3.out" << "\n";
+        std::cerr<< "Fail to open write file: " << params.resultPrefix+"_somatic_var.out" << "\n";
         exit(1);
     }
 
@@ -1845,7 +1845,7 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
 
 void SomaticVarCaller::WriteOtherSomaticHpLog(const HaplotagParameters &params, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     std::ofstream *OtherHpSomaticVarLog=NULL;
-    std::string logPosfix = "_otherHpSomaticVar.log";
+    std::string logPosfix = "_other_allele_somatic_var.log";
     OtherHpSomaticVarLog=new std::ofstream(params.resultPrefix + logPosfix);
 
     int totalOtherSomaticHpVar = 0;
@@ -1908,7 +1908,7 @@ void SomaticVarCaller::WriteOtherSomaticHpLog(const HaplotagParameters &params, 
 
 void SomaticVarCaller::WriteDenseTumorSnpIntervalLog(const HaplotagParameters &params, const std::vector<std::string> &chrVec){
     std::ofstream *closeSomaticSnpIntervalLog=NULL;
-    std::string logPosfix = "_denseTumorSnpInterval.log";
+    std::string logPosfix = "_dense_tumor_snp_interval.log";
     closeSomaticSnpIntervalLog=new std::ofstream(params.resultPrefix + logPosfix);
 
     int totalIntervalCount = 0;

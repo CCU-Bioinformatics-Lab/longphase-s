@@ -122,7 +122,7 @@ class SomaticReadBenchmark: public VcfParser{
             HaplotagParameters &params,
             std::string logPosfix
         );
-        void writeCrossHighConSnpReadLog(
+        void writeTaggedTruthSomaticReadLog(
             const std::vector<std::string>& chrVec,
             HaplotagParameters &params,
             std::string logPosfix
