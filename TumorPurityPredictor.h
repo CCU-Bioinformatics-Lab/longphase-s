@@ -182,8 +182,8 @@ class TumorPurityPredictor{
         const HaplotagParameters& params;    
         const std::vector<std::string>& chrVec;    
         std::map<std::string, std::map<int, PosBase>>& chrPosNorBase;
-        std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo;
-        std::map<std::string, std::map<int, HP3_Info>> chrPosSomaticFlag;
+        std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo;
+        std::map<std::string, std::map<int, SomaticData>> chrPosSomaticFlag;
 
         size_t initial_data_size;
         FilterCounts filterCounts;
@@ -193,7 +193,7 @@ class TumorPurityPredictor{
             const HaplotagParameters& params,
             const std::vector<std::string>& chrVec,
             std::map<std::string, std::map<int, PosBase>>& chrPosNorBase,
-            std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo); 
+            std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo); 
 
         ~TumorPurityPredictor();
         double predictTumorPurity();
@@ -204,7 +204,7 @@ class TumorPurityPredictor{
 
         BoxPlotValue statisticPurityData(std::vector<PurityData> &purityFeatureValueVec);
         void removeOutliers(std::vector<PurityData> &purityFeatureValueVec, BoxPlotValue &plotValue);
-        void markStatisticFlag(std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo);
+        void markStatisticFlag(std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo);
 
         void writePurityLog(const HaplotagParameters &params, double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold);
 };

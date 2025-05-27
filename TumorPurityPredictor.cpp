@@ -4,7 +4,7 @@ TumorPurityPredictor::TumorPurityPredictor(
     const HaplotagParameters& params,
     const std::vector<std::string>& chrVec,
     std::map<std::string, std::map<int, PosBase>>& chrPosNorBase,
-    std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo
+    std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo
 ) : params(params), chrVec(chrVec), chrPosNorBase(chrPosNorBase), chrPosSomaticInfo(chrPosSomaticInfo), initial_data_size(0){}
 
 TumorPurityPredictor::~TumorPurityPredictor(){
@@ -93,7 +93,7 @@ double TumorPurityPredictor::predictTumorPurity(){
 
 void TumorPurityPredictor::buildPurityFeatureValueVec(std::vector<PurityData> &purityFeatureValueVec){
     for(auto chr : chrVec){
-        std::map<int, HP3_Info>::iterator somaticPosIter = chrPosSomaticInfo[chr].begin();
+        std::map<int, SomaticData>::iterator somaticPosIter = chrPosSomaticInfo[chr].begin();
         while(somaticPosIter != chrPosSomaticInfo[chr].end()){
             // int H1readCount = (*somaticPosIter).second.base.ReadHpCount[ReadHP::H1];
             // int H2readCount = (*somaticPosIter).second.base.ReadHpCount[ReadHP::H2];
@@ -321,7 +321,7 @@ BoxPlotValue TumorPurityPredictor::statisticPurityData(std::vector<PurityData> &
     return plotValue;
 }
 
-void TumorPurityPredictor::markStatisticFlag(std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo){
+void TumorPurityPredictor::markStatisticFlag(std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo){
     for(const auto& chr : chrVec) {
         auto& chrInfo = chrPosSomaticInfo[chr];
         for(const auto& pos : chrPosSomaticFlag[chr]) {

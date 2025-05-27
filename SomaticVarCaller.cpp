@@ -200,7 +200,7 @@ void ExtractNorDataCigarParser::processDeletionOperation(int& length, uint32_t* 
 
 
 ExtractTumDataBamParser::ExtractTumDataBamParser(
-    std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo,
+    std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo,
     std::map<std::string, std::map<std::string, ReadVarHpCount>>& chrReadHpResultSet,
     std::map<std::string, std::map<int, std::map<std::string, int>>>& chrTumorPosReadCorrBaseHP
 ):
@@ -217,7 +217,7 @@ ExtractTumDataBamParser::~ExtractTumDataBamParser(){
 
 
 ExtractTumDataChrProcessor::ExtractTumDataChrProcessor(
-    std::map<std::string, std::map<int, HP3_Info>>& chrPosSomaticInfo,
+    std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo,
     std::map<std::string, std::map<std::string, ReadVarHpCount>>& chrReadHpResultSet,
     std::map<std::string, std::map<int, std::map<std::string, int>>>& chrTumorPosReadCorrBaseHP,
     const std::string &chr
@@ -345,7 +345,7 @@ void ExtractTumDataChrProcessor::processRead(
     }
 }
 
-void ExtractTumDataChrProcessor::ClassifyReadsByCase(std::vector<int> &tumorAllelePosVec, std::map<int, int> &norCountPS, std::map<int, int> &hpCount, const HaplotagParameters &params, std::map<int, HP3_Info> &somaticPosInfo){
+void ExtractTumDataChrProcessor::ClassifyReadsByCase(std::vector<int> &tumorAllelePosVec, std::map<int, int> &norCountPS, std::map<int, int> &hpCount, const HaplotagParameters &params, std::map<int, SomaticData> &somaticPosInfo){
     
     //decide whether to tag the read or not
     bool recordRead = true;
@@ -410,7 +410,7 @@ void ExtractTumDataChrProcessor::ClassifyReadsByCase(std::vector<int> &tumorAlle
 
 void ExtractTumDataChrProcessor::postProcess( const std::string &chr, std::map<int, MultiGenomeVar> &currentVariants){
     //calculate the information of the somatic positon 
-    std::map<int, HP3_Info>::iterator somaticVarIter = somaticPosInfo->begin();
+    std::map<int, SomaticData>::iterator somaticVarIter = somaticPosInfo->begin();
     while( somaticVarIter != somaticPosInfo->end()){
         
         if(!currentVariants[(*somaticVarIter).first].isExists(TUMOR)){
@@ -486,7 +486,7 @@ void ExtractTumDataChrProcessor::postProcess( const std::string &chr, std::map<i
 }
 
 ExtractTumDataCigarParser::ExtractTumDataCigarParser(
-    std::map<int, HP3_Info> &somaticPosInfo,
+    std::map<int, SomaticData> &somaticPosInfo,
     std::vector<int>& tumorAllelePosVec,
     std::vector<int>& tumorSnpPosVec,
     std::map<int, int>& tumCountPS,
@@ -572,7 +572,7 @@ void ExtractTumDataCigarParser::OnlyTumorSNPjudgeHP(const std::string &chrName, 
 
 
 SomaticVarCaller::SomaticVarCaller(const std::vector<std::string> &chrVec, const HaplotagParameters &params){
-    chrPosSomaticInfo = new std::map<std::string, std::map<int, HP3_Info>>();
+    chrPosSomaticInfo = new std::map<std::string, std::map<int, SomaticData>>();
     chrPosNorBase = new std::map<std::string, std::map<int, PosBase>>();
     callerReadHpDistri = new ReadHpDistriLog();
     denseTumorSnpInterval = new std::map<std::string, std::map<int, std::pair<int, DenseSnpInterval>>>();
@@ -580,7 +580,7 @@ SomaticVarCaller::SomaticVarCaller(const std::vector<std::string> &chrVec, const
     chrTumorPosReadCorrBaseHP = new std::map<std::string, std::map<int, std::map<std::string, int>>>();
 
     for(auto chr : chrVec){
-        (*chrPosSomaticInfo)[chr] = std::map<int, HP3_Info>();
+        (*chrPosSomaticInfo)[chr] = std::map<int, SomaticData>();
         (*chrPosNorBase)[chr] = std::map<int, PosBase>();
         callerReadHpDistri->loadChrKey(chr);
         (*denseTumorSnpInterval)[chr] = std::map<int, std::pair<int, DenseSnpInterval>>();
@@ -644,7 +644,7 @@ void SomaticVarCaller::VariantCalling(
     for(auto chr : chrVec ){
         // record the position that tagged as HP3
         // chr, variant position
-        std::map<int, HP3_Info> *somaticPosInfo = nullptr;
+        std::map<int, SomaticData> *somaticPosInfo = nullptr;
         // read ID, reads hpResult 
         // std::map<int, ReadHpResult> *localCallerReadHpDistri = nullptr;
         chrReadHpResult *localCallerReadHpDistri = nullptr;
@@ -865,9 +865,9 @@ void SomaticVarCaller::SetFilterParamsWithPurity(SomaticFilterParaemter &somatic
     }
 }
 
-void SomaticVarCaller::SomaticFeatureFilter(const SomaticFilterParaemter &somaticParams, std::map<int, MultiGenomeVar> &currentChrVariants,const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo, double& tumorPurity){
+void SomaticVarCaller::SomaticFeatureFilter(const SomaticFilterParaemter &somaticParams, std::map<int, MultiGenomeVar> &currentChrVariants,const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, double& tumorPurity){
     //calculate the information of the somatic positon 
-    std::map<int, HP3_Info>::iterator somaticVarIter = somaticPosInfo.begin();
+    std::map<int, SomaticData>::iterator somaticVarIter = somaticPosInfo.begin();
 
     while( somaticVarIter != somaticPosInfo.end()){
                 
@@ -970,7 +970,7 @@ void SomaticVarCaller::SomaticFeatureFilter(const SomaticFilterParaemter &somati
     }
 }
 
-void SomaticVarCaller::ShannonEntropyFilter(const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants, std::string &ref_string){
+void SomaticVarCaller::ShannonEntropyFilter(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants, std::string &ref_string){
     int window_size = 10;
     auto somaticVarIter = somaticPosInfo.begin();
     while(somaticVarIter != somaticPosInfo.end()){
@@ -1098,25 +1098,18 @@ void SomaticVarCaller::calculateZScores(const std::map<int, double>& data, doubl
     }
 }
 
-void SomaticVarCaller::calculateIntervalZScore(bool &isStartPos, int &startPos, int &endPos, int &snpCount, DenseSnpInterval &denseSnp, std::map<int, std::pair<int, DenseSnpInterval>> &localDenseTumorSnpInterval){
+void SomaticVarCaller::calculateIntervalData(bool &isStartPos, int &startPos, int &endPos, DenseSnpInterval &denseSnp, std::map<int, std::pair<int, DenseSnpInterval>> &localDenseTumorSnpInterval){
     double mean = calculateMean(denseSnp.snpAltMean);
     double stdDev = calculateStandardDeviation(denseSnp.snpAltMean, mean);
     calculateZScores(denseSnp.snpAltMean, mean, stdDev, denseSnp.snpZscore);
 
-    denseSnp.snpCount = snpCount;
     denseSnp.totalAltMean = mean;
     denseSnp.StdDev = stdDev;   
 
     localDenseTumorSnpInterval[startPos] = std::make_pair(endPos, denseSnp); // save the interval
-
-    isStartPos = false;
-    startPos = 0;
-    snpCount = 0;
-    denseSnp.snpAltMean.clear();
-    denseSnp.snpZscore.clear();
 }
 
-void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, HP3_Info> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP, std::map<int, std::pair<int, DenseSnpInterval>> &localDenseTumorSnpInterval){
+void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, SomaticData> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP, std::map<int, std::pair<int, DenseSnpInterval>> &localDenseTumorSnpInterval){
     //calculate the mean of HP3 reads at each tumor SNP position
     for(auto somaticPosIter = tumorPosReadCorrBaseHP.begin(); somaticPosIter != tumorPosReadCorrBaseHP.end(); somaticPosIter++){
         float readCount = 0.0;
@@ -1156,10 +1149,10 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, HP3_Info> &somatic
 
     //find the interval of tumor SNPs
     auto somaticPosIter = somaticPosInfo.begin();
-    bool isStartPos = false;
+    bool isRecordStartPos = false;
     int startPos = 0;
-    int snpCount = 0;
-    int dense_distance = 5000;
+    // int dense_distance = 5000;
+    int dense_distance = 1200;
     DenseSnpInterval denseSnp;
 
     while (somaticPosIter != somaticPosInfo.end()){
@@ -1170,24 +1163,36 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, HP3_Info> &somatic
         if (nextIter != somaticPosInfo.end()){
             int nextPos = nextIter->first;
 
-            if (nextPos - curPos <= dense_distance) {
-                if (!isStartPos) {
-                    isStartPos = true;
+            int snpDistance = nextPos - curPos;
+
+            if (snpDistance <= dense_distance) {
+                //record the start position of the dense tumor interval
+                if (!isRecordStartPos) {
+                    isRecordStartPos = true;
                     startPos = curPos;
-                    snpCount++;
                     denseSnp.snpAltMean[curPos] = somaticPosIter->second.MeanAltCountPerVarRead;
-                    // altMeanVec.push_back(somaticPosIter->second.altMeanCount);
-                    // altPosVec.push_back(pos);
-                    // std::cout << "------------->startPos: " << startPos << " AltMean: " << somaticPosIter->second.MeanAltCountPerVarRead << std::endl;
+                    denseSnp.minDistance[curPos] = snpDistance;
+                    denseSnp.snpCount++;
                 }
+
+                // compare the distance between the previous and next position
+                if(snpDistance < denseSnp.minDistance[curPos]){
+                    denseSnp.minDistance[curPos] = snpDistance;
+                }
+
+                //record the next position in the dense tumor interval
                 denseSnp.snpAltMean[nextPos] = nextIter->second.MeanAltCountPerVarRead;
-                // altMeanVec.push_back(nextIter->second.altMeanCount);
-                // altPosVec.push_back(nextPos);
-                snpCount++;
-                // std::cout << "pos: " << pos << " nextPos: " << nextPos << " snpCount: " << snpCount << " altVecSize: " << altMeanVec.size() << " nextAltMean: " << nextIter->second.altMeanCount << std::endl;
+                denseSnp.minDistance[nextPos] = snpDistance;
+
+                denseSnp.snpCount++;
+               
             } else {
-                if (isStartPos) {
-                    calculateIntervalZScore(isStartPos, startPos, curPos, snpCount, denseSnp, localDenseTumorSnpInterval);
+                if (isRecordStartPos) {
+                    //record the end position of the dense tumor interval
+                    calculateIntervalData(isRecordStartPos, startPos, curPos, denseSnp, localDenseTumorSnpInterval);
+                    isRecordStartPos = false;
+                    startPos = 0;
+                    denseSnp.clear();
                     // std::cout << "------------->endPos: " << pos << " stdDev: " << stdDev << "\n"<< std::endl;
                 }else{
                     // std::cerr << "ERROR: isStartPos is false: pos: " << curPos << " nextPos: " << nextPos << " startPos: " << startPos << std::endl;
@@ -1199,11 +1204,11 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, HP3_Info> &somatic
     }
 
     // check if there is an unfinished interval
-    if (isStartPos) {
+    if (isRecordStartPos) {
         int endPos = somaticPosInfo.rbegin()->first;
         if(endPos - startPos <= dense_distance){
             // std::cout << "Last interval ------------->" << "startPos: " << startPos << " endPos: " << endPos << std::endl;
-            calculateIntervalZScore(isStartPos, startPos, endPos, snpCount, denseSnp, localDenseTumorSnpInterval);
+            calculateIntervalData(isRecordStartPos, startPos, endPos, denseSnp, localDenseTumorSnpInterval);
         }
         // localDenseTumorSnpInterval[startPos] = std::make_pair(somaticPosInfo.rbegin()->first, denseSnpInterval()); // save the last interval
     }
@@ -1212,16 +1217,22 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, HP3_Info> &somatic
     for (const auto& entry : localDenseTumorSnpInterval) {
         if(entry.second.second.snpCount > 1){
             for(auto snpIter: entry.second.second.snpZscore){
-                somaticPosInfo[snpIter.first].inDenseTumorInterval = true;
-                somaticPosInfo[snpIter.first].zScore = abs(snpIter.second);
-                somaticPosInfo[snpIter.first].intervalSnpCount = entry.second.second.snpCount;
+                int pos = snpIter.first;
+                somaticPosInfo[pos].inDenseTumorInterval = true;
+                somaticPosInfo[pos].zScore = abs(snpIter.second);
+                somaticPosInfo[pos].intervalSnpCount = entry.second.second.snpCount;
+            }
+
+            for(auto minDistanceIter: entry.second.second.minDistance){
+                int pos = minDistanceIter.first;
+                somaticPosInfo[pos].minDistance = minDistanceIter.second;
             }
         }
     }
 }
 
-void SomaticVarCaller::FindOtherSomaticSnpHP(const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants){
-    std::map<int, HP3_Info>::iterator somaticVarIter = somaticPosInfo.begin();
+void SomaticVarCaller::FindOtherSomaticSnpHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants){
+    std::map<int, SomaticData>::iterator somaticVarIter = somaticPosInfo.begin();
     while(somaticVarIter != somaticPosInfo.end()){
         if((*somaticVarIter).second.isHighConSomaticSNP){
             int pos = (*somaticVarIter).first;
@@ -1315,9 +1326,9 @@ std::string SomaticVarCaller::convertIntNucToStr(int base){
     }
 }
 
-void SomaticVarCaller::CalibrateReadHP(const std::string &chr, const SomaticFilterParaemter &somaticParams, std::map<int, HP3_Info> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP){
+void SomaticVarCaller::CalibrateReadHP(const std::string &chr, const SomaticFilterParaemter &somaticParams, std::map<int, SomaticData> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP){
         //calibrate read HP to remove low confidence H3/H4 SNP
-        std::map<int, HP3_Info>::iterator somaticVarIter = somaticPosInfo.begin();
+        std::map<int, SomaticData>::iterator somaticVarIter = somaticPosInfo.begin();
         while( somaticVarIter != somaticPosInfo.end()){
             if(!(*somaticVarIter).second.isHighConSomaticSNP){
                 int pos = (*somaticVarIter).first;
@@ -1384,12 +1395,12 @@ void SomaticVarCaller::CalculateReadSetHP(const HaplotagParameters &params, cons
 }
 
 void SomaticVarCaller::StatisticSomaticPosReadHP(
-    const std::string &chr, std::map<int, HP3_Info> &somaticPosInfo,
+    const std::string &chr, std::map<int, SomaticData> &somaticPosInfo,
     std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP,
     std::map<std::string, ReadVarHpCount> &readHpResultSet,
     chrReadHpResult &localReadHpDistri
 ){
-    std::map<int, HP3_Info>::iterator somaticVarIter = somaticPosInfo.begin();
+    std::map<int, SomaticData>::iterator somaticVarIter = somaticPosInfo.begin();
     while(somaticVarIter != somaticPosInfo.end()){
         if((*somaticVarIter).second.isHighConSomaticSNP){
             int pos = (*somaticVarIter).first;
@@ -1493,7 +1504,7 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
 
     int totalSomaticSNP = 0;
     for(auto chr : chrVec){
-        std::map<int, HP3_Info>::iterator somaticVarIter = (*chrPosSomaticInfo)[chr].begin();
+        std::map<int, SomaticData>::iterator somaticVarIter = (*chrPosSomaticInfo)[chr].begin();
         while( somaticVarIter != (*chrPosSomaticInfo)[chr].end()){
             if((*somaticVarIter).second.isHighConSomaticSNP){
                 totalSomaticSNP++;
@@ -1598,6 +1609,7 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                  << "AltMeanCountPerVarRead\t"
                  << "zScore\t"
                  << "IntervalSnpCount\t"
+                 << "IntervalMinDistance\t"
                  << "ExistNorSnp\t"
                  << "StatisticPurity\t"
                  << "isFilterOut\t"
@@ -1608,7 +1620,7 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
     //write variants information
     for(auto chr : chrVec){
     
-        std::map<int, HP3_Info>::iterator somaticVarIter = (*chrPosSomaticInfo)[chr].begin();
+        std::map<int, SomaticData>::iterator somaticVarIter = (*chrPosSomaticInfo)[chr].begin();
         while( somaticVarIter != (*chrPosSomaticInfo)[chr].end()){
             
             if((*somaticVarIter).second.isHighConSomaticSNP == false){
@@ -1813,12 +1825,13 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
                         << (*somaticVarIter).second.MeanAltCountPerVarRead << "\t" //56
                         << zScore << "\t" //57
                         << (*somaticVarIter).second.intervalSnpCount << "\t" //58
-                        << mergedChrVarinat[chr][(*somaticVarIter).first].isExists(NORMAL) << "\t" //59
-                        << (*somaticVarIter).second.statisticPurity << "\t" //60
-                        << (*somaticVarIter).second.isFilterOut << "\t" //61
-                        << norNonDelAF << "\t" //62
-                        << tumNonDelAF << "\t" //63
-                        << GTtype <<"\n";  //64
+                        << (*somaticVarIter).second.minDistance << "\t" //59
+                        << mergedChrVarinat[chr][(*somaticVarIter).first].isExists(NORMAL) << "\t" //60
+                        << (*somaticVarIter).second.statisticPurity << "\t" //61
+                        << (*somaticVarIter).second.isFilterOut << "\t" //62
+                        << norNonDelAF << "\t" //63
+                        << tumNonDelAF << "\t" //64
+                        << GTtype <<"\n";  //65
                         
             somaticVarIter++;          
         }
@@ -1934,7 +1947,8 @@ void SomaticVarCaller::WriteDenseTumorSnpIntervalLog(const HaplotagParameters &p
                                     << intervalIter.second.second.StdDev << "\n";
             for(auto snpIter: intervalIter.second.second.snpAltMean){
                 double zScore = intervalIter.second .second.snpZscore[snpIter.first];
-                (*closeSomaticSnpIntervalLog) <<"#snp:altMean:zScore=>  " << snpIter.first + 1 << " : " << snpIter.second << " : " << zScore << "\n";
+                int minDistance = intervalIter.second.second.minDistance[snpIter.first];
+                (*closeSomaticSnpIntervalLog) <<"#snp:altMean:zScore:minDistance=>  " << snpIter.first + 1 << " : " << snpIter.second << " : " << zScore << " : " << minDistance << "\n";
             }
             (*closeSomaticSnpIntervalLog) << "#\n";
             

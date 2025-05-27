@@ -195,7 +195,7 @@ struct PosBase{
     }
 };
 
-struct HP3_Info{
+struct SomaticData{
     //Case ratio 
     int totalCleanHP3Read;
     int pure_H1_1_read;
@@ -233,6 +233,7 @@ struct HP3_Info{
     float MeanAltCountPerVarRead;
     float zScore;
     int intervalSnpCount;
+    int minDistance;
     bool inDenseTumorInterval;
     
     // filter out by somatic feature filter
@@ -241,12 +242,12 @@ struct HP3_Info{
     //readHp, count
     std::map<int, int> somaticReadHpCount;
 
-    HP3_Info(): totalCleanHP3Read(0), pure_H1_1_read(0), pure_H2_1_read(0), pure_H3_read(0), Mixed_HP_read(0), unTag(0)
+    SomaticData(): totalCleanHP3Read(0), pure_H1_1_read(0), pure_H2_1_read(0), pure_H3_read(0), Mixed_HP_read(0), unTag(0)
              , CaseReadCount(0), pure_H1_1_readRatio(0.0), pure_H2_1_readRatio(0.0), pure_H3_readRatio(0.0), Mixed_HP_readRatio(0.0)
              , base(), GTtype(""), somaticHp4Base(Nitrogenous::UNKOWN), somaticHp5Base(Nitrogenous::UNKOWN), somaticHp4BaseCount(0), somaticHp5BaseCount(0)
              , isHighConSomaticSNP(false), somaticReadDeriveByHP(0), shannonEntropy(0.0), homopolymerLength(0)
              , statisticPurity(false), allelicImbalanceRatio(0.0), somaticHaplotypeImbalanceRatio(0.0)
-             , MeanAltCountPerVarRead(0.0), zScore(0.0), intervalSnpCount(0), inDenseTumorInterval(false)
+             , MeanAltCountPerVarRead(0.0), zScore(0.0), intervalSnpCount(0), minDistance(0), inDenseTumorInterval(false)
              , isFilterOut(false), somaticReadHpCount(std::map<int, int>()){}
 };
 
