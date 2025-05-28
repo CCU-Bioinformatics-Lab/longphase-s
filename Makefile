@@ -18,7 +18,6 @@ OBJ = Haplotag.o \
 	  ModCallParsingBam.o \
 	  ModCallProcess.o \
 	  SomaticVarCaller.o \
-	  HaplotagType.o \
 	  TumorPurityPredictor.o \
 	  SomaticBenchmark.o \
 	  SomaticHaplotagProcess.o \

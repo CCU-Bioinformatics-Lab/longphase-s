@@ -3,6 +3,15 @@
 
 #include "HaplotagType.h"
 
+struct chrReadHpResult{
+    std::map<int, ReadHpResult> posReadHpResult;
+
+    void recordReadHp(int &pos, int &hpResult, int &BaseHP);
+    void recordDeriveHp(int &pos, int &deriveHP, float deriveHPsimilarity);
+    void recordAlignCoverRegion(int& curVarPos, int &startPos, int &endPos);
+};
+
+
 class LogEntry {
     public:
         std::string key;

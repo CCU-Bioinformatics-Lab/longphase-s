@@ -284,16 +284,6 @@ struct ReadHpResult{
     ReadHpResult(): somaticSnpH3count(0), existDeriveByH1andH2(false), deriveHP(0),
                     coverRegionStartPos(INT_MAX), coverRegionEndPos(INT_MIN){}
 };
-
-struct chrReadHpResult{
-    std::map<int, ReadHpResult> posReadHpResult;
-
-    void recordReadHp(int &pos, int &hpResult, int &BaseHP);
-    void recordDeriveHp(int &pos, int &deriveHP, float deriveHPsimilarity);
-    void recordAlignCoverRegion(int& curVarPos, int &startPos, int &endPos);
-};
-
-
         
 
 #endif
