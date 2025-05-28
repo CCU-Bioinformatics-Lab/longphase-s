@@ -439,7 +439,6 @@ void CigarParser::parsingCigar(
     this->aln = &aln;
     this->bamHdr = &bamHdr;
     this->chrName = &chrName;
-    this->params = &params;
     this->ref_string = &ref_string;
     this->hpCount = &hpCount;
     this->variantsHP = &variantsHP;
@@ -809,7 +808,7 @@ int GermlineJudgeBase::germlineDetermineReadHap(
     return hpResult;
 }
 
-void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){
+void SomaticJudgeBase::somaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){
     int curPos = (*currentVariantIter).first;
     auto& curVar = (*currentVariantIter).second;
 
@@ -847,18 +846,18 @@ void SomaticJudgeBase::SomaticJudgeSnpHP(std::map<int, MultiGenomeVar>::iterator
                              << curVar.Variant[TUMOR].allele.Alt << "\n";
                     exit(EXIT_SUCCESS);
                 }else{
-                    OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, &tumCountPS, variantsHP, tumorAllelePosVec);
+                    onlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, &tumCountPS, variantsHP, tumorAllelePosVec);
                 }
             }
         //the tumor SNP GT is unphased heterozygous
         }else if(curVar.Variant[TUMOR].is_unphased_hetero == true){
             if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
-                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec);
+                onlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec);
             }           
         //the tumor SNP GT is homozygous
         }else if(curVar.Variant[TUMOR].is_homozygous == true){
             if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
-                OnlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec);
+                onlyTumorSNPjudgeHP(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec);
             }
         }
     }

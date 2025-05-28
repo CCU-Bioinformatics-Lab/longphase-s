@@ -67,6 +67,9 @@ class SomaticReadBenchmark: public VcfParser{
 
         std::map<std::string, std::vector<BedRegion>> bedRegions;
 
+        std::string benchmarkVcf;
+        int mappingQualityThreshold;
+
         void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         void setChrSomaticReadVecPtr(
             const std::string &chr,
@@ -75,8 +78,7 @@ class SomaticReadBenchmark: public VcfParser{
         );
         void writeReadLog(
             const std::vector<std::string>& chrVec,
-            HaplotagParameters &params,
-            std::string logPosfix,
+            std::string outputFileName,
             std::map<std::string, std::vector<SomaticReadLog>*> &somaticReadVecMap
         );
 
@@ -84,7 +86,7 @@ class SomaticReadBenchmark: public VcfParser{
 
     public:
 
-        SomaticReadBenchmark();
+        SomaticReadBenchmark(std::string benchmarkVcf, int mappingQualityThreshold);
         ~SomaticReadBenchmark();
         void setTestingFunc(bool openTestingFunc);
         bool getTestingFunc();
@@ -113,24 +115,20 @@ class SomaticReadBenchmark: public VcfParser{
 
         void writePosAlleleCountLog(
             std::vector<std::string>& chrVec,
-            HaplotagParameters &params,
-            std::string logPosfix,
+            std::string outputFileName,
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat
         );
         void writeTaggedSomaticReadLog(
             const std::vector<std::string>& chrVec,
-            HaplotagParameters &params,
-            std::string logPosfix
+            std::string outputFileName
         );
         void writeTaggedTruthSomaticReadLog(
             const std::vector<std::string>& chrVec,
-            HaplotagParameters &params,
-            std::string logPosfix
+            std::string outputFileName
         );
         void writeTaggedReadLog(
             const std::vector<std::string>& chrVec,
-            HaplotagParameters &params,
-            std::string logPosfix
+            std::string outputFileName
         );
         
         void displaySomaticVarCount(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);

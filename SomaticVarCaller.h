@@ -120,13 +120,20 @@ class ExtractNorDataCigarParser : public CigarParser{
         //specific data members
         std::map<int, PosBase>& variantBase;
         std::vector<int>& tumVarPosVec;
+        const int& mappingQualityThr;
     protected:
 
         void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base) override;
         void processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel) override;
 
     public:
-        ExtractNorDataCigarParser(std::map<int, PosBase>& variantBase, std::vector<int>& tumVarPosVec, int& ref_pos, int& query_pos);
+        ExtractNorDataCigarParser(
+            std::map<int, PosBase>& variantBase,
+            std::vector<int>& tumVarPosVec,
+            int& ref_pos, 
+            int& query_pos,
+            const int& mappingQualityThr
+        );
         ~ExtractNorDataCigarParser() override;
 };
 
@@ -179,9 +186,9 @@ class ExtractTumDataChrProcessor : public ChromosomeProcessor, public SomaticJud
         ) override;
 
 
-        void ClassifyReadsByCase(std::vector<int> &readPosHP3, std::map<int, int> &norCountPS, std::map<int, int> &hpCount, const HaplotagParameters &params, std::map<int, SomaticData> &somaticPosInfo);
+        void classifyReadsByCase(std::vector<int> &readPosHP3, std::map<int, int> &norCountPS, std::map<int, int> &hpCount, std::map<int, SomaticData> &somaticPosInfo);
 
-        void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){};
+        void onlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){};
 
         void postProcess(const std::string &chr, std::map<int, MultiGenomeVar> &currentVariants) override;
     public:
@@ -207,12 +214,14 @@ class ExtractTumDataCigarParser : public CigarParser, public SomaticJudgeBase{
 
         //record PS count( PS value, count)
         std::map<int, int>& tumCountPS;
+
+        const int& mappingQualityThr;
     protected:
 
         void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base) override;
         void processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel) override;
 
-        void OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec) override;
+        void onlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec) override;
 
     public:
         ExtractTumDataCigarParser(
@@ -221,7 +230,8 @@ class ExtractTumDataCigarParser : public CigarParser, public SomaticJudgeBase{
             std::vector<int>& tumorSnpPosVec, 
             std::map<int, int>& tumCountPS,
             int& ref_pos,
-            int& query_pos
+            int& query_pos,
+            const int& mappingQualityThr
         );
         ~ExtractTumDataCigarParser() override;
 
@@ -278,12 +288,12 @@ class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
         void calculateIntervalData(bool &isStartPos, int &startPos, int &pos, DenseSnpInterval &denseSnp, std::map<int, std::pair<int, DenseSnpInterval>> &localDenseTumorSnpInterval);
         void getDenseTumorSnpInterval(std::map<int, SomaticData> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, std::map<int, std::pair<int, DenseSnpInterval>> &closeSomaticSnpInterval);
 
-        void SomaticFeatureFilter(const SomaticFilterParaemter &somaticParams, std::map<int, MultiGenomeVar> &currentChrVariants,const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, double& tumorPurity);
+        void somaticFeatureFilter(const SomaticFilterParaemter &somaticParams, std::map<int, MultiGenomeVar> &currentChrVariants,const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, double& tumorPurity);
         
-        void CalibrateReadHP(const std::string &chr, const SomaticFilterParaemter &somaticParams, std::map<int, SomaticData> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount);
-        void CalculateReadSetHP(const HaplotagParameters &params, const std::string &chr, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount);
+        void calibrateReadHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount);
+        void calculateReadSetHP(const std::string &chr, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, const double& percentageThreshold);
         
-        void StatisticSomaticPosReadHP(
+        void statisticSomaticPosReadHP(
             const std::string &chr,
             std::map<int, SomaticData> &somaticPosInfo,
             std::map<int, std::map<std::string, int>> &somaticPosReadHPCount,
@@ -291,25 +301,25 @@ class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
             chrReadHpResult &localReadHpDistri
         );
         
-        void WriteSomaticVarCallingLog(const HaplotagParameters &params, const SomaticFilterParaemter &somaticParams, const std::vector<std::string> &chrVec
+        void writeSomaticVarCallingLog(const HaplotagParameters &params, const SomaticFilterParaemter &somaticParams, const std::vector<std::string> &chrVec
                                      , std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
-        void WriteOtherSomaticHpLog(const HaplotagParameters &params, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
-        void WriteDenseTumorSnpIntervalLog(const HaplotagParameters &params, const std::vector<std::string> &chrVec);
+        void writeOtherSomaticHpLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        void writeDenseTumorSnpIntervalLog(const std::string logFileName, const std::vector<std::string> &chrVec);
         
         // temporary function
-        void ShannonEntropyFilter(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants, std::string &ref_string);
+        void shannonEntropyFilter(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants, std::string &ref_string);
         double entropyComponent(int count, int total);
         double calculateShannonEntropy(int nA, int nC, int nT, int nG);
         double calculateMean(const std::map<int, double>& data);
 
-        void FindOtherSomaticSnpHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants);
+        void findOtherSomaticSnpHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants);
         int convertStrNucToInt(std::string &base);
         std::string convertIntNucToStr(int base);
         
         void releaseMemory();
 
     protected:
-        void OnlyTumorSNPjudgeHP(
+        void onlyTumorSNPjudgeHP(
             const std::string &chrName,
             int &curPos,
             MultiGenomeVar &curVar,
@@ -323,7 +333,7 @@ class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
         SomaticVarCaller(const std::vector<std::string> &chrVec, const HaplotagParameters &params);
         virtual ~SomaticVarCaller();
 
-        void VariantCalling(
+        void variantCalling(
             const HaplotagParameters &params,
             const std::vector<std::string> &chrVec,
             const std::map<std::string, int> &chrLength,

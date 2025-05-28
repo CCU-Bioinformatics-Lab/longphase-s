@@ -144,12 +144,12 @@ class ReadHpDistriLog{
             coverRegionInfo(): startPos(0), endPos(0), length(0){}
         };
         // chr, variant position (0-base), reads HP 
-        // std::map<std::string, std::map<int, ReadHpResult>> chrVarReadHpResult;
         std::map<std::string, chrReadHpResult> chrVarReadHpResult;
+        int mappingQualityThreshold;
     protected:
 
     public:
-        ReadHpDistriLog();
+        ReadHpDistriLog(int mappingQualityThreshold);
         ~ReadHpDistriLog();
 
         // use in multi-thread scenario
@@ -162,9 +162,9 @@ class ReadHpDistriLog{
         void recordChrDeriveHp(const std::string &chr, int &pos, int &deriveHP, float deriveHPsimilarity);
         void recordChrAlignCoverRegion(const std::string &chr, int &pos, int &startPos, int &endPos);
 
-        void writeReadHpDistriLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec);
-        void writePosCoverRegionLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec);
-        void writeTagReadCoverRegionLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength);
+        void writeReadHpDistriLog(const std::string logFileName, const std::vector<std::string> &chrVec);
+        void writePosCoverRegionLog(const std::string logFileName, const std::vector<std::string> &chrVec);
+        void writeTagReadCoverRegionLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength);
         void removeNotDeriveByH1andH2pos(const std::vector<std::string> &chrVec);
 };
 

@@ -139,9 +139,11 @@ void SomaticReadVerifier::recordTaggedRead(const std::string &chr, std::string &
     metrics->totalReadVec.push_back(tmp);
 }
 
-SomaticReadBenchmark::SomaticReadBenchmark(){
+SomaticReadBenchmark::SomaticReadBenchmark(std::string benchmarkVcf, int mappingQualityThreshold){
     setParseSnpFile(true);
     openTestingFunc = false;
+    this->benchmarkVcf = benchmarkVcf;
+    this->mappingQualityThreshold = mappingQualityThreshold;
 }
 SomaticReadBenchmark::~SomaticReadBenchmark(){
 
@@ -187,9 +189,9 @@ void SomaticReadBenchmark::parserProcess(std::string &input, VCF_Info &Info, std
     else{
         std::istringstream iss(input);
         std::vector<std::string> fields((std::istream_iterator<std::string>(iss)),std::istream_iterator<std::string>());
-
-        if( fields.size() == 0 )
+        if( fields.size() == 0 ){
             return;
+        }
             
         // trans to 0-base
         int pos = std::stoi( fields[1] ) - 1;
@@ -199,6 +201,7 @@ void SomaticReadBenchmark::parserProcess(std::string &input, VCF_Info &Info, std
         varData.allele.Ref = fields[3];
         varData.allele.Alt = fields[4];
         mergedChrVarinat[chr][pos].Variant[Genome::HIGH_CON_SOMATIC] = varData;
+
     }
 }
 
@@ -409,15 +412,14 @@ SomaticReadMetrics* SomaticReadBenchmark::getMetricsPtr(const std::string &chr){
 
 void SomaticReadBenchmark::writePosAlleleCountLog(
     std::vector<std::string>& chrVec,
-    HaplotagParameters &params,
-    std::string logPosfix,
+    std::string outputFileName,
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat
 ){
     // if not open testing function, return
     if(!openTestingFunc) return;
 
     std::ofstream *refAltCountLog=NULL;
-    refAltCountLog=new std::ofstream(params.resultPrefix + logPosfix);
+    refAltCountLog=new std::ofstream(outputFileName);
     int totalVariantCount = 0;
 
     for(auto chr: chrVec){
@@ -425,14 +427,14 @@ void SomaticReadBenchmark::writePosAlleleCountLog(
     }
 
     if(!refAltCountLog->is_open()){
-        std::cerr<< "Fail to open write file: " << params.resultPrefix + logPosfix << "\n";
+        std::cerr<< "Fail to open write file: " << outputFileName << "\n";
         exit(1);
     }else{
         (*refAltCountLog) << "#############################\n";
         (*refAltCountLog) << "# Somatic SNP allele count #\n";
         (*refAltCountLog) << "#############################\n";
-        (*refAltCountLog) << "##High confidence VCF:"  << params.benchmarkVcf << "\n";
-        (*refAltCountLog) << "##MappingQualityThreshold:"  << params.qualityThreshold << "\n";
+        (*refAltCountLog) << "##Benchmark VCF:"  << benchmarkVcf << "\n";
+        (*refAltCountLog) << "##MappingQualityThreshold:"  << mappingQualityThreshold << "\n";
         (*refAltCountLog) << "##Tatal variants:"  << totalVariantCount << "\n";
         (*refAltCountLog) << "#CHROM\t"
                           << "POS\t"
@@ -462,8 +464,7 @@ void SomaticReadBenchmark::writePosAlleleCountLog(
 
 void SomaticReadBenchmark::writeTaggedReadLog(
     const std::vector<std::string>& chrVec,
-    HaplotagParameters &params,
-    std::string logPosfix
+    std::string outputFileName
 ){
     // if not open testing function, return
     if(!openTestingFunc) return;
@@ -476,12 +477,11 @@ void SomaticReadBenchmark::writeTaggedReadLog(
         metricsIter++;
     }
 
-    writeReadLog(chrVec, params, logPosfix, somaticReadVecMap);
+    writeReadLog(chrVec, outputFileName, somaticReadVecMap);
 }
 void SomaticReadBenchmark::writeTaggedSomaticReadLog(
     const std::vector<std::string>& chrVec,
-    HaplotagParameters &params,
-    std::string logPosfix
+    std::string outputFileName
 ){
     // if not open testing function, return
     if(!openTestingFunc) return;
@@ -494,13 +494,12 @@ void SomaticReadBenchmark::writeTaggedSomaticReadLog(
         metricsIter++;
     }
 
-    writeReadLog(chrVec, params, logPosfix, somaticReadVecMap);
+    writeReadLog(chrVec, outputFileName, somaticReadVecMap);
 }
 
 void SomaticReadBenchmark::writeTaggedTruthSomaticReadLog(
     const std::vector<std::string>& chrVec,
-    HaplotagParameters &params,
-    std::string logPosfix
+    std::string outputFileName
 ){
     // if not open testing function, return
     if(!openTestingFunc) return;
@@ -513,7 +512,7 @@ void SomaticReadBenchmark::writeTaggedTruthSomaticReadLog(
         metricsIter++;
     }
 
-    writeReadLog(chrVec, params, logPosfix, somaticReadVecMap);
+    writeReadLog(chrVec, outputFileName, somaticReadVecMap);
 }
 
 void SomaticReadBenchmark::setChrSomaticReadVecPtr(
@@ -526,15 +525,14 @@ void SomaticReadBenchmark::setChrSomaticReadVecPtr(
 
 void SomaticReadBenchmark::writeReadLog(
     const std::vector<std::string>& chrVec,
-    HaplotagParameters &params,
-    std::string logPosfix,
+    std::string outputFileName,
     std::map<std::string, std::vector<SomaticReadLog>*> &somaticReadVecMap
 ){
     // if not open testing function, return
     if(!openTestingFunc) return;
 
     std::ofstream *somaticReadLog=NULL;
-    somaticReadLog=new std::ofstream(params.resultPrefix + logPosfix);
+    somaticReadLog=new std::ofstream(outputFileName);
 
     int totalTruthSomaticReads = 0;
     std::map<std::string, int> truthSomaticReadsMap;
@@ -571,14 +569,14 @@ void SomaticReadBenchmark::writeReadLog(
 
 
     if(!somaticReadLog->is_open()){
-        std::cerr<< "Fail to open write file: " << params.resultPrefix + logPosfix << "\n";
+        std::cerr<< "Fail to open write file: " << outputFileName << "\n";
         exit(1);
     }else{
         (*somaticReadLog) << "#####################\n";
         (*somaticReadLog) << "# Somatic Reads Log #\n";
         (*somaticReadLog) << "#####################\n";
-        (*somaticReadLog) << "##High confidence VCF: "  << params.benchmarkVcf << "\n";
-        (*somaticReadLog) << "##MappingQualityThreshold: "  << params.qualityThreshold << "\n";
+        (*somaticReadLog) << "##Benchmark VCF: "  << benchmarkVcf << "\n";
+        (*somaticReadLog) << "##MappingQualityThreshold: "  << mappingQualityThreshold << "\n";
         (*somaticReadLog) << "##Tatal reads: "  << totalReads << "\n";
         (*somaticReadLog) << "##Tatal truth somatic reads: "  << totalTruthSomaticReads << "\n";
         (*somaticReadLog) << "##Tatal truth H1-1: "  << truthSomaticReadsMap["1-1"] << "\n";
@@ -638,7 +636,7 @@ void SomaticReadBenchmark::displaySomaticVarCount(std::vector<std::string> &chrV
     for(auto &chr : chrVec){
         std::map<int, MultiGenomeVar>::iterator chrVariantIter = mergedChrVarinat[chr].begin();
         while(chrVariantIter != mergedChrVarinat[chr].end()){
-            if(chrVariantIter->second.isExists(HIGH_CON_SOMATIC)){
+            if(chrVariantIter->second.isExists(Genome::HIGH_CON_SOMATIC)){
                 totalVariantCount++;
             }
             chrVariantIter++;

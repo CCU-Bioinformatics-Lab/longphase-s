@@ -81,7 +81,7 @@ class SomaticHaplotagCigarParser: public CigarParser, public SomaticJudgeBase{
         SomaticReadVerifier& somaticReadCounter;
     protected:
 
-        void OnlyTumorSNPjudgeHP(
+        void onlyTumorSNPjudgeHP(
             const std::string &chrName,
             int &curPos,
             MultiGenomeVar &curVar,

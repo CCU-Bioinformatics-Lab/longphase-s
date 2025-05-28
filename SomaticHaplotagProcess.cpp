@@ -2,10 +2,10 @@
 
 
 SomaticHaplotagProcess::SomaticHaplotagProcess(HaplotagParameters &params)
-    : HaplotagProcess(params), somaticParamsMessage(params)
+    : HaplotagProcess(params), somaticParamsMessage(params), somaticBenchmark(params.benchmarkVcf, params.qualityThreshold)
 {
-    hpBeforeInheritance = new ReadHpDistriLog();
-    hpAfterInheritance = new ReadHpDistriLog();
+    hpBeforeInheritance = new ReadHpDistriLog(params.qualityThreshold);
+    hpAfterInheritance = new ReadHpDistriLog(params.qualityThreshold);
 }
 
 SomaticHaplotagProcess::~SomaticHaplotagProcess(){
@@ -33,7 +33,7 @@ void SomaticHaplotagProcess::taggingProcess()
 
     //somatic variant calling
     SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(*chrVec, params);
-    somaticVarCaller->VariantCalling(params, *chrVec, *chrLength, (*mergedChrVarinat), vcfSet, Genome::TUMOR);
+    somaticVarCaller->variantCalling(params, *chrVec, *chrLength, (*mergedChrVarinat), vcfSet, Genome::TUMOR);
     somaticVarCaller->getSomaticFlag(*chrVec, *mergedChrVarinat);
     delete somaticVarCaller;
     // return;
@@ -149,17 +149,17 @@ void SomaticHaplotagProcess::calculateSnpCounts(){
 void SomaticHaplotagProcess::postprocessForHaplotag(){
     std::cerr<< "postprocess for haplotag ...\n";
     if(params.writeReadLog){
-        hpBeforeInheritance->writeReadHpDistriLog(params, "_read_distri_before_inheritance.out", *chrVec);
-        hpAfterInheritance->writeReadHpDistriLog(params, "_read_distri_after_inheritance.out", *chrVec);
+        hpBeforeInheritance->writeReadHpDistriLog(params.resultPrefix + "_read_distri_before_inheritance.out", *chrVec);
+        hpAfterInheritance->writeReadHpDistriLog(params.resultPrefix + "_read_distri_after_inheritance.out", *chrVec);
         //write snp cover region
-        hpAfterInheritance->writePosCoverRegionLog(params, "_snp_cover_region.out", *chrVec);
+        hpAfterInheritance->writePosCoverRegionLog(params.resultPrefix + "_snp_cover_region.out", *chrVec);
         //write read cover region in whole genome
-        hpAfterInheritance->writeTagReadCoverRegionLog(params, "_read_cover_region.bed", *chrVec, *chrLength);
+        hpAfterInheritance->writeTagReadCoverRegionLog(params.resultPrefix + "_read_cover_region.bed", *chrVec, *chrLength);
         //write somatic read log
-        somaticBenchmark.writeTaggedReadLog(*chrVec, params, "_total_tagged_read.out");
-        somaticBenchmark.writeTaggedSomaticReadLog(*chrVec, params, "_tagged_somatic_read.out");
-        somaticBenchmark.writeTaggedTruthSomaticReadLog(*chrVec, params, "_tagged_truth_somatic_read.out");
-        somaticBenchmark.writePosAlleleCountLog(*chrVec, params, "_allele_count.out", *mergedChrVarinat);
+        somaticBenchmark.writeTaggedReadLog(*chrVec, params.resultPrefix + "_total_tagged_read.out");
+        somaticBenchmark.writeTaggedSomaticReadLog(*chrVec, params.resultPrefix + "_tagged_somatic_read.out");
+        somaticBenchmark.writeTaggedTruthSomaticReadLog(*chrVec, params.resultPrefix + "_tagged_truth_somatic_read.out");
+        somaticBenchmark.writePosAlleleCountLog(*chrVec, params.resultPrefix + "_allele_count.out", *mergedChrVarinat);
     }
 }
 
@@ -491,7 +491,7 @@ SomaticHaplotagCigarParser::~SomaticHaplotagCigarParser(){
 
 }
 
-void SomaticHaplotagCigarParser::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){
+void SomaticHaplotagCigarParser::onlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){
 
     if(curVar.isSomaticVariant){
         std::string& TumorRefBase = curVar.Variant[TUMOR].allele.Ref;
@@ -515,7 +515,7 @@ void SomaticHaplotagCigarParser::OnlyTumorSNPjudgeHP(const std::string &chrName,
 }
 
 void SomaticHaplotagCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base){
-    SomaticJudgeSnpHP(currentVariantIter, *chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, nullptr);
+    somaticJudgeSnpHP(currentVariantIter, *chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, nullptr);
 
     //record the somatic snp derive by which germline hp in this read
     if(currentVariantIter->second.isSomaticVariant){

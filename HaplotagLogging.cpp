@@ -1,7 +1,7 @@
 #include "HaplotagLogging.h"
 
-ReadHpDistriLog::ReadHpDistriLog(){
-
+ReadHpDistriLog::ReadHpDistriLog(int mappingQualityThreshold){
+    this->mappingQualityThreshold = mappingQualityThreshold;
 }
 
 ReadHpDistriLog::~ReadHpDistriLog(){
@@ -32,9 +32,9 @@ void ReadHpDistriLog::recordChrAlignCoverRegion(const std::string &chr, int &pos
 }
 
 
-void ReadHpDistriLog::writeReadHpDistriLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec){
+void ReadHpDistriLog::writeReadHpDistriLog(const std::string logFileName, const std::vector<std::string> &chrVec){
     std::ofstream *readHpDistriLog=NULL;
-    readHpDistriLog=new std::ofstream(params.resultPrefix + logPosfix);
+    readHpDistriLog=new std::ofstream(logFileName);
 
     int somaticSnpCount = 0;
     for(auto chr: chrVec){
@@ -44,13 +44,13 @@ void ReadHpDistriLog::writeReadHpDistriLog(const HaplotagParameters &params, std
     }
 
     if(!readHpDistriLog->is_open()){
-        std::cerr<< "Fail to open write file: " << params.resultPrefix + logPosfix << "\n";
+        std::cerr<< "Fail to open write file: " << logFileName << "\n";
         exit(1);
     }else{
         (*readHpDistriLog) << "####################################\n";
         (*readHpDistriLog) << "# Somatic SNP read HP distribution #\n";
         (*readHpDistriLog) << "####################################\n";
-        (*readHpDistriLog) << "##MappingQualityThreshold:"        << params.qualityThreshold << "\n";
+        (*readHpDistriLog) << "##MappingQualityThreshold:"        << mappingQualityThreshold << "\n";
         (*readHpDistriLog) << "##SomaticSNP: " << somaticSnpCount << "\n";
         (*readHpDistriLog) << "#Chr\t"
                             << "Pos\t"
@@ -132,9 +132,9 @@ void ReadHpDistriLog::writeReadHpDistriLog(const HaplotagParameters &params, std
     readHpDistriLog = nullptr;
 }
 
-void ReadHpDistriLog::writePosCoverRegionLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec){
+void ReadHpDistriLog::writePosCoverRegionLog(const std::string logFileName, const std::vector<std::string> &chrVec){
     std::ofstream *posCoverRegionLog=NULL;
-    posCoverRegionLog=new std::ofstream(params.resultPrefix + logPosfix);
+    posCoverRegionLog=new std::ofstream(logFileName);
 
     int somaticSnpCount = 0;
     for(auto chr: chrVec){
@@ -144,13 +144,13 @@ void ReadHpDistriLog::writePosCoverRegionLog(const HaplotagParameters &params, s
     }
 
     if(!posCoverRegionLog->is_open()){
-        std::cerr<< "Fail to open write file: " << params.resultPrefix + logPosfix << "\n";
+        std::cerr<< "Fail to open write file: " << logFileName << "\n";
         exit(1);
     }else{
         (*posCoverRegionLog) << "############################\n";
         (*posCoverRegionLog) << "# Somatic SNP cover region #\n";
         (*posCoverRegionLog) << "############################\n";
-        (*posCoverRegionLog) << "##MappingQualityThreshold:"        << params.qualityThreshold << "\n";
+        (*posCoverRegionLog) << "##MappingQualityThreshold:"        << mappingQualityThreshold << "\n";
         (*posCoverRegionLog) << "##SomaticSNP: " << somaticSnpCount << "\n";
         (*posCoverRegionLog) << "#Chr\t"
                               << "Pos\t"
@@ -178,9 +178,9 @@ void ReadHpDistriLog::writePosCoverRegionLog(const HaplotagParameters &params, s
     posCoverRegionLog = nullptr;
 }
 
-void ReadHpDistriLog::writeTagReadCoverRegionLog(const HaplotagParameters &params, std::string logPosfix, const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength){
+void ReadHpDistriLog::writeTagReadCoverRegionLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength){
     std::ofstream *tagReadCoverRegionLog=NULL;
-    tagReadCoverRegionLog=new std::ofstream(params.resultPrefix + logPosfix);
+    tagReadCoverRegionLog=new std::ofstream(logFileName);
 
     std::map<std::string, std::vector<coverRegionInfo>> coverRegion;
 
@@ -250,13 +250,13 @@ void ReadHpDistriLog::writeTagReadCoverRegionLog(const HaplotagParameters &param
     totalChrCoverageRatio = (double)totalChrCoverLength / (double)totalChrLength;
 
     if(!tagReadCoverRegionLog->is_open()){
-        std::cerr<< "Fail to open write file: " << params.resultPrefix + logPosfix << "\n";
+        std::cerr<< "Fail to open write file: " << logFileName << "\n";
         exit(1);
     }else{
         (*tagReadCoverRegionLog) << "##################################\n";
         (*tagReadCoverRegionLog) << "# Somatic reads cover region bed #\n";
         (*tagReadCoverRegionLog) << "##################################\n";
-        (*tagReadCoverRegionLog) << "##MappingQualityThreshold: "   << params.qualityThreshold << "\n";
+        (*tagReadCoverRegionLog) << "##MappingQualityThreshold: "   << mappingQualityThreshold << "\n";
         (*tagReadCoverRegionLog) << "##----Chr coverage ratio----\n";
         (*tagReadCoverRegionLog) << "##Total chr coverage ratio: " << totalChrCoverageRatio << "\n";
         for(auto chr: chrVec){

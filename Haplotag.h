@@ -86,7 +86,7 @@ class HelpMessageManager {
         virtual ~HelpMessageManager() = default;
         
         // Build the basic message structure
-        virtual void buildBaseMessage() {}
+        virtual void buildMessage() {}
         
         // Allow derived classes to add new help messages
         virtual void modifyMessage() {}
@@ -157,11 +157,9 @@ class OptionManager {
 
 class HaplotagHelpManager : public HelpMessageManager {
 public:
-    HaplotagHelpManager(const std::string& program) : HelpMessageManager(program) {
-        buildBaseMessage();
-    }
+    HaplotagHelpManager(const std::string& program) : HelpMessageManager(program) {}
 
-    virtual void buildBaseMessage() override;
+    virtual void buildMessage() override;
 };
 
 // Haplotag-specific option definition manager
@@ -173,15 +171,14 @@ class HaplotagOptionManager : public OptionManager {
 
         virtual void initializeDefaultValues();
 
-        bool loadHaplotagOptions(char& opt, std::istringstream& arg);
+        virtual bool loadOptions(char& opt, std::istringstream& arg);
+
+        virtual void recordCommand(int argc, char** argv);
 
         // Validate all input files
         virtual bool validateFiles();
 
         virtual bool validateNumericParameter();
-
-        virtual bool loadExtendOptions(char& opt, std::istringstream& arg);
-        virtual bool validateExtendFiles();
 
         virtual HelpMessageManager* createHelpManager(const std::string& program) override {
             return new HaplotagHelpManager(program);
@@ -192,7 +189,7 @@ class HaplotagOptionManager : public OptionManager {
         HaplotagOptionManager(const std::string& program);
         virtual ~HaplotagOptionManager();
 
-        void setOptions() override;
+        virtual void setOptions() override;
         void setHelpMessage();
         void parseOptions(int argc, char** argv);
 

@@ -2,8 +2,12 @@
 
 #define SUBPROGRAM "somatic haplotag"
 
-void SomaticHaplotagHelpManager::modifyMessage() {
+void SomaticHaplotagHelpManager::buildMessage() {
+    // build base message
+    HaplotagHelpManager::buildMessage();
+
     const std::string requireSection = "required arguments:";
+    const std::string optionalSection = "optional arguments:";
     //clear the section item
     clearSectionItem(requireSection);
     // Required arguments - Somatic mode
@@ -13,12 +17,17 @@ void SomaticHaplotagHelpManager::modifyMessage() {
     addSectionItem(requireSection, "      --tumor-bam-file=NAME           input tumor sample BAM file for mutation tagging.");
     addSectionItem(requireSection, "      -r, --reference=NAME            reference FASTA.\n");
 
-    const std::string optionalSection = "optional arguments:";
-    addSectionItem(optionalSection, "      --tumor-purity=Num              tumor purity value (0.1~1.0) used to adjust somatic variant calling sensitivity and specificity");
+    addSectionItem(optionalSection, " ");
+    
+    addSection("somatic variant calling arguments:");
+    addItem("      --tumor-purity=Num              tumor purity value (0.1~1.0) used to adjust somatic variant calling sensitivity and specificity");
 }
 
-void SomaticHaplotagOptionManager::extendOptions() {
-    // Tumor-specific options
+void SomaticHaplotagOptionManager::setOptions() {
+    // base haplotag options
+    HaplotagOptionManager::setOptions();
+
+    // somatic haplotag-specific options
     addOption({"tumor-snp-file", required_argument, NULL, TUM_SNP});
     addOption({"tumor-bam-file", required_argument, NULL, TUM_BAM});
     addOption({"benchmark-snp", required_argument, NULL, BENCHMARK_VCF});
@@ -27,8 +36,10 @@ void SomaticHaplotagOptionManager::extendOptions() {
     addOption({"tumor-purity", required_argument, NULL, TUMOR_PURITY});
 }
 
-bool SomaticHaplotagOptionManager::validateExtendFiles() {
-    bool isValid = true;
+bool SomaticHaplotagOptionManager::validateFiles() {
+    // validate base haplotag files
+    bool isValid = HaplotagOptionManager::validateFiles();
+    // validate somatic haplotag files
     isValid &= validateRequiredFile(ecParams.tumorSnpFile, "tumor SNP file");
     isValid &= validateRequiredFile(ecParams.tumorBamFile, "tumor BAM file");
     isValid &= validateOptionalFile(ecParams.benchmarkVcf, "benchmark VCF file");
@@ -44,20 +55,28 @@ void SomaticHaplotagOptionManager::initializeDefaultValues() {
     ecParams.predictTumorPurity = true;
 }
 
-bool SomaticHaplotagOptionManager::loadExtendOptions(char& opt, std::istringstream& arg) {
-    bool isLoaded = true;
-    switch (opt)
-    {
-        case HaplotagOption::TUM_SNP: arg >> ecParams.tumorSnpFile; break;
-        case HaplotagOption::TUM_BAM: arg >> ecParams.tumorBamFile; break;
-        case HaplotagOption::BENCHMARK_VCF: arg >> ecParams.benchmarkVcf; break;
-        case HaplotagOption::BENCHMARK_BED: arg >> ecParams.benchmarkBedFile; break;
-        case HaplotagOption::DISABLE_FILTER: ecParams.enableFilter = false; break;
-        case HaplotagOption::TUMOR_PURITY: 
-            arg >> ecParams.tumorPurity; 
-            ecParams.predictTumorPurity = false;
+bool SomaticHaplotagOptionManager::loadOptions(char& opt, std::istringstream& arg) {
+    // load base haplotag options
+    bool isLoaded = HaplotagOptionManager::loadOptions(opt, arg);
+    
+    if(!isLoaded){
+        //reset isLoaded
+        isLoaded = true;
+        //load somatic haplotag options
+        switch (opt)
+        {
+            case HaplotagOption::TUM_SNP: arg >> ecParams.tumorSnpFile; break;
+            case HaplotagOption::TUM_BAM: arg >> ecParams.tumorBamFile; break;
+            case HaplotagOption::BENCHMARK_VCF: arg >> ecParams.benchmarkVcf; break;
+            case HaplotagOption::BENCHMARK_BED: arg >> ecParams.benchmarkBedFile; break;
+            case HaplotagOption::DISABLE_FILTER: ecParams.enableFilter = false; break;
+            case HaplotagOption::TUMOR_PURITY: 
+                arg >> ecParams.tumorPurity; 
+                ecParams.predictTumorPurity = false;
+                break;
+            default: isLoaded = false; 
             break;
-        default: isLoaded = false; break;
+        }
     }
     return isLoaded;
 }

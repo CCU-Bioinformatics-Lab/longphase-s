@@ -70,7 +70,7 @@ void ExtractNorDataChrProcessor::processRead(
 
     /// Create a CIGAR parser using polymorphism design
     // Use extractNorDataCigarParser to process CIGAR strings for normal samples    
-    CigarParser* cigarParser = new ExtractNorDataCigarParser(*variantBase, tumVarPosVec, ref_pos, query_pos);
+    CigarParser* cigarParser = new ExtractNorDataCigarParser(*variantBase, tumVarPosVec, ref_pos, query_pos, params.qualityThreshold);
     cigarParser->parsingCigar(aln, bamHdr, chrName, params, firstVariantIter, currentVariants, ref_string, hpCount, variantsHP, norCountPS);
     delete cigarParser;
 
@@ -123,8 +123,8 @@ void ExtractNorDataChrProcessor::postProcess(
     } 
 }
 
-ExtractNorDataCigarParser::ExtractNorDataCigarParser(std::map<int, PosBase>& variantBase, std::vector<int>& tumVarPosVec, int& ref_pos, int& query_pos)
-:CigarParser(ref_pos, query_pos), variantBase(variantBase), tumVarPosVec(tumVarPosVec){
+ExtractNorDataCigarParser::ExtractNorDataCigarParser(std::map<int, PosBase>& variantBase, std::vector<int>& tumVarPosVec, int& ref_pos, int& query_pos, const int& mappingQualityThr)
+:CigarParser(ref_pos, query_pos), variantBase(variantBase), tumVarPosVec(tumVarPosVec), mappingQualityThr(mappingQualityThr){
 
 }
 
@@ -145,7 +145,7 @@ void ExtractNorDataCigarParser::processMatchOperation(int& length, uint32_t* cig
             tumVarPosVec.push_back(curPos);
 
             //counting current tumor SNP base and depth           
-            countBaseNucleotide(variantBase[curPos], base, *aln, params->qualityThreshold);
+            countBaseNucleotide(variantBase[curPos], base, *aln, mappingQualityThr);
         }
         // the indel(deletion) SNP position is the start position, and the deletion occurs at the next position
         else if(curVar.variantType == VariantType::DELETION){
@@ -156,7 +156,7 @@ void ExtractNorDataCigarParser::processMatchOperation(int& length, uint32_t* cig
         }
     }       
 
-    if ( aln->core.qual >= params->qualityThreshold && (*currentVariantIter).second.isExists(NORMAL)){
+    if ( aln->core.qual >= mappingQualityThr && (*currentVariantIter).second.isExists(NORMAL)){
         // only judge the heterozygous SNP
         if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
             auto norVar = (*currentVariantIter).second.Variant[NORMAL];
@@ -187,7 +187,7 @@ void ExtractNorDataCigarParser::processDeletionOperation(int& length, uint32_t* 
     }
 
     // only execute at the first phased normal snp
-    if ( aln->core.qual >= params->qualityThreshold && (*currentVariantIter).second.isExists(NORMAL) && !alreadyJudgeDel){
+    if ( aln->core.qual >= mappingQualityThr && (*currentVariantIter).second.isExists(NORMAL) && !alreadyJudgeDel){
         if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
             // longphase v1.73 only execute once
             alreadyJudgeDel = true;
@@ -269,7 +269,7 @@ void ExtractTumDataChrProcessor::processRead(
     // position relative to read
     int query_pos = 0;
 
-    ExtractTumDataCigarParser cigarParser(*somaticPosInfo, tumorAllelePosVec, tumorSnpPosVec, tumCountPS, ref_pos, query_pos);
+    ExtractTumDataCigarParser cigarParser(*somaticPosInfo, tumorAllelePosVec, tumorSnpPosVec, tumCountPS, ref_pos, query_pos, params.qualityThreshold);
     cigarParser.parsingCigar(aln, bamHdr, chrName, params, firstVariantIter, currentVariants, ref_string, hpCount, variantsHP, norCountPS);
 
     int pqValue = 0;   
@@ -281,7 +281,7 @@ void ExtractTumDataChrProcessor::processRead(
    
     //classify read cases where tumor SNPs have low VAF in normal samples
     if(!tumorAllelePosVec.empty()){
-        ClassifyReadsByCase(tumorAllelePosVec, norCountPS, hpCount, params, *somaticPosInfo);
+        classifyReadsByCase(tumorAllelePosVec, norCountPS, hpCount, *somaticPosInfo);
         
         for(auto pos : tumorAllelePosVec){
             int baseHP = SnpHP::NONE_SNP;
@@ -345,14 +345,10 @@ void ExtractTumDataChrProcessor::processRead(
     }
 }
 
-void ExtractTumDataChrProcessor::ClassifyReadsByCase(std::vector<int> &tumorAllelePosVec, std::map<int, int> &norCountPS, std::map<int, int> &hpCount, const HaplotagParameters &params, std::map<int, SomaticData> &somaticPosInfo){
+void ExtractTumDataChrProcessor::classifyReadsByCase(std::vector<int> &tumorAllelePosVec, std::map<int, int> &norCountPS, std::map<int, int> &hpCount, std::map<int, SomaticData> &somaticPosInfo){
     
     //decide whether to tag the read or not
     bool recordRead = true;
-    /*if( max/(max+min) < params.percentageThreshold){
-        // no tag
-        recordRead = false;
-    }*/
 
     //only exist tumor homo SNP
     if( norCountPS.size() == 0 && hpCount[3] != 0){
@@ -491,9 +487,14 @@ ExtractTumDataCigarParser::ExtractTumDataCigarParser(
     std::vector<int>& tumorSnpPosVec,
     std::map<int, int>& tumCountPS,
     int& ref_pos,
-    int& query_pos
+    int& query_pos,
+    const int& mappingQualityThr
 ):CigarParser(ref_pos, query_pos),
-  somaticPosInfo(somaticPosInfo), tumorAllelePosVec(tumorAllelePosVec), tumorSnpPosVec(tumorSnpPosVec), tumCountPS(tumCountPS){
+  somaticPosInfo(somaticPosInfo),
+  tumorAllelePosVec(tumorAllelePosVec),
+  tumorSnpPosVec(tumorSnpPosVec),
+  tumCountPS(tumCountPS),
+  mappingQualityThr(mappingQualityThr){
 
 }
 
@@ -503,8 +504,8 @@ ExtractTumDataCigarParser::~ExtractTumDataCigarParser(){
 
 void ExtractTumDataCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base){
     //waring : using ref length to split SNP and indel that will be effect case ratio result 
-    if ( aln->core.qual >= params->qualityThreshold ){
-        SomaticJudgeSnpHP(currentVariantIter, *chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, &tumorAllelePosVec);
+    if ( aln->core.qual >= mappingQualityThr ){
+        somaticJudgeSnpHP(currentVariantIter, *chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, &tumorAllelePosVec);
         if((*currentVariantIter).second.isExists(TUMOR)){
             tumorSnpPosVec.push_back((*currentVariantIter).first);
         }
@@ -517,7 +518,7 @@ void ExtractTumDataCigarParser::processMatchOperation(int& length, uint32_t* cig
 
         if(curVar.variantType == VariantType::SNP){
             //counting current tumor SNP base and depth           
-            countBaseNucleotide(somaticPosInfo[(*currentVariantIter).first].base, base, *aln, params->qualityThreshold);
+            countBaseNucleotide(somaticPosInfo[(*currentVariantIter).first].base, base, *aln, mappingQualityThr);
         }
     }
 }
@@ -540,7 +541,7 @@ void ExtractTumDataCigarParser::processDeletionOperation(int& length, uint32_t* 
     }
 }
 
-void ExtractTumDataCigarParser::OnlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){
+void ExtractTumDataCigarParser::onlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){
  //the tumor SNP GT is phased heterozygous
     //all bases of the same type at the current position in normal.bam
 
@@ -574,7 +575,7 @@ void ExtractTumDataCigarParser::OnlyTumorSNPjudgeHP(const std::string &chrName, 
 SomaticVarCaller::SomaticVarCaller(const std::vector<std::string> &chrVec, const HaplotagParameters &params){
     chrPosSomaticInfo = new std::map<std::string, std::map<int, SomaticData>>();
     chrPosNorBase = new std::map<std::string, std::map<int, PosBase>>();
-    callerReadHpDistri = new ReadHpDistriLog();
+    callerReadHpDistri = new ReadHpDistriLog(params.qualityThreshold);
     denseTumorSnpInterval = new std::map<std::string, std::map<int, std::pair<int, DenseSnpInterval>>>();
     chrReadHpResultSet = new std::map<std::string, std::map<std::string, ReadVarHpCount>>();
     chrTumorPosReadCorrBaseHP = new std::map<std::string, std::map<int, std::map<std::string, int>>>();
@@ -605,7 +606,7 @@ void SomaticVarCaller::releaseMemory(){
     delete chrTumorPosReadCorrBaseHP;
 }
 
-void SomaticVarCaller::VariantCalling(
+void SomaticVarCaller::variantCalling(
     const HaplotagParameters &params,
     const std::vector<std::string> &chrVec,
     const std::map<std::string, int> &chrLength,
@@ -682,7 +683,7 @@ void SomaticVarCaller::VariantCalling(
         getDenseTumorSnpInterval(*somaticPosInfo, *readHpResultSet, *tumorPosReadCorrBaseHP, *localDenseTumorSnpInterval);
 
         //calculate information and filter somatic SNPs
-        SomaticFeatureFilter(somaticParams, currentChrVariants, chr, *somaticPosInfo, tumorPurity);
+        somaticFeatureFilter(somaticParams, currentChrVariants, chr, *somaticPosInfo, tumorPurity);
 
         //find other somatic variants HP4/HP5 (temporary)
         // FindOtherSomaticSnpHP(chr, *somaticPosInfo, currentChrVariants);
@@ -691,13 +692,13 @@ void SomaticVarCaller::VariantCalling(
         // ShannonEntropyFilter(chr, *somaticPosInfo, currentChrVariants, ref_string);
 
         //calibrate read HP to remove low confidence H3/H4 SNP
-        CalibrateReadHP(chr, somaticParams, *somaticPosInfo, *readHpResultSet, *tumorPosReadCorrBaseHP);
+        calibrateReadHP(chr, *somaticPosInfo, *readHpResultSet, *tumorPosReadCorrBaseHP);
 
         //calculate all read HP result
-        CalculateReadSetHP(params, chr, *readHpResultSet, *tumorPosReadCorrBaseHP);
+        calculateReadSetHP(chr, *readHpResultSet, *tumorPosReadCorrBaseHP, params.percentageThreshold);
 
         //statistic all read HP in somatic SNP position
-        StatisticSomaticPosReadHP(chr, *somaticPosInfo, *tumorPosReadCorrBaseHP, *readHpResultSet, *localCallerReadHpDistri);
+        statisticSomaticPosReadHP(chr, *somaticPosInfo, *tumorPosReadCorrBaseHP, *readHpResultSet, *localCallerReadHpDistri);
 
     }
     std::cerr<< difftime(time(NULL), begin) << "s\n";
@@ -716,19 +717,19 @@ void SomaticVarCaller::VariantCalling(
     
     if(somaticParams.writeVarLog){
         //write the log file for variants with positions tagged as HP3
-        WriteSomaticVarCallingLog(params ,somaticParams, chrVec, mergedChrVarinat);
+        writeSomaticVarCallingLog(params ,somaticParams, chrVec, mergedChrVarinat);
 
-        WriteOtherSomaticHpLog(params, chrVec, mergedChrVarinat);
+        writeOtherSomaticHpLog(params.resultPrefix + "_other_allele_somatic_var.log", chrVec, mergedChrVarinat);
 
-        WriteDenseTumorSnpIntervalLog(params, chrVec);
+        writeDenseTumorSnpIntervalLog(params.resultPrefix + "_dense_tumor_snp_interval.log", chrVec);
 
-        callerReadHpDistri->writeReadHpDistriLog(params, "_read_distri_scaller.out", chrVec);
+        callerReadHpDistri->writeReadHpDistriLog(params.resultPrefix + "_read_distri_scaller.out", chrVec);
 
         // remove the position that derived by HP1 or HP2
         callerReadHpDistri->removeNotDeriveByH1andH2pos(chrVec);
 
         // record the position that can't derived because exist H1-1 and H2-1 reads
-        callerReadHpDistri->writeReadHpDistriLog(params, "_read_distri_scaller_derive_by_H1_H2.out", chrVec);
+        callerReadHpDistri->writeReadHpDistriLog(params.resultPrefix + "_read_distri_scaller_derive_by_H1_H2.out", chrVec);
 
     }
     return;
@@ -835,7 +836,6 @@ void SomaticVarCaller::SetFilterParamsWithPurity(SomaticFilterParaemter &somatic
     // tumor purity 0.2
     else if (tumorPurity > 0 && tumorPurity < 0.3) 
     {
-        std::cerr << "[Warning] tumor purity is less than 0.3: " << tumorPurity << std::endl;
         somaticParams.norVAF_maxThr = 0.130;
         somaticParams.norDepth_minThr = 1;
 
@@ -873,14 +873,14 @@ void SomaticVarCaller::SetFilterParamsWithPurity(SomaticFilterParaemter &somatic
     }
 }
 
-void SomaticVarCaller::SomaticFeatureFilter(const SomaticFilterParaemter &somaticParams, std::map<int, MultiGenomeVar> &currentChrVariants,const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, double& tumorPurity){
+void SomaticVarCaller::somaticFeatureFilter(const SomaticFilterParaemter &somaticParams, std::map<int, MultiGenomeVar> &currentChrVariants,const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, double& tumorPurity){
     //calculate the information of the somatic positon 
     std::map<int, SomaticData>::iterator somaticVarIter = somaticPosInfo.begin();
 
     while( somaticVarIter != somaticPosInfo.end()){
                 
         if(!currentChrVariants[(*somaticVarIter).first].isExists(TUMOR)){
-            std::cerr << "Error(SomaticFeatureFilter) => can't find the position : chr:" << chr << " pos: " << (*somaticVarIter).first;
+            std::cerr << "Error(somaticFeatureFilter) => can't find the position : chr:" << chr << " pos: " << (*somaticVarIter).first;
             exit(1);
         }
 
@@ -978,7 +978,7 @@ void SomaticVarCaller::SomaticFeatureFilter(const SomaticFilterParaemter &somati
     }
 }
 
-void SomaticVarCaller::ShannonEntropyFilter(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants, std::string &ref_string){
+void SomaticVarCaller::shannonEntropyFilter(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants, std::string &ref_string){
     int window_size = 10;
     auto somaticVarIter = somaticPosInfo.begin();
     while(somaticVarIter != somaticPosInfo.end()){
@@ -1239,7 +1239,7 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, SomaticData> &soma
     }
 }
 
-void SomaticVarCaller::FindOtherSomaticSnpHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants){
+void SomaticVarCaller::findOtherSomaticSnpHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants){
     std::map<int, SomaticData>::iterator somaticVarIter = somaticPosInfo.begin();
     while(somaticVarIter != somaticPosInfo.end()){
         if((*somaticVarIter).second.isHighConSomaticSNP){
@@ -1334,7 +1334,7 @@ std::string SomaticVarCaller::convertIntNucToStr(int base){
     }
 }
 
-void SomaticVarCaller::CalibrateReadHP(const std::string &chr, const SomaticFilterParaemter &somaticParams, std::map<int, SomaticData> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP){
+void SomaticVarCaller::calibrateReadHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP){
         //calibrate read HP to remove low confidence H3/H4 SNP
         std::map<int, SomaticData>::iterator somaticVarIter = somaticPosInfo.begin();
         while( somaticVarIter != somaticPosInfo.end()){
@@ -1379,7 +1379,7 @@ void SomaticVarCaller::CalibrateReadHP(const std::string &chr, const SomaticFilt
         }
 }
 
-void SomaticVarCaller::CalculateReadSetHP(const HaplotagParameters &params, const std::string &chr, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP){
+void SomaticVarCaller::calculateReadSetHP(const std::string &chr, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP, const double& percentageThreshold){
         std::map<std::string, ReadVarHpCount>::iterator readTotalHPcountIter = readHpResultSet.begin();
         //calculate all read HP result 
         while(readTotalHPcountIter != readHpResultSet.end()){
@@ -1396,13 +1396,13 @@ void SomaticVarCaller::CalculateReadSetHP(const HaplotagParameters &params, cons
             double tumorHPsimilarity = 0.0;
             std::map<int, int> norCountPS = (*readTotalHPcountIter).second.norCountPS;
 
-            (*readTotalHPcountIter).second.hpResult = determineReadHP(hpCount, pqValue, norCountPS, normalHPsimilarity, tumorHPsimilarity, params.percentageThreshold, nullptr, nullptr, nullptr);
+            (*readTotalHPcountIter).second.hpResult = determineReadHP(hpCount, pqValue, norCountPS, normalHPsimilarity, tumorHPsimilarity, percentageThreshold, nullptr, nullptr, nullptr);
             
             readTotalHPcountIter++;
         }
 }
 
-void SomaticVarCaller::StatisticSomaticPosReadHP(
+void SomaticVarCaller::statisticSomaticPosReadHP(
     const std::string &chr, std::map<int, SomaticData> &somaticPosInfo,
     std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP,
     std::map<std::string, ReadVarHpCount> &readHpResultSet,
@@ -1499,7 +1499,7 @@ void SomaticVarCaller::StatisticSomaticPosReadHP(
 }
 
 
-void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &params, const SomaticFilterParaemter &somaticParams, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void SomaticVarCaller::writeSomaticVarCallingLog(const HaplotagParameters &params, const SomaticFilterParaemter &somaticParams, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     std::ofstream *tagHP3Log = new std::ofstream(params.resultPrefix+"_somatic_var.out");
 
     if(!tagHP3Log->is_open()){
@@ -1851,10 +1851,9 @@ void SomaticVarCaller::WriteSomaticVarCallingLog(const HaplotagParameters &param
     std::cerr<< difftime(time(NULL), begin) << "s\n";  
 }
 
-void SomaticVarCaller::WriteOtherSomaticHpLog(const HaplotagParameters &params, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void SomaticVarCaller::writeOtherSomaticHpLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     std::ofstream *OtherHpSomaticVarLog=NULL;
-    std::string logPosfix = "_other_allele_somatic_var.log";
-    OtherHpSomaticVarLog=new std::ofstream(params.resultPrefix + logPosfix);
+    OtherHpSomaticVarLog=new std::ofstream(logFileName);
 
     int totalOtherSomaticHpVar = 0;
     for(auto chr: chrVec){
@@ -1866,13 +1865,12 @@ void SomaticVarCaller::WriteOtherSomaticHpLog(const HaplotagParameters &params, 
     }
 
     if(!OtherHpSomaticVarLog->is_open()){
-        std::cerr<< "Fail to open write file: " << params.resultPrefix + logPosfix << "\n";
+        std::cerr<< "Fail to open write file: " << logFileName << "\n";
         exit(1);
     }else{
         (*OtherHpSomaticVarLog) << "################################\n";
         (*OtherHpSomaticVarLog) << "# Other Somatic HP Variant Log #\n";
         (*OtherHpSomaticVarLog) << "################################\n";
-        (*OtherHpSomaticVarLog) << "##MappingQualityThreshold:"  << params.qualityThreshold << "\n";
         (*OtherHpSomaticVarLog) << "##Tatal other somatic HP variants:"  << totalOtherSomaticHpVar << "\n";
         (*OtherHpSomaticVarLog) << "#CHROM\t"
                                 << "POS\t"
@@ -1893,7 +1891,7 @@ void SomaticVarCaller::WriteOtherSomaticHpLog(const HaplotagParameters &params, 
                 continue;
             }
             if(currentChrVar.find(pos) == currentChrVar.end()){
-                std::cerr << "Error(WriteOtherSomaticHpLog) => can't find the position : chr:" << chr << " pos: " << pos + 1;
+                std::cerr << "Error(writeOtherSomaticHpLog) => can't find the position : chr:" << chr << " pos: " << pos + 1;
                 exit(1);
             }
 
@@ -1914,10 +1912,9 @@ void SomaticVarCaller::WriteOtherSomaticHpLog(const HaplotagParameters &params, 
     OtherHpSomaticVarLog = nullptr;
 }
 
-void SomaticVarCaller::WriteDenseTumorSnpIntervalLog(const HaplotagParameters &params, const std::vector<std::string> &chrVec){
+void SomaticVarCaller::writeDenseTumorSnpIntervalLog(const std::string logFileName, const std::vector<std::string> &chrVec){
     std::ofstream *closeSomaticSnpIntervalLog=NULL;
-    std::string logPosfix = "_dense_tumor_snp_interval.log";
-    closeSomaticSnpIntervalLog=new std::ofstream(params.resultPrefix + logPosfix);
+    closeSomaticSnpIntervalLog=new std::ofstream(logFileName);
 
     int totalIntervalCount = 0;
     for(auto chr: chrVec){
@@ -1925,13 +1922,12 @@ void SomaticVarCaller::WriteDenseTumorSnpIntervalLog(const HaplotagParameters &p
     }
 
     if(!closeSomaticSnpIntervalLog->is_open()){
-        std::cerr<< "Fail to open write file: " << params.resultPrefix + logPosfix << "\n";
+        std::cerr<< "Fail to open write file: " << logFileName << "\n";
         exit(1);
     }else{
         (*closeSomaticSnpIntervalLog) << "################################\n";
         (*closeSomaticSnpIntervalLog) << "# Dense Tumor SNP Interval Log #\n";
         (*closeSomaticSnpIntervalLog) << "################################\n";
-        (*closeSomaticSnpIntervalLog) << "##MappingQualityThreshold:"  << params.qualityThreshold << "\n";
         (*closeSomaticSnpIntervalLog) << "##Tatal intervals:"  << totalIntervalCount << "\n";
         (*closeSomaticSnpIntervalLog) << "#CHROM\t"
                                       << "startPos-endPos\t"

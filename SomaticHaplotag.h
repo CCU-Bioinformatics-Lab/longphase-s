@@ -10,7 +10,7 @@ class SomaticHaplotagHelpManager : public HaplotagHelpManager {
     public:
         SomaticHaplotagHelpManager(const std::string& program) : HaplotagHelpManager(program) {}
 
-        virtual void modifyMessage() override;
+        virtual void buildMessage() override;
     
 };
 
@@ -21,17 +21,15 @@ class SomaticHaplotagOptionManager : public HaplotagOptionManager {
         }
 
         virtual void initializeDefaultValues() override;
-        virtual void extendOptions() override;
 
-        virtual bool loadExtendOptions(char& opt, std::istringstream& arg) override;
-        virtual bool validateExtendFiles() override;
+        virtual bool loadOptions(char& opt, std::istringstream& arg) override;
+
+        virtual bool validateFiles() override;
         virtual bool validateNumericParameter() override;
 
     public:
-        SomaticHaplotagOptionManager(const std::string& program) : HaplotagOptionManager(program) {
-            //extend somatic haplotag options
-            extendOptions();
-        }
+        SomaticHaplotagOptionManager(const std::string& program) : HaplotagOptionManager(program) {}
+        virtual void setOptions() override;
         virtual ~SomaticHaplotagOptionManager() = default;
 };
 

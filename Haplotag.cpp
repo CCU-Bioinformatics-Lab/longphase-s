@@ -5,7 +5,7 @@
 
 #define SUBPROGRAM "haplotag"
 
-void HaplotagHelpManager::buildBaseMessage() {
+void HaplotagHelpManager::buildMessage() {
     // Usage
     addSection("Usage: " + programName + " [OPTION] ... READSFILE");
     addItem("      --help                          display this help and exit.\n");
@@ -39,7 +39,7 @@ HaplotagOptionManager::HaplotagOptionManager(const std::string& program) : Optio
 
 void HaplotagOptionManager::setHelpMessage() {
     helpManager = createHelpManager(programName);
-    helpManager->modifyMessage();
+    helpManager->buildMessage();
 }
 
 HaplotagOptionManager::~HaplotagOptionManager() {
@@ -73,9 +73,6 @@ void HaplotagOptionManager::setOptions() {
     
     // Add terminator
     addOption({NULL, 0, NULL, 0});
-
-    //extend haplotag options
-    extendOptions();
 }
 
 void HaplotagOptionManager::initializeDefaultValues() {
@@ -103,11 +100,7 @@ void HaplotagOptionManager::parseOptions(int argc, char** argv)
     {
         std::istringstream arg(optarg != NULL ? optarg : "");
 
-        if(loadHaplotagOptions(c, arg)){
-            continue;
-        }
-
-        if(loadExtendOptions(c, arg)){
+        if(loadOptions(c, arg)){
             continue;
         }
         
@@ -120,10 +113,7 @@ void HaplotagOptionManager::parseOptions(int argc, char** argv)
     }
 
     // Build command string
-    for(int i = 0; i < argc; ++i){
-        ecParams.command.append(argv[i]);
-        ecParams.command.append(" ");
-    }
+    recordCommand(argc, argv);
 
     // Validate arguments
     if (argc - optind < 0) {
@@ -133,10 +123,6 @@ void HaplotagOptionManager::parseOptions(int argc, char** argv)
     
     // Validate all input files
     if (!validateFiles()) {
-        die = true;
-    }
-
-    if (!validateExtendFiles()) {
         die = true;
     }
     
@@ -153,7 +139,7 @@ void HaplotagOptionManager::parseOptions(int argc, char** argv)
     } 
 }
 
-bool HaplotagOptionManager::loadHaplotagOptions(char& opt, std::istringstream& arg) {
+bool HaplotagOptionManager::loadOptions(char& opt, std::istringstream& arg) {
     bool isLoaded = true;
     switch (opt)
     {
@@ -175,6 +161,13 @@ bool HaplotagOptionManager::loadHaplotagOptions(char& opt, std::istringstream& a
     return isLoaded;
 }
 
+void HaplotagOptionManager::recordCommand(int argc, char** argv) {
+    for(int i = 0; i < argc; ++i){
+        ecParams.command.append(argv[i]);
+        ecParams.command.append(" ");
+    }
+}
+
 
 bool HaplotagOptionManager::validateFiles() {
     bool isValid = true;
@@ -191,13 +184,6 @@ bool HaplotagOptionManager::validateFiles() {
     return isValid;
 }
 
-bool HaplotagOptionManager::loadExtendOptions(char& opt, std::istringstream& arg) {
-    return false;
-}
-
-bool HaplotagOptionManager::validateExtendFiles() {
-    return true;
-}
 
 bool HaplotagOptionManager::validateNumericParameter() {
     bool isValid = true;

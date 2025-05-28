@@ -62,7 +62,7 @@ class SomaticJudgeBase{
     private :
 
     protected:
-        void SomaticJudgeSnpHP(
+        void somaticJudgeSnpHP(
             std::map<int, MultiGenomeVar>::iterator &currentVariantIter,
             std::string chrName,
             std::string base,
@@ -83,7 +83,7 @@ class SomaticJudgeBase{
             std::map<int, int> *variantsHP
         );
 
-        virtual void OnlyTumorSNPjudgeHP(
+        virtual void onlyTumorSNPjudgeHP(
             const std::string &chrName,
             int &curPos, MultiGenomeVar &curVar,
             std::string base,
@@ -264,7 +264,6 @@ class CigarParser : public GermlineJudgeBase{
         const bam1_t* aln;
         const bam_hdr_t* bamHdr;
         const std::string* chrName;
-        const HaplotagParameters* params;
         const std::string* ref_string;
         std::map<int, int>* hpCount;
         std::map<int, int>* norCountPS;
