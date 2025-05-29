@@ -49,8 +49,9 @@ struct TagReadLog{
 };
 
 class HaplotagParamsMessage : public MessageManager{
-    protected:
+    private:
         const HaplotagParameters& params;
+    protected:
 
         void addCommonParamsMessage(){
             addEntry("phased SNP file", params.snpFile);
@@ -93,8 +94,9 @@ class HaplotagParamsMessage : public MessageManager{
 
 // Normal header
 class GermlineTagLog : public MessageManager {
-    protected:
+    private:
         const HaplotagParameters& params;
+    protected:
 
         void checkStreamStatus() {
             if (!tagReadLog || !tagReadLog->is_open()) {
@@ -119,17 +121,17 @@ class GermlineTagLog : public MessageManager {
 
         virtual void writeBasicColumns(){
             *tagReadLog << "#ReadID\t"
-                    << "CHROM\t"
-                    << "ReadStart\t"
-                    << "Confidnet(%)\t"
-                    << "Haplotype\t"
-                    << "PhaseSet\t"
-                    << "TotalAllele\t"
-                    << "HP1Allele\t"
-                    << "HP2Allele\t"
-                    << "phasingQuality(PQ)\t"
-                    << "(Variant,HP)\t"
-                    << "(PhaseSet,Variantcount)\n";
+                        << "CHROM\t"
+                        << "ReadStart\t"
+                        << "Confidnet(%)\t"
+                        << "Haplotype\t"
+                        << "PhaseSet\t"
+                        << "TotalAllele\t"
+                        << "HP1Allele\t"
+                        << "HP2Allele\t"
+                        << "phasingQuality(PQ)\t"
+                        << "(Variant,HP)\t"
+                        << "(PhaseSet,Variantcount)\n";
         }
 
     public:
@@ -230,6 +232,7 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
 
 class GermlineHaplotagBamParser: public HaplotagBamParser{
     private:
+        const HaplotagParameters& params;
     protected:
         ReadStatistics& readStats;
         GermlineTagLog *tagResult;
@@ -239,7 +242,7 @@ class GermlineHaplotagBamParser: public HaplotagBamParser{
         };
 
         // create tag read log
-        virtual GermlineTagLog* createTagReadLog(const HaplotagParameters& params){
+        virtual GermlineTagLog* createTagReadLog(){
             return new GermlineTagLog(params);
         };
 
@@ -248,17 +251,19 @@ class GermlineHaplotagBamParser: public HaplotagBamParser{
             ParsingBamMode mode,
             bool writeOutputBam,
             bool mappingQualityFilter,
-            ReadStatistics& readStats
+            ReadStatistics& readStats,
+            const HaplotagParameters& params
         );
         ~GermlineHaplotagBamParser() override;
 
-        void createTagLog(const HaplotagParameters& params);
+        void createTagLog();
 };
 
 class HaplotagProcess
 {
-    protected:
+    private:
         HaplotagParameters &params;
+    protected:
         HaplotagParamsMessage paramsMessage;
 
         std::vector<std::string> *chrVec;
@@ -286,7 +291,7 @@ class HaplotagProcess
         // update chromosome processing based on region
         void setProcessingChromRegion();
 
-        virtual void tagRead(HaplotagParameters &params, const Genome& geneType);
+        virtual void tagRead(HaplotagParameters &params, std::string& tagBamFile, const Genome& geneType);
         virtual void postprocessForHaplotag(){};
         void printAlignmentStaristics();
 
@@ -296,7 +301,7 @@ class HaplotagProcess
             bool mappingQualityFilter,
             ReadStatistics& readStats
         ){
-            return new GermlineHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats);
+            return new GermlineHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats, params);
         }
 
         virtual std::string getNormalSnpParsingMessage(){

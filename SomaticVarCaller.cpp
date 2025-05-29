@@ -572,10 +572,12 @@ void ExtractTumDataCigarParser::onlyTumorSNPjudgeHP(const std::string &chrName, 
 
 
 
-SomaticVarCaller::SomaticVarCaller(const std::vector<std::string> &chrVec, const HaplotagParameters &params){
+SomaticVarCaller::SomaticVarCaller(const std::vector<std::string> &chrVec, const SomaticHaplotagParameters &params)
+:params(params)
+{
     chrPosSomaticInfo = new std::map<std::string, std::map<int, SomaticData>>();
     chrPosNorBase = new std::map<std::string, std::map<int, PosBase>>();
-    callerReadHpDistri = new ReadHpDistriLog(params.qualityThreshold);
+    callerReadHpDistri = new ReadHpDistriLog(params.basic.qualityThreshold);
     denseTumorSnpInterval = new std::map<std::string, std::map<int, std::pair<int, DenseSnpInterval>>>();
     chrReadHpResultSet = new std::map<std::string, std::map<std::string, ReadVarHpCount>>();
     chrTumorPosReadCorrBaseHP = new std::map<std::string, std::map<int, std::map<std::string, int>>>();
@@ -607,7 +609,7 @@ void SomaticVarCaller::releaseMemory(){
 }
 
 void SomaticVarCaller::variantCalling(
-    const HaplotagParameters &params,
+    const SomaticHaplotagParameters &sParams,
     const std::vector<std::string> &chrVec,
     const std::map<std::string, int> &chrLength,
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
@@ -619,27 +621,27 @@ void SomaticVarCaller::variantCalling(
     std::cerr<< "extracting data from normal BAM... ";
     std::time_t begin = time(NULL);
     ExtractNorDataBamParser normalBamParser(*chrPosNorBase);
-    normalBamParser.parsingBam(params.bamFile, params, chrVec, chrLength, mergedChrVarinat, vcfSet, Genome::NORMAL);
+    normalBamParser.parsingBam(sParams.basic.bamFile, sParams.basic, chrVec, chrLength, mergedChrVarinat, vcfSet, Genome::NORMAL);
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 
     std::cerr << "extracting data from tumor BAM... ";
     begin = time(NULL);
     ExtractTumDataBamParser tumorBamParser(*chrPosSomaticInfo, *chrReadHpResultSet, *chrTumorPosReadCorrBaseHP);
-    tumorBamParser.parsingBam(params.tumorBamFile, params, chrVec, chrLength, mergedChrVarinat, vcfSet, Genome::TUMOR);
+    tumorBamParser.parsingBam(sParams.tumorBamFile, sParams.basic, chrVec, chrLength, mergedChrVarinat, vcfSet, Genome::TUMOR);
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 
     double tumorPurity = 0.0;
 
-    if(params.predictTumorPurity){
-        TumorPurityPredictor* tumorPurityPredictor = new TumorPurityPredictor(chrVec, *chrPosNorBase, *chrPosSomaticInfo, params.writeReadLog, params.resultPrefix);
+    if(sParams.predictTumorPurity){
+        TumorPurityPredictor* tumorPurityPredictor = new TumorPurityPredictor(chrVec, *chrPosNorBase, *chrPosSomaticInfo, sParams.basic.writeReadLog, sParams.basic.resultPrefix);
         // predict tumor purity
         tumorPurity = tumorPurityPredictor->predictTumorPurity();
         //flag the position that is used for purity prediction
         tumorPurityPredictor->markStatisticFlag(*chrPosSomaticInfo);
         delete tumorPurityPredictor;
     }else{
-        std::cerr << "using tumor purity from parameters: " << params.tumorPurity << std::endl;
-        tumorPurity = params.tumorPurity;
+        std::cerr << "using tumor purity from parameters: " << sParams.tumorPurity << std::endl;
+        tumorPurity = sParams.tumorPurity;
     }
 
     // set filter params with tumor purity
@@ -648,7 +650,7 @@ void SomaticVarCaller::variantCalling(
     std::cerr<< "calling somatic variants ... ";
     begin = time(NULL);
     // loop all chromosome
-    #pragma omp parallel for schedule(dynamic) num_threads(params.numThreads) 
+    #pragma omp parallel for schedule(dynamic) num_threads(sParams.basic.numThreads) 
     for(auto chr : chrVec ){
         // record the position that tagged as HP3
         // chr, variant position
@@ -695,7 +697,7 @@ void SomaticVarCaller::variantCalling(
         calibrateReadHP(chr, *somaticPosInfo, *readHpResultSet, *tumorPosReadCorrBaseHP);
 
         //calculate all read HP result
-        calculateReadSetHP(chr, *readHpResultSet, *tumorPosReadCorrBaseHP, params.percentageThreshold);
+        calculateReadSetHP(chr, *readHpResultSet, *tumorPosReadCorrBaseHP, sParams.basic.percentageThreshold);
 
         //statistic all read HP in somatic SNP position
         statisticSomaticPosReadHP(chr, *somaticPosInfo, *tumorPosReadCorrBaseHP, *readHpResultSet, *localCallerReadHpDistri);
@@ -717,19 +719,19 @@ void SomaticVarCaller::variantCalling(
     
     if(somaticParams.writeVarLog){
         //write the log file for variants with positions tagged as HP3
-        writeSomaticVarCallingLog(params ,somaticParams, chrVec, mergedChrVarinat);
+        writeSomaticVarCallingLog(sParams ,somaticParams, chrVec, mergedChrVarinat);
 
-        writeOtherSomaticHpLog(params.resultPrefix + "_other_allele_somatic_var.log", chrVec, mergedChrVarinat);
+        writeOtherSomaticHpLog(sParams.basic.resultPrefix + "_other_allele_somatic_var.log", chrVec, mergedChrVarinat);
 
-        writeDenseTumorSnpIntervalLog(params.resultPrefix + "_dense_tumor_snp_interval.log", chrVec);
+        writeDenseTumorSnpIntervalLog(sParams.basic.resultPrefix + "_dense_tumor_snp_interval.log", chrVec);
 
-        callerReadHpDistri->writeReadHpDistriLog(params.resultPrefix + "_read_distri_scaller.out", chrVec);
+        callerReadHpDistri->writeReadHpDistriLog(sParams.basic.resultPrefix + "_read_distri_scaller.out", chrVec);
 
         // remove the position that derived by HP1 or HP2
         callerReadHpDistri->removeNotDeriveByH1andH2pos(chrVec);
 
         // record the position that can't derived because exist H1-1 and H2-1 reads
-        callerReadHpDistri->writeReadHpDistriLog(params.resultPrefix + "_read_distri_scaller_derive_by_H1_H2.out", chrVec);
+        callerReadHpDistri->writeReadHpDistriLog(sParams.basic.resultPrefix + "_read_distri_scaller_derive_by_H1_H2.out", chrVec);
 
     }
     return;
@@ -1499,11 +1501,11 @@ void SomaticVarCaller::statisticSomaticPosReadHP(
 }
 
 
-void SomaticVarCaller::writeSomaticVarCallingLog(const HaplotagParameters &params, const SomaticFilterParaemter &somaticParams, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
-    std::ofstream *tagHP3Log = new std::ofstream(params.resultPrefix+"_somatic_var.out");
+void SomaticVarCaller::writeSomaticVarCallingLog(const SomaticHaplotagParameters &params, const SomaticFilterParaemter &somaticParams, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+    std::ofstream *tagHP3Log = new std::ofstream(params.basic.resultPrefix+"_somatic_var.out");
 
     if(!tagHP3Log->is_open()){
-        std::cerr<< "Fail to open write file: " << params.resultPrefix+"_somatic_var.out" << "\n";
+        std::cerr<< "Fail to open write file: " << params.basic.resultPrefix+"_somatic_var.out" << "\n";
         exit(1);
     }
 
@@ -1525,23 +1527,23 @@ void SomaticVarCaller::writeSomaticVarCallingLog(const HaplotagParameters &param
     (*tagHP3Log) << "####################################\n"
                  << "#   Somatic Variants Calling Log   #\n"
                  << "####################################\n";
-    (*tagHP3Log) << "##normalSnpFile:"       << params.snpFile             << "\n"
+    (*tagHP3Log) << "##normalSnpFile:"       << params.basic.snpFile             << "\n"
                  << "##tumorSnpFile:"        << params.tumorSnpFile        << "\n" 
-                 << "##svFile:"              << params.svFile              << "\n"
-                 << "##bamFile:"             << params.bamFile             << "\n"
+                 << "##svFile:"              << params.basic.svFile              << "\n"
+                 << "##bamFile:"             << params.basic.bamFile             << "\n"
                  << "##tumorBamFile:"        << params.tumorBamFile        << "\n" 
-                 << "##resultPrefix:"        << params.resultPrefix        << "\n"
-                 << "##numThreads:"          << params.numThreads          << "\n"
-                 << "##region:"              << params.region              << "\n"
-                 << "##qualityThreshold:"    << params.qualityThreshold    << "\n"
-                 << "##percentageThreshold:" << params.percentageThreshold << "\n"
-                 << "##tagSupplementary:"    << params.tagSupplementary    << "\n"
+                 << "##resultPrefix:"        << params.basic.resultPrefix        << "\n"
+                 << "##numThreads:"          << params.basic.numThreads          << "\n"
+                 << "##region:"              << params.basic.region              << "\n"
+                 << "##qualityThreshold:"    << params.basic.qualityThreshold    << "\n"
+                 << "##percentageThreshold:" << params.basic.percentageThreshold << "\n"
+                 << "##tagSupplementary:"    << params.basic.tagSupplementary    << "\n"
                  << "##\n";
 
     //write filter parameter
     (*tagHP3Log) << "##======== Filter Parameters =========\n"
                  << "##Enable filter : " << somaticParams.applyFilter << "\n"
-                 << "##Calling mapping quality :" << params.qualityThreshold << "\n"
+                 << "##Calling mapping quality :" << params.basic.qualityThreshold << "\n"
                  << "##Tumor purity : " << somaticParams.tumorPurity << "\n"
                  << "##Normal VAF maximum threshold : " << somaticParams.norVAF_maxThr << "\n"
                  << "##Normal depth minimum threshold : " << somaticParams.norDepth_minThr << "\n"

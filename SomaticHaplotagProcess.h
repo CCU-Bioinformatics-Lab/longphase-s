@@ -10,25 +10,28 @@
 #include "HaplotagLogging.h"
 
 class SomaticHaplotagParamsMessage : public HaplotagParamsMessage{
+    private:
+        const SomaticHaplotagParameters& sParams;
     public:
-        SomaticHaplotagParamsMessage(const HaplotagParameters& params):HaplotagParamsMessage(params){}
+        SomaticHaplotagParamsMessage(const SomaticHaplotagParameters& sParams)
+        :HaplotagParamsMessage(sParams.basic),sParams(sParams){}
 
         virtual void addParamsMessage() override {
             addCommonParamsMessage();
-            insertAfterKey("tumor SNP file", params.tumorSnpFile, "phased SNP file");
-            insertAfterKey("input tumor bam file", params.tumorBamFile, "input bam file");
+            insertAfterKey("tumor SNP file", sParams.tumorSnpFile, "phased SNP file");
+            insertAfterKey("input tumor bam file", sParams.tumorBamFile, "input bam file");
             insertAfterKey("[haplotag params]"," ", "#1");
 
             insertAfterKey("\n[somatic calling params]"," ", "tag supplementary");
-            insertAfterKey("somatic calling mapping quality", params.qualityThreshold, "\n[somatic calling params]");
-            insertAfterKey("enable somatic variant filter", params.enableFilter, "somatic calling mapping quality");
-            insertAfterKey("predict tumor purity", params.predictTumorPurity, "enable somatic variant filter");
+            insertAfterKey("somatic calling mapping quality", sParams.basic.qualityThreshold, "\n[somatic calling params]");
+            insertAfterKey("enable somatic variant filter", sParams.enableFilter, "somatic calling mapping quality");
+            insertAfterKey("predict tumor purity", sParams.predictTumorPurity, "enable somatic variant filter");
 
             std::string tumorPurityStr;
-            if(params.predictTumorPurity){
+            if(sParams.predictTumorPurity){
                 tumorPurityStr = "none";
             }else{
-                tumorPurityStr = std::to_string(params.tumorPurity);
+                tumorPurityStr = std::to_string(sParams.tumorPurity);
             }
 
             insertAfterKey("tumor purity value", tumorPurityStr, "predict tumor purity");
@@ -40,17 +43,19 @@ class SomaticHaplotagParamsMessage : public HaplotagParamsMessage{
 
 // Tumor specific header
 class SomaticTagLog : public GermlineTagLog {
+    private:
+        const SomaticHaplotagParameters& sParams;
     public:
-        SomaticTagLog(const HaplotagParameters& params) : GermlineTagLog(params){}
+        SomaticTagLog(const SomaticHaplotagParameters& sParams) : GermlineTagLog(sParams.basic), sParams(sParams){}
         ~SomaticTagLog(){};
 
         void addBasicEntries() override {
             // add basic entries
             addCommonBasicEntries();
             // add tumor specific entries
-            insertAfterKey("tumorSnpFile", params.tumorSnpFile, "snpFile");
-            insertAfterKey("tumorBamFile", params.tumorBamFile, "bamFile");
-            insertAfterKey("somaticCallingThreshold", params.qualityThreshold, "region");
+            insertAfterKey("tumorSnpFile", sParams.tumorSnpFile, "snpFile");
+            insertAfterKey("tumorBamFile", sParams.tumorBamFile, "bamFile");
+            insertAfterKey("somaticCallingThreshold", sParams.basic.qualityThreshold, "region");
         }
 
         void writeBasicColumns() override {
@@ -162,6 +167,7 @@ class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
         SomaticReadBenchmark& somaticBenchmark;
         ReadHpDistriLog& hpBeforeInheritance;
         ReadHpDistriLog& hpAfterInheritance;
+        const SomaticHaplotagParameters& sParams;
     protected:
         std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) override {
             return std::unique_ptr<ChromosomeProcessor>(new SomaticHaplotagChrProcessor(
@@ -177,8 +183,8 @@ class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
         };
 
         // create somatic tag read log
-        virtual GermlineTagLog* createTagReadLog(const HaplotagParameters& params) override {
-            return new SomaticTagLog(params);
+        virtual GermlineTagLog* createTagReadLog() override {
+            return new SomaticTagLog(sParams);
         }
 
     public:
@@ -189,15 +195,18 @@ class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
             ReadStatistics& readStats,
             SomaticReadBenchmark& highConSomaticData,
             ReadHpDistriLog& hpBeforeInheritance,
-            ReadHpDistriLog& hpAfterInheritance
+            ReadHpDistriLog& hpAfterInheritance,
+            const SomaticHaplotagParameters& sParams
         );
         ~SomaticHaplotagBamParser() override;
 };
 
 class SomaticHaplotagProcess: public HaplotagProcess, public SomaticJudgeBase{
+    private:
+        SomaticHaplotagParameters& sParams;
     protected:
 
-        SomaticHaplotagParamsMessage somaticParamsMessage;
+        SomaticHaplotagParamsMessage sParamsMessage;
 
         ReadHpDistriLog *hpBeforeInheritance;
         ReadHpDistriLog *hpAfterInheritance;
@@ -218,7 +227,7 @@ class SomaticHaplotagProcess: public HaplotagProcess, public SomaticJudgeBase{
             bool mappingQualityFilter,
             ReadStatistics& readStats
         ) override{
-            return new SomaticHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats, somaticBenchmark, *hpBeforeInheritance, *hpAfterInheritance);
+            return new SomaticHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats, somaticBenchmark, *hpBeforeInheritance, *hpAfterInheritance, sParams);
         }
 
         virtual std::string getNormalSnpParsingMessage() override{
@@ -230,7 +239,7 @@ class SomaticHaplotagProcess: public HaplotagProcess, public SomaticJudgeBase{
         };
 
     public:
-        SomaticHaplotagProcess(HaplotagParameters &params);
+        SomaticHaplotagProcess(SomaticHaplotagParameters &params);
         ~SomaticHaplotagProcess() override;
 
         virtual void taggingProcess() override;

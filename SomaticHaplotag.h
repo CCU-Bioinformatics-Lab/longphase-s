@@ -9,17 +9,18 @@ template<>
 struct ParamsHandler<SomaticHaplotagParameters>{
     static void initialize(SomaticHaplotagParameters& params) {
 
-        ParamsHandler<HaplotagParameters>::initialize(params.baseParams);
+        ParamsHandler<HaplotagParameters>::initialize(params.basic);
 
         params.tumorPurity = 0.2;
-        params.predictTumorPurity = false;
+        params.tumorPurity = 0.2;
+        params.enableFilter = true;
+        params.predictTumorPurity = true;
         params.onlyPredictTumorPurity = false;
-        params.enableFilter = false;
     }
 
     static bool loadArgument(SomaticHaplotagParameters& params, char& opt, std::istringstream& arg) {
         // load base haplotag options
-        bool isLoaded = ParamsHandler<HaplotagParameters>::loadArgument(params.baseParams, opt, arg);
+        bool isLoaded = ParamsHandler<HaplotagParameters>::loadArgument(params.basic, opt, arg);
         
         if(!isLoaded){
             //reset isLoaded
@@ -42,12 +43,43 @@ struct ParamsHandler<SomaticHaplotagParameters>{
         }
         return isLoaded;
     }
+
+    static bool validateFiles(SomaticHaplotagParameters& params, const std::string& programName) {
+        // validate base haplotag files
+        bool isValid = ParamsHandler<HaplotagParameters>::validateFiles(params.basic, programName);
+        // validate somatic haplotag files
+        isValid &= FileValidator::validateRequiredFile(params.tumorSnpFile, "tumor SNP file", programName);
+        isValid &= FileValidator::validateRequiredFile(params.tumorBamFile, "tumor BAM file", programName);
+        isValid &= FileValidator::validateOptionalFile(params.benchmarkVcf, "benchmark VCF file", programName);
+        isValid &= FileValidator::validateOptionalFile(params.benchmarkBedFile, "benchmark BED file", programName);
+        return isValid;
+    }
+
+    static bool validateNumericParameter(SomaticHaplotagParameters& params, const std::string& programName) {
+        bool isValid = ParamsHandler<HaplotagParameters>::validateNumericParameter(params.basic, programName);
+    
+        if (params.tumorPurity < 0.1 || params.tumorPurity > 1.0) {
+            std::cerr << "[ERROR] " << programName << ": invalid tumor purity. value: " 
+                    << params.tumorPurity 
+                    << "\nthis value need: 0.1~1.0, --tumor-purity=Number\n";
+            isValid = false;
+        }
+        
+        return isValid;  
+    }
+
+    static void recordCommand(SomaticHaplotagParameters& params, int argc, char** argv) {
+        for(int i = 0; i < argc; ++i){
+            params.basic.command.append(argv[i]);
+            params.basic.command.append(" ");
+        }
+    }
 };
 
 struct SomaticHaplotagParamHandler {
     static void initialize(SomaticHaplotagParameters& params) {
 
-        HaplotagParamHandler::initialize(params.baseParams);
+        HaplotagParamHandler::initialize(params.basic);
 
         params.tumorPurity = 0.2;
         params.predictTumorPurity = false;
@@ -57,7 +89,7 @@ struct SomaticHaplotagParamHandler {
 
     static bool loadArgument(SomaticHaplotagParameters& params, char& opt, std::istringstream& arg) {
         // load base haplotag options
-        bool isLoaded = HaplotagParamHandler::loadArgument(params.baseParams, opt, arg);
+        bool isLoaded = HaplotagParamHandler::loadArgument(params.basic, opt, arg);
         
         if(!isLoaded){
             //reset isLoaded
@@ -92,6 +124,7 @@ class SomaticHaplotagHelpManager : public HaplotagHelpManager {
 };
 
 class SomaticHaplotagArgumentManager : public HaplotagArgumentManager {
+    SomaticHaplotagParameters ecParams;
     protected:
         virtual HelpMessageManager* createHelpManager(const std::string& program) override {
             return new SomaticHaplotagHelpManager(program);
@@ -108,6 +141,7 @@ class SomaticHaplotagArgumentManager : public HaplotagArgumentManager {
         SomaticHaplotagArgumentManager(const std::string& program) : HaplotagArgumentManager(program) {}
         virtual void setOptions() override;
         virtual ~SomaticHaplotagArgumentManager() = default;
+        SomaticHaplotagParameters& getParams() { return ecParams; }
 };
 
 

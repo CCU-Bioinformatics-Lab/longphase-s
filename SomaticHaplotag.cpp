@@ -37,64 +37,72 @@ void SomaticHaplotagArgumentManager::setOptions() {
 }
 
 bool SomaticHaplotagArgumentManager::validateFiles() {
-    // validate base haplotag files
-    bool isValid = HaplotagArgumentManager::validateFiles();
-    // validate somatic haplotag files
-    isValid &= validateRequiredFile(ecParams.tumorSnpFile, "tumor SNP file");
-    isValid &= validateRequiredFile(ecParams.tumorBamFile, "tumor BAM file");
-    isValid &= validateOptionalFile(ecParams.benchmarkVcf, "benchmark VCF file");
-    isValid &= validateOptionalFile(ecParams.benchmarkBedFile, "benchmark BED file");
-    return isValid;
+    
+    return ParamsHandler<SomaticHaplotagParameters>::validateFiles(ecParams, programName);
+
+    // // validate base haplotag files
+    // bool isValid = HaplotagArgumentManager::validateFiles();
+    // // validate somatic haplotag files
+    // isValid &= validateRequiredFile(ecParams.tumorSnpFile, "tumor SNP file");
+    // isValid &= validateRequiredFile(ecParams.tumorBamFile, "tumor BAM file");
+    // isValid &= validateOptionalFile(ecParams.benchmarkVcf, "benchmark VCF file");
+    // isValid &= validateOptionalFile(ecParams.benchmarkBedFile, "benchmark BED file");
+    // return isValid;
 }
 
 void SomaticHaplotagArgumentManager::initializeDefaultValues() {
-    HaplotagArgumentManager::initializeDefaultValues();
 
-    ecParams.tumorPurity = 0.2;
-    ecParams.enableFilter = true;
-    ecParams.predictTumorPurity = true;
+    ParamsHandler<SomaticHaplotagParameters>::initialize(ecParams);
+
+    // HaplotagArgumentManager::initializeDefaultValues();
+
+    // ecParams.tumorPurity = 0.2;
+    // ecParams.enableFilter = true;
+    // ecParams.predictTumorPurity = true;
 }
 
 bool SomaticHaplotagArgumentManager::loadArgument(char& opt, std::istringstream& arg) {
     // return SomaticHaplotagParamHandler::load(ecParams, opt, arg);
-    // return SomaticHaplotagParamHandler::load(ecParams, opt, arg);
+    return ParamsHandler<SomaticHaplotagParameters>::loadArgument(ecParams, opt, arg);
     // load base haplotag options
-    bool isLoaded = HaplotagArgumentManager::loadArgument(opt, arg);
+    // bool isLoaded = HaplotagArgumentManager::loadArgument(opt, arg);
     
-    if(!isLoaded){
-        //reset isLoaded
-        isLoaded = true;
-        //load somatic haplotag options
-        switch (opt)
-        {
-            case HaplotagOption::TUM_SNP: arg >> ecParams.tumorSnpFile; break;
-            case HaplotagOption::TUM_BAM: arg >> ecParams.tumorBamFile; break;
-            case HaplotagOption::BENCHMARK_VCF: arg >> ecParams.benchmarkVcf; break;
-            case HaplotagOption::BENCHMARK_BED: arg >> ecParams.benchmarkBedFile; break;
-            case HaplotagOption::DISABLE_FILTER: ecParams.enableFilter = false; break;
-            case HaplotagOption::TUMOR_PURITY: 
-                arg >> ecParams.tumorPurity; 
-                ecParams.predictTumorPurity = false;
-                break;
-            default: isLoaded = false; 
-            break;
-        }
-    }
-    return isLoaded;
+    // if(!isLoaded){
+    //     //reset isLoaded
+    //     isLoaded = true;
+    //     //load somatic haplotag options
+    //     switch (opt)
+    //     {
+    //         case HaplotagOption::TUM_SNP: arg >> ecParams.tumorSnpFile; break;
+    //         case HaplotagOption::TUM_BAM: arg >> ecParams.tumorBamFile; break;
+    //         case HaplotagOption::BENCHMARK_VCF: arg >> ecParams.benchmarkVcf; break;
+    //         case HaplotagOption::BENCHMARK_BED: arg >> ecParams.benchmarkBedFile; break;
+    //         case HaplotagOption::DISABLE_FILTER: ecParams.enableFilter = false; break;
+    //         case HaplotagOption::TUMOR_PURITY: 
+    //             arg >> ecParams.tumorPurity; 
+    //             ecParams.predictTumorPurity = false;
+    //             break;
+    //         default: isLoaded = false; 
+    //         break;
+    //     }
+    // }
+    // return isLoaded;
 }
 
 bool SomaticHaplotagArgumentManager::validateNumericParameter() {
     
-    bool isValid = HaplotagArgumentManager::validateNumericParameter();
+    return ParamsHandler<SomaticHaplotagParameters>::validateNumericParameter(ecParams, programName);
+
+    // bool isValid = HaplotagArgumentManager::validateNumericParameter();
     
-    if (ecParams.tumorPurity < 0.1 || ecParams.tumorPurity > 1.0) {
-        std::cerr << "[ERROR] " << programName << ": invalid tumor purity. value: " 
-                << ecParams.tumorPurity 
-                << "\nthis value need: 0.1~1.0, --tumor-purity=Number\n";
-        isValid = false;
-    }
+    // if (ecParams.tumorPurity < 0.1 || ecParams.tumorPurity > 1.0) {
+    //     std::cerr << "[ERROR] " << programName << ": invalid tumor purity. value: " 
+    //             << ecParams.tumorPurity 
+    //             << "\nthis value need: 0.1~1.0, --tumor-purity=Number\n";
+    //     isValid = false;
+    // }
     
-    return isValid;
+    // return isValid;
 }
 int SomaticHaplotagMain(int argc, char** argv, std::string in_version){
     
@@ -106,7 +114,7 @@ int SomaticHaplotagMain(int argc, char** argv, std::string in_version){
     optionManager.parseOptions(argc, argv);
     optionManager.setVersion(in_version);
 
-    HaplotagParameters ecParams = optionManager.getParams();
+    SomaticHaplotagParameters ecParams = optionManager.getParams();
     
     SomaticHaplotagProcess processor(ecParams);
     processor.taggingProcess();

@@ -36,7 +36,7 @@ void HaplotagProcess::taggingProcess()
     // update chromosome processing based on region
     setProcessingChromRegion();
     // tag read
-    tagRead(params, tagGeneType);
+    tagRead(params,params.bamFile, tagGeneType);
     // postprocess after haplotag
     postprocessForHaplotag();
 
@@ -106,21 +106,12 @@ void HaplotagProcess::setProcessingChromRegion(){
 }
 
 
-void HaplotagProcess::tagRead(HaplotagParameters &params, const Genome& geneType){
+void HaplotagProcess::tagRead(HaplotagParameters &params, std::string& tagBamFile, const Genome& geneType){
 
-    // input file management
-    std::string openBamFile = params.bamFile;
-
-    if(geneType == Genome::TUMOR){
-        openBamFile = params.tumorBamFile;
-    }else if(geneType == Genome::NORMAL){
-        openBamFile = params.bamFile;
-    }
-
-    ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;
-    bool writeOutputBam = false;
-    // ParsingBamMode mode = ParsingBamMode::SINGLE_THREAD;
-    // bool writeOutputBam = true;
+    // ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;
+    // bool writeOutputBam = false;
+    ParsingBamMode mode = ParsingBamMode::SINGLE_THREAD;
+    bool writeOutputBam = true;
     bool mappingQualityFilter = true;
 
     // tag read
@@ -128,8 +119,8 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, const Genome& geneType
     std::cerr<< getTagReadStartMessage();
 
     GermlineHaplotagBamParser* haplotagBamParser = createHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats);
-    haplotagBamParser->createTagLog(params);
-    haplotagBamParser->parsingBam(openBamFile, params, *chrVec, *chrLength, *mergedChrVarinat, vcfSet, geneType);
+    haplotagBamParser->createTagLog();
+    haplotagBamParser->parsingBam(tagBamFile, params, *chrVec, *chrLength, *mergedChrVarinat, vcfSet, geneType);
     delete haplotagBamParser;
 
     std::cerr<< "tag read " << difftime(time(NULL), begin) << "s\n";
@@ -209,16 +200,17 @@ GermlineHaplotagBamParser::GermlineHaplotagBamParser(
     ParsingBamMode mode,
     bool writeOutputBam,
     bool mappingQualityFilter,
-    ReadStatistics& readStats
+    ReadStatistics& readStats,
+    const HaplotagParameters& params
 ):HaplotagBamParser(mode, writeOutputBam, mappingQualityFilter),
-    readStats(readStats), tagResult(nullptr)
+    params(params), readStats(readStats), tagResult(nullptr)
 {}
 
-void GermlineHaplotagBamParser::createTagLog(const HaplotagParameters& params){
+void GermlineHaplotagBamParser::createTagLog(){
     // Read log can only be written in single thread mode, which is enforced when writeOutputBam is true.
     // This is because log writing requires sequential processing of reads.
     if(params.writeReadLog && writeOutputBam){
-        tagResult = createTagReadLog(params);
+        tagResult = createTagReadLog();
         tagResult->writeHeader();
     }
 }

@@ -259,6 +259,8 @@ class ExtractTumDataBamParser : public HaplotagBamParser{
 
 class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
     private:
+        const SomaticHaplotagParameters& params;
+
         // somatic calling filter params
         SomaticFilterParaemter somaticParams;
 
@@ -301,7 +303,7 @@ class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
             chrReadHpResult &localReadHpDistri
         );
         
-        void writeSomaticVarCallingLog(const HaplotagParameters &params, const SomaticFilterParaemter &somaticParams, const std::vector<std::string> &chrVec
+        void writeSomaticVarCallingLog(const SomaticHaplotagParameters &params, const SomaticFilterParaemter &somaticParams, const std::vector<std::string> &chrVec
                                      , std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         void writeOtherSomaticHpLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         void writeDenseTumorSnpIntervalLog(const std::string logFileName, const std::vector<std::string> &chrVec);
@@ -330,11 +332,11 @@ class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
             std::vector<int> *readPosHP3
         ){};
     public:
-        SomaticVarCaller(const std::vector<std::string> &chrVec, const HaplotagParameters &params);
+        SomaticVarCaller(const std::vector<std::string> &chrVec, const SomaticHaplotagParameters &params);
         virtual ~SomaticVarCaller();
 
         void variantCalling(
-            const HaplotagParameters &params,
+            const SomaticHaplotagParameters &params,
             const std::vector<std::string> &chrVec,
             const std::map<std::string, int> &chrLength,
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
