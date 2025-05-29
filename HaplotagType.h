@@ -8,6 +8,23 @@
 #include <omp.h>
 #include <climits>
 
+// Option identifiers enum
+enum HaplotagOption {
+    OPT_HELP = 1,
+    TAG_SUP,
+    SV_FILE,
+    REGION,
+    LOG,
+    MOD_FILE,
+    CRAM,
+    TUM_SNP,
+    TUM_BAM,
+    BENCHMARK_VCF,
+    BENCHMARK_BED,
+    DISABLE_FILTER,
+    TUMOR_PURITY
+};
+
 struct HaplotagParameters
 {
     int numThreads;

@@ -55,9 +55,11 @@ void SomaticHaplotagArgumentManager::initializeDefaultValues() {
     ecParams.predictTumorPurity = true;
 }
 
-bool SomaticHaplotagArgumentManager::loadOptions(char& opt, std::istringstream& arg) {
+bool SomaticHaplotagArgumentManager::loadArgument(char& opt, std::istringstream& arg) {
+    // return SomaticHaplotagParamHandler::load(ecParams, opt, arg);
+    // return SomaticHaplotagParamHandler::load(ecParams, opt, arg);
     // load base haplotag options
-    bool isLoaded = HaplotagArgumentManager::loadOptions(opt, arg);
+    bool isLoaded = HaplotagArgumentManager::loadArgument(opt, arg);
     
     if(!isLoaded){
         //reset isLoaded

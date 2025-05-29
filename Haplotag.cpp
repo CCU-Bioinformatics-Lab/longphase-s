@@ -37,13 +37,13 @@ void HaplotagHelpManager::buildMessage() {
 HaplotagArgumentManager::HaplotagArgumentManager(const std::string& program) : ArgumentManager(program) {
 }
 
-void HaplotagArgumentManager::setHelpMessage() {
-    helpManager = createHelpManager(programName);
-    helpManager->buildMessage();
-}
+// void HaplotagArgumentManager::setHelpMessage() {
+    // helpManager = createHelpManager(programName);
+    // helpManager->buildMessage();
+// }
 
 HaplotagArgumentManager::~HaplotagArgumentManager() {
-   if(helpManager) delete helpManager;
+//    if(helpManager) delete helpManager;
 }
 
 
@@ -77,132 +77,143 @@ void HaplotagArgumentManager::setOptions() {
 
 void HaplotagArgumentManager::initializeDefaultValues() {
     // Initialize default values
-    ecParams.numThreads = 1;
-    ecParams.qualityThreshold = 1;
-    ecParams.percentageThreshold = 0.6;
-    ecParams.resultPrefix = "result";
-    ecParams.outputFormat = "bam";
-    ecParams.tagSupplementary = false;
-    ecParams.writeReadLog = false;
-    ecParams.command = "longphase ";
+    // ecParams.numThreads = 1;
+    // ecParams.qualityThreshold = 1;
+    // ecParams.percentageThreshold = 0.6;
+    // ecParams.resultPrefix = "result";
+    // ecParams.outputFormat = "bam";
+    // ecParams.tagSupplementary = false;
+    // ecParams.writeReadLog = false;
+    // ecParams.command = "longphase ";
+    // DefaultValueInitializer<HaplotagParameters>::initialize(ecParams);
+    // HaplotagParamHandler::initialize(ecParams);
+    ParamsHandler<HaplotagParameters>::initialize(ecParams);
 }
 
-void HaplotagArgumentManager::parseOptions(int argc, char** argv)
-{
+// void HaplotagArgumentManager::parseOptions(int argc, char** argv)
+// {
+    
+//     // Initialize default values
+//     initializeDefaultValues();
 
-    // Initialize default values
-    initializeDefaultValues();
+//     optind = 1;    // Reset getopt
 
-    optind = 1;    // Reset getopt
+//     bool die = false;
+//     for (char c; (c = getopt_long(argc, argv, getShortOpts(), getLongOpts(), NULL)) != -1;)
+//     {
+//         std::istringstream arg(optarg != NULL ? optarg : "");
 
-    bool die = false;
-    for (char c; (c = getopt_long(argc, argv, getShortOpts(), getLongOpts(), NULL)) != -1;)
-    {
-        std::istringstream arg(optarg != NULL ? optarg : "");
-
-        if(loadOptions(c, arg)){
-            continue;
-        }
+//         if(loadArgument(c, arg)){
+//             continue;
+//         }
         
-        if(c == HaplotagOption::OPT_HELP){
-            helpManager->printHelp();
-            exit(EXIT_SUCCESS);
-        }else{
-            die = true;
-        }
-    }
+//         if(c == getHelpEnumNum()){
+//             if(helpManager) helpManager->printHelp();
+//             exit(EXIT_SUCCESS);
+//         }else{
+//             die = true;
+//         }
+//     }
 
-    // Build command string
-    recordCommand(argc, argv);
+//     // Build command string
+//     recordCommand(argc, argv);
 
-    // Validate arguments
-    if (argc - optind < 0) {
-        std::cerr << "[ERROR] " << programName << ": missing arguments\n";
-        die = true;
-    }
+//     // Validate arguments
+//     if (argc - optind < 0) {
+//         std::cerr << "[ERROR] " << programName << ": missing arguments\n";
+//         die = true;
+//     }
     
-    // Validate all input files
-    if (!validateFiles()) {
-        die = true;
-    }
+//     // Validate all input files
+//     if (!validateFiles()) {
+//         die = true;
+//     }
     
-    // Validate numeric parameters
-    if (!validateNumericParameter()) {
-        die = true;
-    }
+//     // Validate numeric parameters
+//     if (!validateNumericParameter()) {
+//         die = true;
+//     }
     
-    if (die)
-    {
-        std::cerr << "\n";
-        helpManager->printHelp();
-        exit(EXIT_FAILURE);
-    } 
-}
+//     if (die)
+//     {
+//         std::cerr << "\n";
+//         if(helpManager) helpManager->printHelp();
+//         exit(EXIT_FAILURE);
+//     } 
+// }
 
-bool HaplotagArgumentManager::loadOptions(char& opt, std::istringstream& arg) {
-    bool isLoaded = true;
-    switch (opt)
-    {
-        case 's': arg >> ecParams.snpFile; break;
-        case 't': arg >> ecParams.numThreads; break;
-        case 'b': arg >> ecParams.bamFile; break;
-        case 'r': arg >> ecParams.fastaFile; break; 
-        case 'o': arg >> ecParams.resultPrefix; break;
-        case 'q': arg >> ecParams.qualityThreshold; break;
-        case 'p': arg >> ecParams.percentageThreshold; break;
-        case HaplotagOption::SV_FILE:  arg >> ecParams.svFile; break;
-        case HaplotagOption::MOD_FILE: arg >> ecParams.modFile; break;     
-        case HaplotagOption::TAG_SUP:  ecParams.tagSupplementary = true; break;
-        case HaplotagOption::REGION:   arg >> ecParams.region; break;        
-        case HaplotagOption::CRAM:     ecParams.outputFormat = "cram"; break;
-        case HaplotagOption::LOG:      ecParams.writeReadLog = true; break;
-        default: isLoaded = false; break;
-    }
-    return isLoaded;
+bool HaplotagArgumentManager::loadArgument(char& opt, std::istringstream& arg) {
+    // return HaplotagParamHandler::loadArgument(ecParams, opt, arg);
+    return ParamsHandler<HaplotagParameters>::loadArgument(ecParams, opt, arg);
+    // bool isLoaded = true;
+    // switch (opt)
+    // {
+    //     case 's': arg >> ecParams.snpFile; break;
+    //     case 't': arg >> ecParams.numThreads; break;
+    //     case 'b': arg >> ecParams.bamFile; break;
+    //     case 'r': arg >> ecParams.fastaFile; break; 
+    //     case 'o': arg >> ecParams.resultPrefix; break;
+    //     case 'q': arg >> ecParams.qualityThreshold; break;
+    //     case 'p': arg >> ecParams.percentageThreshold; break;
+    //     case HaplotagOption::SV_FILE:  arg >> ecParams.svFile; break;
+    //     case HaplotagOption::MOD_FILE: arg >> ecParams.modFile; break;     
+    //     case HaplotagOption::TAG_SUP:  ecParams.tagSupplementary = true; break;
+    //     case HaplotagOption::REGION:   arg >> ecParams.region; break;        
+    //     case HaplotagOption::CRAM:     ecParams.outputFormat = "cram"; break;
+    //     case HaplotagOption::LOG:      ecParams.writeReadLog = true; break;
+    //     default: isLoaded = false; break;
+    // }
+    // return isLoaded;
 }
 
 void HaplotagArgumentManager::recordCommand(int argc, char** argv) {
-    for(int i = 0; i < argc; ++i){
-        ecParams.command.append(argv[i]);
-        ecParams.command.append(" ");
-    }
+    // HaplotagParamHandler::recordCommand(ecParams, argc, argv);
+    ParamsHandler<HaplotagParameters>::recordCommand(ecParams, argc, argv);
+    // for(int i = 0; i < argc; ++i){
+    //     ecParams.command.append(argv[i]);
+    //     ecParams.command.append(" ");
+    // }
 }
 
 
 bool HaplotagArgumentManager::validateFiles() {
-    bool isValid = true;
+    // bool isValid = true;
     
-    // Required files
-    isValid &= validateRequiredFile(ecParams.snpFile, "SNP file");
-    isValid &= validateRequiredFile(ecParams.bamFile, "BAM file");
-    isValid &= validateRequiredFile(ecParams.fastaFile, "reference file");
+    // // Required files
+    // isValid &= validateRequiredFile(ecParams.snpFile, "SNP file");
+    // isValid &= validateRequiredFile(ecParams.bamFile, "BAM file");
+    // isValid &= validateRequiredFile(ecParams.fastaFile, "reference file");
     
-    // Optional files
-    isValid &= validateOptionalFile(ecParams.svFile, "SV file");
-    isValid &= validateOptionalFile(ecParams.modFile, "MOD file");
+    // // Optional files
+    // isValid &= validateOptionalFile(ecParams.svFile, "SV file");
+    // isValid &= validateOptionalFile(ecParams.modFile, "MOD file");
     
-    return isValid;
+    // return isValid;
+    // return HaplotagParamHandler::validateFiles(ecParams, programName);
+    return ParamsHandler<HaplotagParameters>::validateFiles(ecParams, programName);
 }
 
 
 bool HaplotagArgumentManager::validateNumericParameter() {
-    bool isValid = true;
+    // return HaplotagParamHandler::validateNumericParameter(ecParams, programName);
+    return ParamsHandler<HaplotagParameters>::validateNumericParameter(ecParams, programName);
+    // bool isValid = true;
     
-    if (ecParams.numThreads < 1) {
-        std::cerr << "[ERROR] " << programName << ": invalid threads. value: " 
-                << ecParams.numThreads 
-                << "\nplease check -t, --threads=Num\n";
-        isValid = false;
-    }
+    // if (ecParams.numThreads < 1) {
+    //     std::cerr << "[ERROR] " << programName << ": invalid threads. value: " 
+    //             << ecParams.numThreads 
+    //             << "\nplease check -t, --threads=Num\n";
+    //     isValid = false;
+    // }
     
-    if (ecParams.percentageThreshold > 1 || ecParams.percentageThreshold < 0) {
-        std::cerr << "[ERROR] " << programName << ": invalid percentage threshold. value: " 
-                << ecParams.percentageThreshold
-                << "\nthis value need: 0~1, please check -p, --percentageThreshold=Num\n";
-        isValid = false;
-    }
+    // if (ecParams.percentageThreshold > 1 || ecParams.percentageThreshold < 0) {
+    //     std::cerr << "[ERROR] " << programName << ": invalid percentage threshold. value: " 
+    //             << ecParams.percentageThreshold
+    //             << "\nthis value need: 0~1, please check -p, --percentageThreshold=Num\n";
+    //     isValid = false;
+    // }
 
-    return isValid;
+    // return isValid;
 }
 
 
