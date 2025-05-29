@@ -43,6 +43,22 @@ struct HaplotagParameters
 
 };
 
+struct SomaticHaplotagParameters
+{
+    HaplotagParameters baseParams;
+    // Somatic haplotag parameters
+    std::string tumorSnpFile;   
+    std::string tumorBamFile;  
+    std::string benchmarkVcf;
+    std::string benchmarkBedFile;
+    
+    double tumorPurity;
+    bool predictTumorPurity;
+    bool onlyPredictTumorPurity;
+
+    bool enableFilter;
+};
+
 enum Genome
 {
     NORMAL = 0,

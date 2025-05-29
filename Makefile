@@ -25,6 +25,7 @@ OBJ = Haplotag.o \
 	  HaplotagParsingBam.o \
 	  HaplotagVcfParser.o \
 	  HaplotagLogging.o \
+	  ArgumentManager.o \
 	  main.o 
 
 PROGRAMS = longphase

@@ -14,7 +14,7 @@ class SomaticHaplotagHelpManager : public HaplotagHelpManager {
     
 };
 
-class SomaticHaplotagOptionManager : public HaplotagOptionManager {
+class SomaticHaplotagArgumentManager : public HaplotagArgumentManager {
     protected:
         virtual HelpMessageManager* createHelpManager(const std::string& program) override {
             return new SomaticHaplotagHelpManager(program);
@@ -28,9 +28,9 @@ class SomaticHaplotagOptionManager : public HaplotagOptionManager {
         virtual bool validateNumericParameter() override;
 
     public:
-        SomaticHaplotagOptionManager(const std::string& program) : HaplotagOptionManager(program) {}
+        SomaticHaplotagArgumentManager(const std::string& program) : HaplotagArgumentManager(program) {}
         virtual void setOptions() override;
-        virtual ~SomaticHaplotagOptionManager() = default;
+        virtual ~SomaticHaplotagArgumentManager() = default;
 };
 
 

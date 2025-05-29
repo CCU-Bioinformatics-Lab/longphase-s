@@ -34,20 +34,20 @@ void HaplotagHelpManager::buildMessage() {
     addItem("      --log                           an additional log file records the result of each read. default:false");
 }
 
-HaplotagOptionManager::HaplotagOptionManager(const std::string& program) : OptionManager(program) {
+HaplotagArgumentManager::HaplotagArgumentManager(const std::string& program) : ArgumentManager(program) {
 }
 
-void HaplotagOptionManager::setHelpMessage() {
+void HaplotagArgumentManager::setHelpMessage() {
     helpManager = createHelpManager(programName);
     helpManager->buildMessage();
 }
 
-HaplotagOptionManager::~HaplotagOptionManager() {
+HaplotagArgumentManager::~HaplotagArgumentManager() {
    if(helpManager) delete helpManager;
 }
 
 
-void HaplotagOptionManager::setOptions() {
+void HaplotagArgumentManager::setOptions() {
     // Initialize short options string
     shortOpts = "s:b:o:t:q:p:r:";
 
@@ -75,7 +75,7 @@ void HaplotagOptionManager::setOptions() {
     addOption({NULL, 0, NULL, 0});
 }
 
-void HaplotagOptionManager::initializeDefaultValues() {
+void HaplotagArgumentManager::initializeDefaultValues() {
     // Initialize default values
     ecParams.numThreads = 1;
     ecParams.qualityThreshold = 1;
@@ -87,7 +87,7 @@ void HaplotagOptionManager::initializeDefaultValues() {
     ecParams.command = "longphase ";
 }
 
-void HaplotagOptionManager::parseOptions(int argc, char** argv)
+void HaplotagArgumentManager::parseOptions(int argc, char** argv)
 {
 
     // Initialize default values
@@ -139,7 +139,7 @@ void HaplotagOptionManager::parseOptions(int argc, char** argv)
     } 
 }
 
-bool HaplotagOptionManager::loadOptions(char& opt, std::istringstream& arg) {
+bool HaplotagArgumentManager::loadOptions(char& opt, std::istringstream& arg) {
     bool isLoaded = true;
     switch (opt)
     {
@@ -161,7 +161,7 @@ bool HaplotagOptionManager::loadOptions(char& opt, std::istringstream& arg) {
     return isLoaded;
 }
 
-void HaplotagOptionManager::recordCommand(int argc, char** argv) {
+void HaplotagArgumentManager::recordCommand(int argc, char** argv) {
     for(int i = 0; i < argc; ++i){
         ecParams.command.append(argv[i]);
         ecParams.command.append(" ");
@@ -169,7 +169,7 @@ void HaplotagOptionManager::recordCommand(int argc, char** argv) {
 }
 
 
-bool HaplotagOptionManager::validateFiles() {
+bool HaplotagArgumentManager::validateFiles() {
     bool isValid = true;
     
     // Required files
@@ -185,7 +185,7 @@ bool HaplotagOptionManager::validateFiles() {
 }
 
 
-bool HaplotagOptionManager::validateNumericParameter() {
+bool HaplotagArgumentManager::validateNumericParameter() {
     bool isValid = true;
     
     if (ecParams.numThreads < 1) {
@@ -206,41 +206,9 @@ bool HaplotagOptionManager::validateNumericParameter() {
 }
 
 
-// Validate if a required file exists
-bool OptionManager::validateRequiredFile(const std::string& filePath, const std::string& fileDescription) {
-    if(filePath.empty()) {
-        std::cerr << "[ERROR] " << programName  << ": missing " << fileDescription << ".\n";
-
-        return false;
-    }
-    
-    std::ifstream openFile(filePath.c_str());
-    if(!openFile.is_open()) {
-        std::cerr << "[ERROR] " << programName  << ": " << fileDescription << ": " << filePath << " not exist.\n\n";
-        return false;
-    }
-    return true;
-}
-
-// Validate if an optional file exists (if specified)
-bool OptionManager::validateOptionalFile(const std::string& filePath, const std::string& fileDescription) {
-    if(filePath.empty()) {
-        // Optional file not specified, that's OK
-        return true;  
-    }
-    
-    std::ifstream openFile(filePath.c_str());
-    if(!openFile.is_open()) {
-        std::cerr << "[ERROR] " << programName << ": " << fileDescription << ": " << filePath << " not exist.\n\n";
-        return false;
-    }
-    return true;
-}
-
-
 int HaplotagMain(int argc, char** argv, std::string in_version)
 {
-    HaplotagOptionManager optionManager(SUBPROGRAM);
+    HaplotagArgumentManager optionManager(SUBPROGRAM);
 
     optionManager.setOptions();
     optionManager.setHelpMessage();

@@ -23,9 +23,9 @@ void SomaticHaplotagHelpManager::buildMessage() {
     addItem("      --tumor-purity=Num              tumor purity value (0.1~1.0) used to adjust somatic variant calling sensitivity and specificity");
 }
 
-void SomaticHaplotagOptionManager::setOptions() {
+void SomaticHaplotagArgumentManager::setOptions() {
     // base haplotag options
-    HaplotagOptionManager::setOptions();
+    HaplotagArgumentManager::setOptions();
 
     // somatic haplotag-specific options
     addOption({"tumor-snp-file", required_argument, NULL, TUM_SNP});
@@ -36,9 +36,9 @@ void SomaticHaplotagOptionManager::setOptions() {
     addOption({"tumor-purity", required_argument, NULL, TUMOR_PURITY});
 }
 
-bool SomaticHaplotagOptionManager::validateFiles() {
+bool SomaticHaplotagArgumentManager::validateFiles() {
     // validate base haplotag files
-    bool isValid = HaplotagOptionManager::validateFiles();
+    bool isValid = HaplotagArgumentManager::validateFiles();
     // validate somatic haplotag files
     isValid &= validateRequiredFile(ecParams.tumorSnpFile, "tumor SNP file");
     isValid &= validateRequiredFile(ecParams.tumorBamFile, "tumor BAM file");
@@ -47,17 +47,17 @@ bool SomaticHaplotagOptionManager::validateFiles() {
     return isValid;
 }
 
-void SomaticHaplotagOptionManager::initializeDefaultValues() {
-    HaplotagOptionManager::initializeDefaultValues();
+void SomaticHaplotagArgumentManager::initializeDefaultValues() {
+    HaplotagArgumentManager::initializeDefaultValues();
 
     ecParams.tumorPurity = 0.2;
     ecParams.enableFilter = true;
     ecParams.predictTumorPurity = true;
 }
 
-bool SomaticHaplotagOptionManager::loadOptions(char& opt, std::istringstream& arg) {
+bool SomaticHaplotagArgumentManager::loadOptions(char& opt, std::istringstream& arg) {
     // load base haplotag options
-    bool isLoaded = HaplotagOptionManager::loadOptions(opt, arg);
+    bool isLoaded = HaplotagArgumentManager::loadOptions(opt, arg);
     
     if(!isLoaded){
         //reset isLoaded
@@ -81,9 +81,9 @@ bool SomaticHaplotagOptionManager::loadOptions(char& opt, std::istringstream& ar
     return isLoaded;
 }
 
-bool SomaticHaplotagOptionManager::validateNumericParameter() {
+bool SomaticHaplotagArgumentManager::validateNumericParameter() {
     
-    bool isValid = HaplotagOptionManager::validateNumericParameter();
+    bool isValid = HaplotagArgumentManager::validateNumericParameter();
     
     if (ecParams.tumorPurity < 0.1 || ecParams.tumorPurity > 1.0) {
         std::cerr << "[ERROR] " << programName << ": invalid tumor purity. value: " 
@@ -96,7 +96,7 @@ bool SomaticHaplotagOptionManager::validateNumericParameter() {
 }
 int SomaticHaplotagMain(int argc, char** argv, std::string in_version){
     
-    SomaticHaplotagOptionManager optionManager(SUBPROGRAM);
+    SomaticHaplotagArgumentManager optionManager(SUBPROGRAM);
 
     optionManager.setOptions();
     optionManager.setHelpMessage();
