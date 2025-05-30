@@ -6,21 +6,19 @@ void SomaticHaplotagHelpManager::buildMessage() {
     // build base message
     HaplotagHelpManager::buildMessage();
 
-    const std::string requireSection = "required arguments:";
-    const std::string optionalSection = "optional arguments:";
     //clear the section item
-    clearSectionItem(requireSection);
+    clearSectionItem(REQUIRED_SECTION);
     // Required arguments - Somatic mode
-    addSectionItem(requireSection, "      -s, --snp-file=NAME             input normal sample SNP VCF file.");
-    addSectionItem(requireSection, "      -b, --bam-file=NAME             input normal sample BAM file (used as a reference for comparison).");
-    addSectionItem(requireSection, "      --tumor-snp-file=NAME           input tumor sample SNP VCF file.");
-    addSectionItem(requireSection, "      --tumor-bam-file=NAME           input tumor sample BAM file for mutation tagging.");
-    addSectionItem(requireSection, "      -r, --reference=NAME            reference FASTA.\n");
+    addSectionItem(REQUIRED_SECTION, "      -s, --snp-file=NAME             input normal sample SNP VCF file.");
+    addSectionItem(REQUIRED_SECTION, "      -b, --bam-file=NAME             input normal sample BAM file.");
+    addSectionItem(REQUIRED_SECTION, "      --tumor-snp-file=NAME           input tumor sample SNP VCF file.");
+    addSectionItem(REQUIRED_SECTION, "      --tumor-bam-file=NAME           input tumor sample BAM file for mutation tagging.");
+    addSectionItem(REQUIRED_SECTION, "      -r, --reference=NAME            reference FASTA.\n");
 
-    addSectionItem(optionalSection, " ");
+    addSectionItem(OPTIONAL_SECTION, " ");
     
-    addSection("somatic variant calling arguments:");
-    addItem("      --tumor-purity=Num              tumor purity value (0.1~1.0) used to adjust somatic variant calling sensitivity and specificity");
+    addSection(SOMATIC_VARIANT_CALLING_SECTION);
+    addItem("      --tumor-purity=Num              tumor purity value (0.1~1.0) used to adjust somatic variant calling sensitivity and specificity.");
 }
 
 void SomaticHaplotagOptionDefiner::defineOptions(ArgumentManager& manager) {
@@ -44,7 +42,6 @@ void ParamsHandler<SomaticHaplotagParameters>::initialize(SomaticHaplotagParamet
     params.tumorPurity = 0.2;
     params.enableFilter = true;
     params.predictTumorPurity = true;
-    params.onlyPredictTumorPurity = false;
 }
 
 bool ParamsHandler<SomaticHaplotagParameters>::loadArgument(SomaticHaplotagParameters& params, char& opt, std::istringstream& arg) {
@@ -57,12 +54,12 @@ bool ParamsHandler<SomaticHaplotagParameters>::loadArgument(SomaticHaplotagParam
         //load somatic haplotag options
         switch (opt)
         {
-            case HaplotagOption::TUM_SNP: arg >> params.tumorSnpFile; break;
-            case HaplotagOption::TUM_BAM: arg >> params.tumorBamFile; break;
-            case HaplotagOption::BENCHMARK_VCF: arg >> params.benchmarkVcf; break;
-            case HaplotagOption::BENCHMARK_BED: arg >> params.benchmarkBedFile; break;
-            case HaplotagOption::DISABLE_FILTER: params.enableFilter = false; break;
-            case HaplotagOption::TUMOR_PURITY: 
+            case SomaticHaplotagOption::TUM_SNP: arg >> params.tumorSnpFile; break;
+            case SomaticHaplotagOption::TUM_BAM: arg >> params.tumorBamFile; break;
+            case SomaticHaplotagOption::BENCHMARK_VCF: arg >> params.benchmarkVcf; break;
+            case SomaticHaplotagOption::BENCHMARK_BED: arg >> params.benchmarkBedFile; break;
+            case SomaticHaplotagOption::DISABLE_FILTER: params.enableFilter = false; break;
+            case SomaticHaplotagOption::TUMOR_PURITY: 
                 arg >> params.tumorPurity; 
                 params.predictTumorPurity = false;
                 break;
@@ -116,7 +113,6 @@ int SomaticHaplotagMain(int argc, char** argv, std::string in_version){
     optionManager.setHelpMessage();
 
     optionManager.parseOptions(argc, argv);
-    // optionManager.setVersion(in_version);
 
     SomaticHaplotagParameters ecParams = optionManager.getParams();
     

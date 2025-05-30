@@ -44,12 +44,6 @@ void HaplotagProcess::taggingProcess()
 };
 
 void HaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
-    // parse common variant files
-    // normal SNP, SV, MOD vcf file
-    parseCommonVariantFiles(vcfParser);
-}
-
-void HaplotagProcess::parseCommonVariantFiles(VcfParser& vcfParser){
     // load SNP vcf file
     std::time_t begin = time(NULL);
     std::cerr<< getNormalSnpParsingMessage();

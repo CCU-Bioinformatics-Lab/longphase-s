@@ -131,6 +131,9 @@ namespace FileValidator{
 // Help message management class
 class HelpMessageManager {
     protected:
+        const std::string REQUIRED_SECTION = "required arguments:";
+        const std::string OPTIONAL_SECTION = "optional arguments:";
+        
         /**
          * @brief Structure representing a help section with header and items
          */
@@ -147,6 +150,12 @@ class HelpMessageManager {
          * @param header The section header text
          */
         void addSection(const std::string& header);
+
+        /**
+         * @brief Remove a section by header
+         * @param header The header of the section to remove
+         */
+        void removeSection(const std::string& header);
         
         /**
          * @brief Add an item to the current section
@@ -160,6 +169,13 @@ class HelpMessageManager {
          * @param newItem The item text to add
          */
         void addSectionItem(const std::string& sectionName, const std::string& newItem);
+
+        /**
+         * @brief Remove an item from a specific section by name
+         * @param sectionName The name of the target section
+         * @param removeItem The item text to remove
+         */
+        void removeSectionItem(const std::string& sectionName, const std::string& removeItem);
         
         /**
          * @brief Clear all items from a specific section

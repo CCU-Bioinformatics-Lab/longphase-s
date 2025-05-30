@@ -11,13 +11,13 @@ void HaplotagHelpManager::buildMessage() {
     addItem("      --help                          display this help and exit.\n");
     
     // Required arguments - General mode
-    addSection("required arguments:");
+    addSection(REQUIRED_SECTION);
     addItem("      -s, --snp-file=NAME             input SNP vcf file.");
     addItem("      -b, --bam-file=NAME             input bam file.");
     addItem("      -r, --reference=NAME            reference FASTA.\n");
         
     // Optional arguments
-    addSection("optional arguments:");
+    addSection(OPTIONAL_SECTION);
     addItem("      --tagSupplementary              tag supplementary alignment. default:false");
     addItem("      --sv-file=NAME                  input phased SV vcf file.");
     addItem("      --mod-file=NAME                 input a modified VCF file (produced by longphase modcall and processed by longphase phase).");
@@ -79,7 +79,7 @@ void ParamsHandler<HaplotagParameters>::initialize(HaplotagParameters& params, c
     params.outputFormat = "bam";
     params.tagSupplementary = false;
     params.writeReadLog = false;
-    params.command = "longphase ";
+    params.command = "longphase-s ";
     params.version = version;
 }
 

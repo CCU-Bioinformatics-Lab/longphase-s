@@ -17,7 +17,7 @@ class SomaticHaplotagParamsMessage : public HaplotagParamsMessage{
         :HaplotagParamsMessage(sParams.basic),sParams(sParams){}
 
         virtual void addParamsMessage() override {
-            addCommonParamsMessage();
+            HaplotagParamsMessage::addParamsMessage();
             insertAfterKey("tumor SNP file", sParams.tumorSnpFile, "phased SNP file");
             insertAfterKey("input tumor bam file", sParams.tumorBamFile, "input bam file");
             insertAfterKey("[haplotag params]"," ", "#1");

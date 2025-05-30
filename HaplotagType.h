@@ -16,8 +16,11 @@ enum HaplotagOption {
     REGION,
     LOG,
     MOD_FILE,
-    CRAM,
-    TUM_SNP,
+    CRAM
+};
+
+enum SomaticHaplotagOption{
+    TUM_SNP = 50,
     TUM_BAM,
     BENCHMARK_VCF,
     BENCHMARK_BED,
@@ -58,9 +61,15 @@ struct SomaticHaplotagParameters
     
     double tumorPurity;
     bool predictTumorPurity;
-    bool onlyPredictTumorPurity;
 
     bool enableFilter;
+};
+
+struct PurityPredictionParameters
+{
+    HaplotagParameters basic;
+    std::string tumorBamFile;
+    std::string tumorSnpFile;
 };
 
 enum Genome

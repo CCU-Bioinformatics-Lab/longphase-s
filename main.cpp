@@ -4,11 +4,11 @@
 #include "Haplotag.h"
 #include "ModCall.h"
 #include "SomaticHaplotag.h"
+#include "PurityPrediction.h"
 
 
 #define PROGRAM_BIN "main"
 #define VERSION "1.7.3"
-
 
 
 static std::string version = VERSION;
@@ -20,6 +20,7 @@ static const char *STRIDE_USAGE_MESSAGE =
 "               haplotag   tag reads by haplotype.\n"
 "               modcall    convert bam file to modification vcf file.\n"
 "               somaticHaplotag   tag reads by somatichaplotype.\n"
+"               purityPrediction   predict purity.\n"
 "\n";
 
 int main(int argc, char** argv)
@@ -43,6 +44,10 @@ int main(int argc, char** argv)
     else if(command=="somaticHaplotag")
     {
         SomaticHaplotagMain(argc - 1, argv + 1, version);
+    }
+    else if(command=="purityPrediction")
+    {
+        PurityPredictionMain(argc - 1, argv + 1, version);
     }
     else if(command=="modcall")
     {

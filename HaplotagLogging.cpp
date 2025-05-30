@@ -39,8 +39,8 @@ void chrReadHpResult::recordAlignCoverRegion(int& curVarPos, int &startPos, int 
     }
 }
 
-ReadHpDistriLog::ReadHpDistriLog(int mappingQualityThreshold){
-    this->mappingQualityThreshold = mappingQualityThreshold;
+ReadHpDistriLog::ReadHpDistriLog(){
+
 }
 
 ReadHpDistriLog::~ReadHpDistriLog(){
@@ -89,7 +89,6 @@ void ReadHpDistriLog::writeReadHpDistriLog(const std::string logFileName, const 
         (*readHpDistriLog) << "####################################\n";
         (*readHpDistriLog) << "# Somatic SNP read HP distribution #\n";
         (*readHpDistriLog) << "####################################\n";
-        (*readHpDistriLog) << "##MappingQualityThreshold:"        << mappingQualityThreshold << "\n";
         (*readHpDistriLog) << "##SomaticSNP: " << somaticSnpCount << "\n";
         (*readHpDistriLog) << "#Chr\t"
                             << "Pos\t"
@@ -189,7 +188,6 @@ void ReadHpDistriLog::writePosCoverRegionLog(const std::string logFileName, cons
         (*posCoverRegionLog) << "############################\n";
         (*posCoverRegionLog) << "# Somatic SNP cover region #\n";
         (*posCoverRegionLog) << "############################\n";
-        (*posCoverRegionLog) << "##MappingQualityThreshold:"        << mappingQualityThreshold << "\n";
         (*posCoverRegionLog) << "##SomaticSNP: " << somaticSnpCount << "\n";
         (*posCoverRegionLog) << "#Chr\t"
                               << "Pos\t"
@@ -295,7 +293,6 @@ void ReadHpDistriLog::writeTagReadCoverRegionLog(const std::string logFileName, 
         (*tagReadCoverRegionLog) << "##################################\n";
         (*tagReadCoverRegionLog) << "# Somatic reads cover region bed #\n";
         (*tagReadCoverRegionLog) << "##################################\n";
-        (*tagReadCoverRegionLog) << "##MappingQualityThreshold: "   << mappingQualityThreshold << "\n";
         (*tagReadCoverRegionLog) << "##----Chr coverage ratio----\n";
         (*tagReadCoverRegionLog) << "##Total chr coverage ratio: " << totalChrCoverageRatio << "\n";
         for(auto chr: chrVec){

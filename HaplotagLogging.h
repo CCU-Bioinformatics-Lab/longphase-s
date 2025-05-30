@@ -154,11 +154,10 @@ class ReadHpDistriLog{
         };
         // chr, variant position (0-base), reads HP 
         std::map<std::string, chrReadHpResult> chrVarReadHpResult;
-        int mappingQualityThreshold;
     protected:
 
     public:
-        ReadHpDistriLog(int mappingQualityThreshold);
+        ReadHpDistriLog();
         ~ReadHpDistriLog();
 
         // use in multi-thread scenario

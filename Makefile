@@ -26,6 +26,8 @@ OBJ = Haplotag.o \
 	  HaplotagVcfParser.o \
 	  HaplotagLogging.o \
 	  ArgumentManager.o \
+	  PurityPrediction.o \
+	  PurityPredictionProcess.o \
 	  main.o 
 
 PROGRAMS = longphase

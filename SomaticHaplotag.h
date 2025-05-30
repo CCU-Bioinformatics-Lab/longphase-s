@@ -22,6 +22,8 @@ struct ParamsHandler<SomaticHaplotagParameters>{
 
 
 class SomaticHaplotagHelpManager : public HaplotagHelpManager {
+    protected:
+        const std::string SOMATIC_VARIANT_CALLING_SECTION = "somatic variant calling arguments:";
     public:
         SomaticHaplotagHelpManager(const std::string& program) : HaplotagHelpManager(program) {}
         virtual void buildMessage() override;

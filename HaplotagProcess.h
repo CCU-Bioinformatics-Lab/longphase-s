@@ -53,7 +53,10 @@ class HaplotagParamsMessage : public MessageManager{
         const HaplotagParameters& params;
     protected:
 
-        void addCommonParamsMessage(){
+
+    public:
+    
+        virtual void addParamsMessage(){
             addEntry("phased SNP file", params.snpFile);
             addEntry("phased SV file", params.svFile);
             addEntry("phased MOD file", params.modFile);
@@ -71,12 +74,7 @@ class HaplotagParamsMessage : public MessageManager{
             addEntry("#2", "-------------------------------------------");
         }
 
-    public:
         HaplotagParamsMessage(const HaplotagParameters& params):params(params){}
-
-        virtual void addParamsMessage(){
-            addCommonParamsMessage();
-        }
 
         void printParamsMessage(){
             // Print all entries with proper formatting
@@ -283,9 +281,8 @@ class HaplotagProcess
         
         std::time_t processBegin;
 
-        virtual void parseVariantFiles(VcfParser& vcfParser);
         // load SNP, SV, MOD vcf file
-        void parseCommonVariantFiles(VcfParser& vcfParser);
+        virtual void parseVariantFiles(VcfParser& vcfParser);
         // decide which genome type chrVec and chrLength belong to
         virtual void setChrVecAndChrLength();
         // update chromosome processing based on region

@@ -4,8 +4,8 @@
 SomaticHaplotagProcess::SomaticHaplotagProcess(SomaticHaplotagParameters &params)
     : HaplotagProcess(params.basic),sParams(params), sParamsMessage(params), somaticBenchmark(params.benchmarkVcf, params.basic.qualityThreshold)
 {
-    hpBeforeInheritance = new ReadHpDistriLog(params.basic.qualityThreshold);
-    hpAfterInheritance = new ReadHpDistriLog(params.basic.qualityThreshold);
+    hpBeforeInheritance = new ReadHpDistriLog();
+    hpAfterInheritance = new ReadHpDistriLog();
 }
 
 SomaticHaplotagProcess::~SomaticHaplotagProcess(){
@@ -32,8 +32,8 @@ void SomaticHaplotagProcess::taggingProcess()
     setProcessingChromRegion();
 
     //somatic variant calling
-    SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(*chrVec, sParams);
-    somaticVarCaller->variantCalling(sParams, *chrVec, *chrLength, (*mergedChrVarinat), vcfSet, Genome::TUMOR);
+    SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(*chrVec);
+    somaticVarCaller->variantCalling(sParams, *chrVec, *chrLength, (*mergedChrVarinat), vcfSet);
     somaticVarCaller->getSomaticFlag(*chrVec, *mergedChrVarinat);
     delete somaticVarCaller;
     // return;
@@ -56,9 +56,8 @@ void SomaticHaplotagProcess::taggingProcess()
 };
 
 void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
-    // parse common variant files
     // normal SNP, SV, MOD vcf file
-    parseCommonVariantFiles(vcfParser);
+    HaplotagProcess::parseVariantFiles(vcfParser);
 
     //load tumor snp vcf
     if(sParams.tumorSnpFile != ""){

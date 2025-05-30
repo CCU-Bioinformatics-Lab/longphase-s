@@ -52,7 +52,7 @@ struct DenseSnpInterval{
     }
 };
 
-struct SomaticFilterParaemter
+struct SomaticVarCallerParaemter
 {
     // Determine whether to apply the filter
     bool applyFilter;
@@ -259,10 +259,10 @@ class SomaticVarCaller{
         
         static constexpr int INTERVAL_SNP_MAX_DISTANCE = 5000;
 
-        const SomaticHaplotagParameters& params;
+        const std::vector<std::string>& chrVec;
 
         // somatic calling filter params
-        SomaticFilterParaemter somaticParams;
+        SomaticVarCallerParaemter somaticParams;
 
         ExtractSomaticDataStragtegy somaticJudger;
         // chr, tumor SNP pos, somatic info
@@ -281,16 +281,16 @@ class SomaticVarCaller{
         // chr, position, read ID, baseHP 
         std::map<std::string, std::map<int, std::map<std::string, int>>> *chrTumorPosReadCorrBaseHP;
 
-        void InitialSomaticFilterParams(bool enableFilter);
+        void initialSomaticFilterParams(bool enableFilter, bool writeVarLog);
 
-        void SetFilterParamsWithPurity(SomaticFilterParaemter &somaticParams, double &tumorPurity);
+        void SetFilterParamsWithPurity(SomaticVarCallerParaemter &somaticParams, double &tumorPurity);
 
         double calculateStandardDeviation(const std::map<int, double>& data, double mean);
         void calculateZScores(const std::map<int, double>& data, double mean, double stdDev, std::map<int, double> &zScores);
         void calculateIntervalData(bool &isStartPos, int &startPos, int &pos, DenseSnpInterval &denseSnp, std::map<int, std::pair<int, DenseSnpInterval>> &localDenseTumorSnpInterval);
         void getDenseTumorSnpInterval(std::map<int, SomaticData> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, std::map<int, std::pair<int, DenseSnpInterval>> &closeSomaticSnpInterval);
 
-        void somaticFeatureFilter(const SomaticFilterParaemter &somaticParams, std::map<int, MultiGenomeVar> &currentChrVariants,const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, double& tumorPurity);
+        void somaticFeatureFilter(const SomaticVarCallerParaemter &somaticParams, std::map<int, MultiGenomeVar> &currentChrVariants,const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, double& tumorPurity);
         
         void calibrateReadHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount);
         void calculateReadSetHP(const std::string &chr, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, const double& percentageThreshold);
@@ -303,7 +303,7 @@ class SomaticVarCaller{
             chrReadHpResult &localReadHpDistri
         );
         
-        void writeSomaticVarCallingLog(const SomaticHaplotagParameters &params, const SomaticFilterParaemter &somaticParams, const std::vector<std::string> &chrVec
+        void writeSomaticVarCallingLog(const SomaticHaplotagParameters &params, const SomaticVarCallerParaemter &somaticParams, const std::vector<std::string> &chrVec
                                      , std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         void writeOtherSomaticHpLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         void writeDenseTumorSnpIntervalLog(const std::string logFileName, const std::vector<std::string> &chrVec);
@@ -323,7 +323,7 @@ class SomaticVarCaller{
     protected:
 
     public:
-        SomaticVarCaller(const std::vector<std::string> &chrVec, const SomaticHaplotagParameters &params);
+        SomaticVarCaller(const std::vector<std::string> &chrVec);
         virtual ~SomaticVarCaller();
 
         void variantCalling(
@@ -331,9 +331,19 @@ class SomaticVarCaller{
             const std::vector<std::string> &chrVec,
             const std::map<std::string, int> &chrLength,
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
-            std::map<Genome, VCF_Info> &vcfSet,
-            const Genome& genmoeType
+            std::map<Genome, VCF_Info> &vcfSet
         );
+
+        void extractSomaticData(
+            const std::string &normalBamFile,
+            const std::string &tumorBamFile,
+            const HaplotagParameters &basicParams,
+            const std::vector<std::string> &chrVec,
+            const std::map<std::string, int> &chrLength,
+            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
+            std::map<Genome, VCF_Info> &vcfSet           
+        );
+        double runTumorPurityPredictor(bool writeReadLog, const std::string resultPrefix);
         void getSomaticFlag(const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
 
 };

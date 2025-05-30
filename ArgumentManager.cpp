@@ -10,6 +10,24 @@ void HelpMessageManager::addItem(const std::string& item) {
     }
 }
 
+void HelpMessageManager::removeSection(const std::string& header) {
+    bool found = false;
+    std::vector<HelpSection>::iterator iter = sections.begin();
+    while(iter != sections.end()){
+        if(iter->header == header){
+            iter = sections.erase(iter);
+            found = true;
+            break;
+        }
+        ++iter;
+    }
+
+    if (!found) {
+        std::cerr << "Section '" << header << "' not found." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+}
+
 void HelpMessageManager::addSectionItem(const std::string& sectionName, const std::string& newItem) {
     bool found = false;
     for (auto& section : sections) {
@@ -21,6 +39,38 @@ void HelpMessageManager::addSectionItem(const std::string& sectionName, const st
     }
 
     if (!found) {
+        std::cerr << "Section '" << sectionName << "' not found." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+}
+
+void HelpMessageManager::removeSectionItem(const std::string& sectionName, const std::string& removeItem) {
+    bool sectionFound = false;
+    bool itemFound = false;
+    std::vector<HelpSection>::iterator iter = sections.begin();
+    while(iter != sections.end()){
+        if (iter->header == sectionName) {
+            sectionFound = true;
+            
+            std::vector<std::string>::iterator itemIter = iter->items.begin();
+            while(itemIter != iter->items.end()){
+                if(*itemIter == removeItem){
+                    itemIter = iter->items.erase(itemIter);
+                    itemFound = true;
+                    break;
+                }
+                ++itemIter;
+            }
+            if (!itemFound) {
+                std::cerr << "Item '" << removeItem << "' not found in section '" << sectionName << "'." << std::endl;
+                exit(EXIT_FAILURE);
+            }
+            break;
+        }
+        ++iter;
+    }
+
+    if (!sectionFound) {
         std::cerr << "Section '" << sectionName << "' not found." << std::endl;
         exit(EXIT_FAILURE);
     }
