@@ -259,6 +259,9 @@ class ExtractTumDataBamParser : public HaplotagBamParser{
 
 class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
     private:
+
+        static constexpr int INTERVAL_SNP_MAX_DISTANCE = 5000;
+
         const SomaticHaplotagParameters& params;
 
         // somatic calling filter params

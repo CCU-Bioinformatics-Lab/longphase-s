@@ -1161,8 +1161,8 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, SomaticData> &soma
     auto somaticPosIter = somaticPosInfo.begin();
     bool isRecordStartPos = false;
     int startPos = 0;
-    // int dense_distance = 5000;
-    int dense_distance = 1200;
+    int dense_distance = INTERVAL_SNP_MAX_DISTANCE;
+
     DenseSnpInterval denseSnp;
 
     while (somaticPosIter != somaticPosInfo.end()){
