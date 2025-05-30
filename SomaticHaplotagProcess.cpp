@@ -91,7 +91,7 @@ void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
         somaticBenchmark.displayBedRegionCount(vcfSet[TUMOR].chrVec);
 
         begin = time(NULL);
-        std::cerr<< "marking variants in bed regions ... \n";
+        std::cerr<< "marking variants in bed regions ... ";
         somaticBenchmark.markVariantsInBedRegions(vcfSet[TUMOR].chrVec, *mergedChrVarinat);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
 

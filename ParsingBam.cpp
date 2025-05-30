@@ -25,7 +25,7 @@ FastaParser::FastaParser(std::string fastaFile,  std::vector<std::string> chrNam
     fai = fai_load(fastaFile.c_str());
     
     // iterating all chr
-    #pragma omp parallfel for schedule(dynamic) num_threads(numThreads)
+    // #pragma omp parallfel for schedule(dynamic) num_threads(numThreads)
     for(std::vector<std::string>::iterator iter = chrName.begin() ; iter != chrName.end() ; iter++){
         int index = iter - chrName.begin();
         

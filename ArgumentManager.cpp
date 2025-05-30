@@ -63,6 +63,9 @@ std::string HelpMessageManager::getHelpMessage() const {
     return oss.str();
 }
 
+void ArgumentManager::setShortOption(const std::string& opt) {
+    shortOpts = opt;
+}
 
 void ArgumentManager::addOption(const struct option& opt) {
     // If this is not the terminator, add it before the last element
@@ -118,6 +121,15 @@ bool ArgumentManager::validateOptionalFile(const std::string& filePath, const st
 
 void ArgumentManager::parseOptions(int argc, char** argv)
 {
+    if(!helpManager){
+        std::cerr << "[ERROR] " << programName << ": help manager not set." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    if(!optionDefiner){
+        std::cerr << "[ERROR] " << programName << ": option definer not set." << std::endl;
+        exit(EXIT_FAILURE);
+    }
 
     // Initialize default values
     initializeDefaultValues();

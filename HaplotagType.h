@@ -45,19 +45,6 @@ struct HaplotagParameters
 
     bool tagSupplementary;
     bool writeReadLog;
-
-    // Somatic haplotag parameters
-    // std::string tumorSnpFile;   
-    // std::string tumorBamFile;  
-    // std::string benchmarkVcf;
-    // std::string benchmarkBedFile;
-    
-    // double tumorPurity;
-    // bool predictTumorPurity;
-    // bool onlyPredictTumorPurity;
-
-    // bool enableFilter;
-
 };
 
 struct SomaticHaplotagParameters
