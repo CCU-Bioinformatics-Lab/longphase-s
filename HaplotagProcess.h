@@ -158,23 +158,26 @@ class GermlineTagLog : public MessageManager {
 };
 
 class GermlineHaplotagCigarParser: public CigarParser{
+    private:
     protected:
+        GermlineHaplotagStrategy judger;
         void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base) override;
         void processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel) override;
     public:
-        GermlineHaplotagCigarParser(int& ref_pos, int& query_pos);
+        GermlineHaplotagCigarParser(CigarParserContext& ctx, int& ref_pos, int& query_pos);
         ~GermlineHaplotagCigarParser() override;
 };
 
 class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
     private:
-
     protected:
         ReadStatistics& readStats;
         // std::ofstream *tagResult;
         GermlineTagLog* tagResult;
 
         ReadStatistics localReadStats;
+
+        GermlineHaplotagStrategy judger;
         
         virtual void processLowMappingQuality() override;
         virtual void processUnmappedRead() override;
@@ -186,13 +189,10 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
         virtual void processRead(
             bam1_t &aln, 
             const bam_hdr_t &bamHdr,
-            const std::string &chrName, 
-            const HaplotagParameters &params, 
-            const Genome& genmoeType, 
+            const std::string &ref_string,
             std::map<int, MultiGenomeVar> &currentVariants,
-            std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-            std::map<Genome, VCF_Info> &vcfSet, 
-            const std::string &ref_string
+            std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
+            ChrProcCommonContext& ctx
         ) override;
 
         virtual int judgeHaplotype(

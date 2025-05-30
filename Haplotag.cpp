@@ -62,15 +62,15 @@ void HaplotagOptionDefiner::defineOptions(ArgumentManager& manager) {
     manager.addOption({NULL, 0, NULL, 0});
 }
 
-HaplotagArgumentManager::HaplotagArgumentManager(const std::string& program)
- : ArgumentTemManager<HaplotagParameters>(program) {
+HaplotagArgumentManager::HaplotagArgumentManager(const std::string& program, const std::string& version)
+ : ArgumentTemManager<HaplotagParameters>(program, version) {
 }
 
 
 HaplotagArgumentManager::~HaplotagArgumentManager() {
 }
 
-void ParamsHandler<HaplotagParameters>::initialize(HaplotagParameters& params) {
+void ParamsHandler<HaplotagParameters>::initialize(HaplotagParameters& params, const std::string& version) {
     // Initialize default values
     params.numThreads = 1;
     params.qualityThreshold = 1;
@@ -80,6 +80,7 @@ void ParamsHandler<HaplotagParameters>::initialize(HaplotagParameters& params) {
     params.tagSupplementary = false;
     params.writeReadLog = false;
     params.command = "longphase ";
+    params.version = version;
 }
 
 bool ParamsHandler<HaplotagParameters>::loadArgument(HaplotagParameters& params, char& opt, std::istringstream& arg) {
@@ -152,7 +153,7 @@ int ParamsHandler<HaplotagParameters>::getHelpEnumNum() {
 
 int HaplotagMain(int argc, char** argv, std::string in_version)
 {
-    HaplotagArgumentManager optionManager(SUBPROGRAM);
+    HaplotagArgumentManager optionManager(SUBPROGRAM, in_version);
 
     optionManager.setOptions();
     optionManager.setHelpMessage();

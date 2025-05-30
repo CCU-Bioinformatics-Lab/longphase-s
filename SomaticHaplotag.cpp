@@ -36,9 +36,9 @@ void SomaticHaplotagOptionDefiner::defineOptions(ArgumentManager& manager) {
     manager.addOption({"tumor-purity", required_argument, NULL, TUMOR_PURITY});
 }
 
-void ParamsHandler<SomaticHaplotagParameters>::initialize(SomaticHaplotagParameters& params) {
+void ParamsHandler<SomaticHaplotagParameters>::initialize(SomaticHaplotagParameters& params, const std::string& version) {
 
-    ParamsHandler<HaplotagParameters>::initialize(params.basic);
+    ParamsHandler<HaplotagParameters>::initialize(params.basic, version);
 
     params.tumorPurity = 0.2;
     params.tumorPurity = 0.2;
@@ -110,7 +110,7 @@ int ParamsHandler<SomaticHaplotagParameters>::getHelpEnumNum() {
 
 int SomaticHaplotagMain(int argc, char** argv, std::string in_version){
     
-    SomaticHaplotagArgumentManager optionManager(SUBPROGRAM);
+    SomaticHaplotagArgumentManager optionManager(SUBPROGRAM, in_version);
 
     optionManager.setOptions();
     optionManager.setHelpMessage();

@@ -90,18 +90,16 @@ class ExtractNorDataChrProcessor : public ChromosomeProcessor{
     private:
         // store base information
         std::map<int, PosBase> *variantBase;
+        GermlineHaplotagStrategy judger;
     protected:
         //override processRead
         void processRead(
             bam1_t &aln, 
             const bam_hdr_t &bamHdr,
-            const std::string &chrName, 
-            const HaplotagParameters &params, 
-            const Genome& genmoeType, 
+            const std::string &ref_string,
             std::map<int, MultiGenomeVar> &currentVariants,
-            std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-            std::map<Genome, VCF_Info> &vcfSet, 
-            const std::string &ref_string
+            std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
+            ChrProcCommonContext& ctx
         ) override;
 
         //override postProcess
@@ -121,6 +119,7 @@ class ExtractNorDataCigarParser : public CigarParser{
         std::map<int, PosBase>& variantBase;
         std::vector<int>& tumVarPosVec;
         const int& mappingQualityThr;
+        GermlineHaplotagStrategy judger;
     protected:
 
         void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base) override;
@@ -128,6 +127,7 @@ class ExtractNorDataCigarParser : public CigarParser{
 
     public:
         ExtractNorDataCigarParser(
+            CigarParserContext& ctx,
             std::map<int, PosBase>& variantBase,
             std::vector<int>& tumVarPosVec,
             int& ref_pos, 
@@ -158,10 +158,10 @@ class ExtractNorDataBamParser : public HaplotagBamParser{
 };
 
 
-
-
-class ExtractTumDataChrProcessor : public ChromosomeProcessor, public SomaticJudgeBase{
+class ExtractTumDataChrProcessor : public ChromosomeProcessor{
     private:
+        ExtractSomaticDataStragtegy somaticJudger;
+
         // record the position that tagged as HP3
         // chr, variant position
         std::map<int, SomaticData> *somaticPosInfo;
@@ -176,19 +176,14 @@ class ExtractTumDataChrProcessor : public ChromosomeProcessor, public SomaticJud
         void processRead(
             bam1_t &aln, 
             const bam_hdr_t &bamHdr,
-            const std::string &chrName, 
-            const HaplotagParameters &params, 
-            const Genome& genmoeType, 
+            const std::string &ref_string,
             std::map<int, MultiGenomeVar> &currentVariants,
-            std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-            std::map<Genome, VCF_Info> &vcfSet, 
-            const std::string &ref_string
+            std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
+            ChrProcCommonContext& ctx
         ) override;
 
 
         void classifyReadsByCase(std::vector<int> &readPosHP3, std::map<int, int> &norCountPS, std::map<int, int> &hpCount, std::map<int, SomaticData> &somaticPosInfo);
-
-        void onlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){};
 
         void postProcess(const std::string &chr, std::map<int, MultiGenomeVar> &currentVariants) override;
     public:
@@ -202,8 +197,11 @@ class ExtractTumDataChrProcessor : public ChromosomeProcessor, public SomaticJud
 };
         
 
-class ExtractTumDataCigarParser : public CigarParser, public SomaticJudgeBase{
+class ExtractTumDataCigarParser : public CigarParser{
     private:
+        ExtractSomaticDataStragtegy somaticJudger;
+        GermlineHaplotagStrategy judger;
+
         std::map<int, SomaticData>& somaticPosInfo;
 
         //record tumor-unique variants on current read
@@ -221,10 +219,9 @@ class ExtractTumDataCigarParser : public CigarParser, public SomaticJudgeBase{
         void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base) override;
         void processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel) override;
 
-        void onlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec) override;
-
     public:
         ExtractTumDataCigarParser(
+            CigarParserContext& ctx,
             std::map<int, SomaticData> &somaticPosInfo, 
             std::vector<int>& tumorAllelePosVec, 
             std::vector<int>& tumorSnpPosVec, 
@@ -257,9 +254,9 @@ class ExtractTumDataBamParser : public HaplotagBamParser{
 };
 
 
-class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
+class SomaticVarCaller{
     private:
-
+        
         static constexpr int INTERVAL_SNP_MAX_DISTANCE = 5000;
 
         const SomaticHaplotagParameters& params;
@@ -267,7 +264,7 @@ class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
         // somatic calling filter params
         SomaticFilterParaemter somaticParams;
 
-        // record the position that tagged as HP3
+        ExtractSomaticDataStragtegy somaticJudger;
         // chr, tumor SNP pos, somatic info
         std::map<std::string, std::map<int, SomaticData>> *chrPosSomaticInfo;
 
@@ -324,16 +321,7 @@ class SomaticVarCaller: public SomaticJudgeBase, public GermlineJudgeBase{
         void releaseMemory();
 
     protected:
-        void onlyTumorSNPjudgeHP(
-            const std::string &chrName,
-            int &curPos,
-            MultiGenomeVar &curVar,
-            std::string base,
-            std::map<int, int> &hpCount,
-            std::map<int, int> *tumCountPS,
-            std::map<int, int> *variantsHP,
-            std::vector<int> *readPosHP3
-        ){};
+
     public:
         SomaticVarCaller(const std::vector<std::string> &chrVec, const SomaticHaplotagParameters &params);
         virtual ~SomaticVarCaller();

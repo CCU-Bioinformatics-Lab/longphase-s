@@ -14,7 +14,7 @@
 template<>
 struct ParamsHandler<HaplotagParameters>{
 
-    static void initialize(HaplotagParameters& params);
+    static void initialize(HaplotagParameters& params, const std::string& version);
 
     static bool loadArgument(HaplotagParameters& params, char& opt, std::istringstream& arg);
 
@@ -55,7 +55,7 @@ class HaplotagArgumentManager : public ArgumentTemManager<HaplotagParameters> {
         }
 
     public:
-        HaplotagArgumentManager(const std::string& program);
+        HaplotagArgumentManager(const std::string& program, const std::string& version);
         virtual ~HaplotagArgumentManager();
 };
 

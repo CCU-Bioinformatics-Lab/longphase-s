@@ -108,19 +108,20 @@ void HaplotagProcess::setProcessingChromRegion(){
 
 void HaplotagProcess::tagRead(HaplotagParameters &params, std::string& tagBamFile, const Genome& geneType){
 
-    // ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;
-    // bool writeOutputBam = false;
-    ParsingBamMode mode = ParsingBamMode::SINGLE_THREAD;
-    bool writeOutputBam = true;
+    ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;
+    bool writeOutputBam = false;
+    // ParsingBamMode mode = ParsingBamMode::SINGLE_THREAD;
+    // bool writeOutputBam = true;
     bool mappingQualityFilter = true;
 
     // tag read
     std::time_t begin = time(NULL);
     std::cerr<< getTagReadStartMessage();
 
+    HaplotagBamParserContext ctx(tagBamFile, params, *chrVec, *chrLength, *mergedChrVarinat, vcfSet, geneType);
     GermlineHaplotagBamParser* haplotagBamParser = createHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats);
     haplotagBamParser->createTagLog();
-    haplotagBamParser->parsingBam(tagBamFile, params, *chrVec, *chrLength, *mergedChrVarinat, vcfSet, geneType);
+    haplotagBamParser->parsingBam(ctx);
     delete haplotagBamParser;
 
     std::cerr<< "tag read " << difftime(time(NULL), begin) << "s\n";
@@ -278,14 +279,12 @@ void GermlineHaplotagChrProcessor::processOtherCase(){
 void GermlineHaplotagChrProcessor::processRead(
     bam1_t &aln, 
     const bam_hdr_t &bamHdr,
-    const std::string &chrName, 
-    const HaplotagParameters &params, 
-    const Genome& genmoeType, 
+    const std::string &ref_string,
     std::map<int, MultiGenomeVar> &currentVariants,
-    std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-    std::map<Genome, VCF_Info> &vcfSet, 
-    const std::string &ref_string
+    std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
+    ChrProcCommonContext& ctx
 ){
+
     if( (aln.core.flag & 0x800) != 0 ){
         localReadStats.totalSupplementary++;
     }
@@ -294,7 +293,7 @@ void GermlineHaplotagChrProcessor::processRead(
     int psValue = 0; 
     int haplotype = ReadHP::unTag;
 
-    haplotype = judgeHaplotype(bamHdr, aln, chrName, params.percentageThreshold, tagResult, pqValue, psValue, genmoeType, ref_string, params, firstVariantIter, currentVariants, vcfSet);
+    haplotype = judgeHaplotype(bamHdr, aln, ctx.chrName, ctx.params.percentageThreshold, tagResult, pqValue, psValue, ctx.genmoeType, ref_string, ctx.params, firstVariantIter, currentVariants, ctx.vcfSet);
 
     initFlag(&aln, "HP");
     initFlag(&aln, "PS");
@@ -353,19 +352,20 @@ int GermlineHaplotagChrProcessor::judgeHaplotype(
     int query_pos = 0;
     
     /// Create a CIGAR parser using polymorphism design
-    // Use GermlineHaplotagCigarParser to process CIGAR strings for normal samples    
-    CigarParser* cigarParser = new GermlineHaplotagCigarParser(ref_pos, query_pos);
-    cigarParser->parsingCigar(aln, bamHdr, chrName, params, firstVariantIter, currentChrVariants, ref_string, hpCount, variantsHP, countPS);
+    // Use GermlineHaplotagCigarParser to process CIGAR strings for normal samples 
+    CigarParserContext cigarCtx(aln, bamHdr, chrName, params, firstVariantIter, currentChrVariants, ref_string);   
+    CigarParser* cigarParser = new GermlineHaplotagCigarParser(cigarCtx, ref_pos, query_pos);
+    cigarParser->parsingCigar(hpCount, variantsHP, countPS);
     delete cigarParser;
 
     // get the number of SVs occurring on different haplotypes in a read
-    germlineJudgeSVHap(aln, vcfSet, hpCount, tagGeneType);
+    judger.judgeSVHap(aln, vcfSet, hpCount, tagGeneType);
 
     double min,max;
     int hpResult = ReadHP::unTag;
 
     // determine the haplotype of the read
-    hpResult = germlineDetermineReadHap(hpCount, min, max, percentageThreshold, pqValue, psValue, countPS, &localReadStats.totalHighSimilarity, &localReadStats.totalWithOutVaraint);
+    hpResult = judger.judgeReadHap(hpCount, min, max, percentageThreshold, pqValue, psValue, countPS, &localReadStats.totalHighSimilarity, &localReadStats.totalWithOutVaraint);
      
     //write tag log file
     if(tagResult != nullptr){
@@ -434,8 +434,8 @@ void GermlineHaplotagChrProcessor::postProcess(const std::string &chr, std::map<
     }
 }
 
-GermlineHaplotagCigarParser::GermlineHaplotagCigarParser(int& ref_pos, int& query_pos)
-:CigarParser(ref_pos, query_pos)
+GermlineHaplotagCigarParser::GermlineHaplotagCigarParser(CigarParserContext& ctx, int& ref_pos, int& query_pos)
+:CigarParser(ctx, ref_pos, query_pos)
 {
 
 }
@@ -446,7 +446,7 @@ GermlineHaplotagCigarParser::~GermlineHaplotagCigarParser(){
 
 void GermlineHaplotagCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base){
     auto norVar = (*currentVariantIter).second.Variant[NORMAL];
-    germlineJudgeSnpHap(*chrName, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, *hpCount, *variantsHP, *norCountPS);
+    judger.judgeSnpHap(ctx.chrName, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, *hpCount, *variantsHP, *norCountPS);
 }
 
 void GermlineHaplotagCigarParser::processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel){
@@ -455,7 +455,7 @@ void GermlineHaplotagCigarParser::processDeletionOperation(int& length, uint32_t
         if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
             // longphase v1.73 only execute once
             alreadyJudgeDel = true;
-            germlineJudgeDeletionHap(*chrName, *ref_string, ref_pos, length, query_pos, currentVariantIter, aln, *hpCount, *variantsHP, *norCountPS);
+            judger.judgeDeletionHap(ctx.chrName, ctx.ref_string, ref_pos, length, query_pos, currentVariantIter, &ctx.aln, *hpCount, *variantsHP, *norCountPS);
         }
     }
 }

@@ -214,7 +214,10 @@ SomaticHaplotagChrProcessor::SomaticHaplotagChrProcessor(
 
 SomaticHaplotagChrProcessor::~SomaticHaplotagChrProcessor(){
     delete somaticReadCounter;
-    std::cerr << chr << " : " << difftime(time(NULL), begin) << "s\n";
+    #pragma omp critical
+    {
+        std::cerr << chr << " : " << difftime(time(NULL), begin) << "s\n";
+    }
 }
 
 int SomaticHaplotagChrProcessor::judgeHaplotype(
@@ -254,12 +257,13 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
     int query_pos = 0;
 
     // Create a CIGAR parser using polymorphism design
-    // Use GermlineHaplotagCigarParser to process CIGAR strings for normal samples    
-    CigarParser* cigarParser = new SomaticHaplotagCigarParser(ref_pos, query_pos, tumCountPS, somaticVarDeriveHP, *somaticReadCounter);
-    cigarParser->parsingCigar(aln, bamHdr, chrName, params, firstVariantIter, currentChrVariants, ref_string, hpCount, variantsHP, norCountPS);
+    // Use GermlineHaplotagCigarParser to process CIGAR strings for normal samples
+    CigarParserContext cigarCtx(aln, bamHdr, chrName, params, firstVariantIter, currentChrVariants, ref_string);   
+    CigarParser* cigarParser = new SomaticHaplotagCigarParser(cigarCtx, ref_pos, query_pos, tumCountPS, somaticVarDeriveHP, *somaticReadCounter);
+    cigarParser->parsingCigar(hpCount, variantsHP, norCountPS);
     delete cigarParser;
     //In the current version, only normal SVs are considered, without inclusion of tumor samples
-    germlineJudgeSVHap(aln, vcfSet, hpCount, Genome::NORMAL);
+    judger.judgeSVHap(aln, vcfSet, hpCount, Genome::NORMAL);
 
     int startPos = aln.core.pos + 1;
     int endPos = ref_pos;
@@ -271,7 +275,7 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
 
     // determine the haplotype of the read
     int hpResult = ReadHP::unTag;
-    hpResult = determineReadHP(hpCount, pqValue, norCountPS, norHPsimilarity, tumHPsimilarity, percentageThreshold, &localReadStats.totalHighSimilarity, &localReadStats.totalCrossTwoBlock, &localReadStats.totalWithOutVaraint);
+    hpResult = somaticJudger.judgeSomaticReadHap(hpCount, pqValue, norCountPS, norHPsimilarity, tumHPsimilarity, percentageThreshold, &localReadStats.totalHighSimilarity, &localReadStats.totalCrossTwoBlock, &localReadStats.totalWithOutVaraint);
 
     int hpResultBeforeInheritance = hpResult;
 
@@ -476,12 +480,13 @@ std::string SomaticHaplotagChrProcessor::convertHpResultToString(int hpResult){
 }
 
 SomaticHaplotagCigarParser::SomaticHaplotagCigarParser(
+    CigarParserContext& ctx,
     int& ref_pos,
     int& query_pos,
     std::map<int, int>& tumCountPS,
     std::map<int, std::pair<int, int>>& somaticVarDeriveHP,
     SomaticReadVerifier& somaticReadCounter
-):CigarParser(ref_pos, query_pos),
+):CigarParser(ctx, ref_pos, query_pos),
     tumCountPS(tumCountPS),
     somaticVarDeriveHP(somaticVarDeriveHP),
     somaticReadCounter(somaticReadCounter)
@@ -493,31 +498,8 @@ SomaticHaplotagCigarParser::~SomaticHaplotagCigarParser(){
 
 }
 
-void SomaticHaplotagCigarParser::onlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){
-
-    if(curVar.isSomaticVariant){
-        std::string& TumorRefBase = curVar.Variant[TUMOR].allele.Ref;
-        std::string& TumorAltBase = curVar.Variant[TUMOR].allele.Alt; 
-
-        if(base == TumorAltBase){
-            hpCount[3]++;
-            if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::SOMATIC_H3;
-
-        //base is not match to TumorRefBase & TumorAltBase (other HP)
-        }else if(base != TumorRefBase && base != TumorAltBase){
-            //hpCount[4]++;
-            //if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::SOMATIC_H4;
-            //std::cerr << "Somatic SNP: " << curPos << " " << base << " -> " << TumorRefBase << "|" << TumorAltBase << std::endl;
-        }
-
-        if(curVar.Variant[TUMOR].is_phased_hetero){
-            if(tumCountPS != nullptr) (*tumCountPS)[curVar[TUMOR].PhasedSet]++;
-        }
-    }
-}
-
 void SomaticHaplotagCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base){
-    somaticJudgeSnpHP(currentVariantIter, *chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, nullptr);
+    somaticJudger.judgeSomaticSnpHap(currentVariantIter, ctx.chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, nullptr);
 
     //record the somatic snp derive by which germline hp in this read
     if(currentVariantIter->second.isSomaticVariant){
@@ -535,11 +517,11 @@ void SomaticHaplotagCigarParser::processMatchOperation(int& length, uint32_t* ci
 
     } 
     
-    somaticReadCounter.recordRefAltAlleleCount(*chrName, base, currentVariantIter);
+    somaticReadCounter.recordRefAltAlleleCount(ctx.chrName, base, currentVariantIter);
 }
 
 void SomaticHaplotagCigarParser::processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel){
-    somaticReadCounter.recordDelReadCount(*chrName, currentVariantIter);
+    somaticReadCounter.recordDelReadCount(ctx.chrName, currentVariantIter);
 }
 
 void SomaticTagLog::writeTagReadLog(TagReadLog& data) {

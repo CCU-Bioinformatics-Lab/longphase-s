@@ -79,38 +79,29 @@ class SomaticTagLog : public GermlineTagLog {
         void writeTagReadLog(TagReadLog& data) override;
 };
 
-class SomaticHaplotagCigarParser: public CigarParser, public SomaticJudgeBase{
+class SomaticHaplotagCigarParser: public CigarParser{
     private:
         std::map<int, int>& tumCountPS;
         std::map<int, std::pair<int, int>>& somaticVarDeriveHP;
         SomaticReadVerifier& somaticReadCounter;
+        SomaticHaplotagStrategy somaticJudger;
     protected:
-
-        void onlyTumorSNPjudgeHP(
-            const std::string &chrName,
-            int &curPos,
-            MultiGenomeVar &curVar,
-            std::string base,
-            std::map<int, int> &hpCount,
-            std::map<int, int> *tumCountPS,
-            std::map<int, int> *variantsHP,
-            std::vector<int> *tumorAllelePosVec
-        ) override;
 
         void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base) override;
         void processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel) override;
     public:
         SomaticHaplotagCigarParser(
-            int& ref_pos
-          , int& query_pos
-          , std::map<int, int>& tumCountPS
-          , std::map<int, std::pair<int, int>>& somaticVarDeriveHP
-          , SomaticReadVerifier& somaticReadCounter
+            CigarParserContext& ctx,
+            int& ref_pos,
+            int& query_pos,
+            std::map<int, int>& tumCountPS,
+            std::map<int, std::pair<int, int>>& somaticVarDeriveHP,
+            SomaticReadVerifier& somaticReadCounter
         );
         ~SomaticHaplotagCigarParser() override;
 };
 
-class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor, public SomaticJudgeBase{
+class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor{
     private:
 
         SomaticReadVerifier* somaticReadCounter;
@@ -120,6 +111,8 @@ class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor, public S
 
         std::string chr;
         std::time_t begin;
+
+        SomaticHaplotagStrategy somaticJudger;
     protected:
         int judgeHaplotype(
             const bam_hdr_t &bamHdr,
@@ -201,7 +194,7 @@ class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
         ~SomaticHaplotagBamParser() override;
 };
 
-class SomaticHaplotagProcess: public HaplotagProcess, public SomaticJudgeBase{
+class SomaticHaplotagProcess: public HaplotagProcess{
     private:
         SomaticHaplotagParameters& sParams;
     protected:

@@ -7,7 +7,7 @@
 
 template<>
 struct ParamsHandler<SomaticHaplotagParameters>{
-    static void initialize(SomaticHaplotagParameters& params);
+    static void initialize(SomaticHaplotagParameters& params, const std::string& version);
 
     static bool loadArgument(SomaticHaplotagParameters& params, char& opt, std::istringstream& arg);
 
@@ -46,7 +46,8 @@ class SomaticHaplotagArgumentManager : public ArgumentTemManager<SomaticHaplotag
         }
 
     public:
-        SomaticHaplotagArgumentManager(const std::string& program) : ArgumentTemManager<SomaticHaplotagParameters>(program) {}
+        SomaticHaplotagArgumentManager(const std::string& program, const std::string& version)
+         : ArgumentTemManager<SomaticHaplotagParameters>(program, version) {}
         virtual ~SomaticHaplotagArgumentManager() = default;
 };
 

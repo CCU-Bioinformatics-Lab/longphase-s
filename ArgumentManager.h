@@ -69,7 +69,7 @@ class HelpMessageManager;
 template<typename Params>
 struct ParamsHandler{
     // Initialize the parameters
-    static void initialize(Params& params) {}
+    static void initialize(Params& params, const std::string& version) {}
 
     // Load the arguments
     static bool loadArgument(Params& params, char& opt, std::istringstream& arg) {return false;}
@@ -302,6 +302,7 @@ class ArgumentManager {
 
     protected:
         std::string programName;
+        std::string version;
         std::vector<struct option> longOpts;
         std::string shortOpts;
 
@@ -411,7 +412,8 @@ class ArgumentManager {
         // Parse command line options
         virtual void parseOptions(int argc, char** argv);
 
-        ArgumentManager(const std::string& program) : programName(program) {};
+        ArgumentManager(const std::string& program, const std::string& version)
+         : programName(program), version(version) {};
         
         virtual ~ArgumentManager(){
             destroy();
@@ -457,7 +459,7 @@ class ArgumentTemManager : public ArgumentManager{
     
     protected:
         virtual void initializeDefaultValues() override {
-            paramsHandler.initialize(params);
+            paramsHandler.initialize(params, version);
         };
 
         virtual bool loadArgument(char& opt, std::istringstream& arg) override {
@@ -485,7 +487,8 @@ class ArgumentTemManager : public ArgumentManager{
         };
         
     public:
-        ArgumentTemManager(const std::string& program) : ArgumentManager(program) {};
+        ArgumentTemManager(const std::string& program, const std::string& version)
+         : ArgumentManager(program, version) {};
 
         Params getParams() const {
             return params;

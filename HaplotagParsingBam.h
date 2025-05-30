@@ -7,12 +7,94 @@ class HaplotagBamParser;
 class ChromosomeProcessor;
 class CigarParser;
 
+struct excutionParams{
+    std::string& version;
+    std::string& command;
+};
 
-class GermlineJudgeBase{
+struct HaplotagBamParserContext{
+    const std::string &BamFile;
+    const HaplotagParameters &params; 
+    const std::vector<std::string> &chrVec; 
+    const std::map<std::string, int> &chrLength; 
+    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat; 
+    std::map<Genome, VCF_Info> &vcfSet;
+    const Genome genmoeType;
+    
+    HaplotagBamParserContext(
+        const std::string &BamFile, 
+        const HaplotagParameters &params, 
+        const std::vector<std::string> &chrVec, 
+        const std::map<std::string, int> &chrLength, 
+        std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
+        std::map<Genome, VCF_Info> &vcfSet,
+        const Genome genmoeType
+    ): 
+    BamFile(BamFile),
+    params(params),
+    chrVec(chrVec),
+    chrLength(chrLength),
+    mergedChrVarinat(mergedChrVarinat),
+    vcfSet(vcfSet),
+    genmoeType(genmoeType)
+    {}
+};
+
+struct ChrProcCommonContext{
+    const std::string &chrName; 
+    const int& chrLength;
+    const HaplotagParameters &params; 
+    const Genome genmoeType;
+    std::map<Genome, VCF_Info> &vcfSet; 
+
+    ChrProcCommonContext(
+        const std::string &chrName,
+        const int& chrLength,
+        const HaplotagParameters &params,
+        const Genome genmoeType,
+        std::map<Genome, VCF_Info> &vcfSet
+    ):
+    chrName(chrName),
+    chrLength(chrLength),
+    params(params),
+    genmoeType(genmoeType),
+    vcfSet(vcfSet)
+    {}
+};
+
+struct CigarParserContext{
+    const bam1_t& aln;
+    const bam_hdr_t& bamHdr;
+    const std::string& chrName;
+    const HaplotagParameters& params;
+    std::map<int, MultiGenomeVar>::iterator& firstVariantIter;
+    std::map<int, MultiGenomeVar>& currentVariants;
+    const std::string& ref_string;
+    
+    CigarParserContext(
+        const bam1_t& aln,
+        const bam_hdr_t& bamHdr,
+        const std::string& chrName,
+        const HaplotagParameters& params,
+        std::map<int, MultiGenomeVar>::iterator& firstVariantIter,
+        std::map<int, MultiGenomeVar>& currentVariants,
+        const std::string& ref_string
+    ):
+    aln(aln),
+    bamHdr(bamHdr),
+    chrName(chrName),
+    params(params),
+    firstVariantIter(firstVariantIter),
+    currentVariants(currentVariants),
+    ref_string(ref_string)
+    {}
+};
+
+class GermlineHaplotagStrategy{
     private:
-
     protected:
-        void germlineJudgeSnpHap(
+    public:
+        void judgeSnpHap(
             const std::string& chrName,
             VarData& norVar, const std::string& base,
             int& ref_pos,
@@ -26,7 +108,7 @@ class GermlineJudgeBase{
             std::map<int, int>& countPS
         );
 
-        void germlineJudgeDeletionHap(
+        void judgeDeletionHap(
             const std::string& chrName,
             const std::string& ref_string,
             int& ref_pos,
@@ -37,14 +119,15 @@ class GermlineJudgeBase{
             std::map<int, int>& variantsHP,
             std::map<int, int>& countPS
         );
-        void germlineJudgeSVHap(
+
+        void judgeSVHap(
             const bam1_t &aln,
             std::map<Genome, VCF_Info> &vcfSet,
             std::map<int, int>& hpCount,
             const int& tagGeneType
         );
 
-        int germlineDetermineReadHap(
+        int judgeReadHap(
             std::map<int, int>& hpCount,
             double& min,
             double& max,
@@ -55,14 +138,34 @@ class GermlineJudgeBase{
             int* totalHighSimilarity,
             int* totalWithOutVaraint
         );
-    public:
 };
 
-class SomaticJudgeBase{
+class SomaticJudgeHapStrategy{
     private :
 
     protected:
-        void somaticJudgeSnpHP(
+        void judgeNormalSnpHap(
+            const std::string& chrName, 
+            int& curPos,
+            MultiGenomeVar& curVar,
+            std::string& base,
+            std::map<int, int>& hpCount, 
+            std::map<int, int>& norCountPS,
+            std::map<int, int> *variantsHP
+        );
+
+        virtual void judgeTumorOnlySnpHap(
+            const std::string &chrName,
+            int &curPos, MultiGenomeVar &curVar,
+            std::string base,
+            std::map<int, int> &hpCount,
+            std::map<int, int> *tumCountPS,
+            std::map<int, int> *variantsHP,
+            std::vector<int> *tumorAllelePosVec
+        ) = 0;
+
+    public:
+        void judgeSomaticSnpHap(
             std::map<int, MultiGenomeVar>::iterator &currentVariantIter,
             std::string chrName,
             std::string base,
@@ -73,27 +176,8 @@ class SomaticJudgeBase{
             std::vector<int> *tumorAllelePosVec
         );
 
-        void normalSNPjudgeHP(
-            const std::string& chrName, 
-            int& curPos,
-            MultiGenomeVar& curVar,
-            std::string& base,
-            std::map<int, int>& hpCount, 
-            std::map<int, int>& norCountPS,
-            std::map<int, int> *variantsHP
-        );
 
-        virtual void onlyTumorSNPjudgeHP(
-            const std::string &chrName,
-            int &curPos, MultiGenomeVar &curVar,
-            std::string base,
-            std::map<int, int> &hpCount,
-            std::map<int, int> *tumCountPS,
-            std::map<int, int> *variantsHP,
-            std::vector<int> *tumorAllelePosVec
-        ){};
-
-        int determineReadHP(
+        int judgeSomaticReadHap(
             std::map<int, int> &hpCount,
             int &pqValue,
             std::map<int, int> &norCountPS,
@@ -105,6 +189,35 @@ class SomaticJudgeBase{
             int *totalWithOutVaraint
         );
 
+};
+
+class ExtractSomaticDataStragtegy: public SomaticJudgeHapStrategy{
+    private:
+    protected:
+        virtual void judgeTumorOnlySnpHap(
+            const std::string &chrName,
+            int &curPos, MultiGenomeVar &curVar,
+            std::string base,
+            std::map<int, int> &hpCount,
+            std::map<int, int> *tumCountPS,
+            std::map<int, int> *variantsHP,
+            std::vector<int> *tumorAllelePosVec
+        ) override;
+    public:
+};
+
+class SomaticHaplotagStrategy: public SomaticJudgeHapStrategy{
+    private:
+    protected:
+        virtual void judgeTumorOnlySnpHap(
+            const std::string &chrName,
+            int &curPos, MultiGenomeVar &curVar,
+            std::string base,
+            std::map<int, int> &hpCount,
+            std::map<int, int> *tumCountPS,
+            std::map<int, int> *variantsHP,
+            std::vector<int> *tumorAllelePosVec
+        ) override;
     public:
 };
 
@@ -128,11 +241,16 @@ class BamFileRAII {
         hts_idx_t* idx;
         bam1_t* aln;
 
-        BamFileRAII(const std::string& BamFile
-                  , const std::string& fastaFile
-                  , htsThreadPool &threadPool
-                  , const HaplotagParameters& params
-                  , const bool writeOutputBam = false);
+        BamFileRAII(
+            const std::string& BamFile,
+            const std::string& fastaFile,
+            htsThreadPool &threadPool,
+            const std::string& version,
+            const std::string& command,
+            const std::string& resultPrefix,
+            const std::string& outputFormat,
+            const bool writeOutputBam = false
+        );
         ~BamFileRAII();
 
         bool validateState();
@@ -146,27 +264,16 @@ class HaplotagBamParser{
         ParsingBamMode mode;
 
         void processBamParallel(
-            const std::string &BamFile, 
-            const HaplotagParameters &params, 
-            const std::vector<std::string> &chrVec, 
-            const std::map<std::string, int> &chrLength, 
+            HaplotagBamParserContext& ctx,
             const FastaParser &fastaParser,
-            htsThreadPool &threadPool,
-            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-            std::map<Genome, VCF_Info> &vcfSet, 
-            const Genome& genmoeType
+            htsThreadPool &threadPool
         );
 
+
         void processBamWithOutput(
-            const std::string &BamFile, 
-            const HaplotagParameters &params, 
-            const std::vector<std::string> &chrVec, 
-            const std::map<std::string, int> &chrLength, 
+            HaplotagBamParserContext& ctx,
             const FastaParser &fastaParser,
-            htsThreadPool &threadPool,
-            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-            std::map<Genome, VCF_Info> &vcfSet, 
-            const Genome& genmoeType
+            htsThreadPool &threadPool
         );
     protected: 
 
@@ -189,19 +296,12 @@ class HaplotagBamParser{
             bool mappingQualityFilter = false
         );
         virtual ~HaplotagBamParser();
-        void parsingBam(
-            const std::string &BamFile, 
-            const HaplotagParameters &params, 
-            const std::vector<std::string> &chrVec, 
-            const std::map<std::string, int> &chrLength, 
-            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-            std::map<Genome, VCF_Info> &vcfSet,
-            const Genome& genmoeType
-        );
+
+        void parsingBam(HaplotagBamParserContext& ctx);
 
 };
 
-class ChromosomeProcessor : public GermlineJudgeBase{
+class ChromosomeProcessor{
     private:
         bool writeOutputBam;
         bool mappingQualityFilter;
@@ -217,13 +317,10 @@ class ChromosomeProcessor : public GermlineJudgeBase{
         virtual void processRead(
             bam1_t &aln, 
             const bam_hdr_t &bamHdr,
-            const std::string &chrName, 
-            const HaplotagParameters &params, 
-            const Genome& genmoeType, 
+            const std::string &ref_string,
             std::map<int, MultiGenomeVar> &currentVariants,
-            std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-            std::map<Genome, VCF_Info> &vcfSet, 
-            const std::string &ref_string
+            std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
+            ChrProcCommonContext& ctx
         ) = 0;
 
         virtual void postProcess(
@@ -243,28 +340,22 @@ class ChromosomeProcessor : public GermlineJudgeBase{
     public:
         ChromosomeProcessor( bool writeOutputBam=false, bool mappingQualityFilter=false);
         virtual ~ChromosomeProcessor();
-        
+
         void processSingleChromosome(
-            const std::string& chr,
-            const std::map<std::string, int>& chrLength,
-            const HaplotagParameters& params, 
+            ChrProcCommonContext& ctx,
+            BamFileRAII& bamRAII,
             const FastaParser& fastaParser,
-            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
-            BamFileRAII& bam,
-            const Genome& genmoeType,
-            std::map<Genome, VCF_Info> &vcfSet
+            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat        
         );
 
 };
 
-class CigarParser : public GermlineJudgeBase{
+class CigarParser{
     private:
     protected:
         // Common data members that derived classes might need
-        const bam1_t* aln;
-        const bam_hdr_t* bamHdr;
-        const std::string* chrName;
-        const std::string* ref_string;
+        CigarParserContext ctx;
+
         std::map<int, int>* hpCount;
         std::map<int, int>* norCountPS;
         std::map<int, int>* variantsHP;
@@ -290,17 +381,24 @@ class CigarParser : public GermlineJudgeBase{
 
     public:
 
-        CigarParser(int& ref_pos, int& query_pos);
+        // CigarParser(int& ref_pos, int& query_pos);
+        CigarParser(CigarParserContext& ctx, int& ref_pos, int& query_pos);
 
         virtual ~CigarParser();
+        // void parsingCigar(
+        //     const bam1_t& aln,
+        //     const bam_hdr_t& bamHdr,
+        //     const std::string& chrName,
+        //     const HaplotagParameters& params,
+        //     std::map<int, MultiGenomeVar>::iterator& firstVariantIter,
+        //     std::map<int, MultiGenomeVar>& currentVariants,
+        //     const std::string& ref_string,
+        //     std::map<int, int>& hpCount,
+        //     std::map<int, int>& variantsHP,
+        //     std::map<int, int>& norCountPS
+        // );
+
         void parsingCigar(
-            const bam1_t& aln,
-            const bam_hdr_t& bamHdr,
-            const std::string& chrName,
-            const HaplotagParameters& params,
-            std::map<int, MultiGenomeVar>::iterator& firstVariantIter,
-            std::map<int, MultiGenomeVar>& currentVariants,
-            const std::string& ref_string,
             std::map<int, int>& hpCount,
             std::map<int, int>& variantsHP,
             std::map<int, int>& norCountPS

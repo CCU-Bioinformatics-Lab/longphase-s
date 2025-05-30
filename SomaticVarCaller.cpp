@@ -39,15 +39,12 @@ ExtractNorDataChrProcessor::~ExtractNorDataChrProcessor(){
 }
 
 void ExtractNorDataChrProcessor::processRead(
-    bam1_t &aln,
-    const bam_hdr_t &bamHdr,
-    const std::string &chrName,
-    const HaplotagParameters &params,
-    const Genome& genmoeType,
-    std::map<int, MultiGenomeVar> &currentVariants,
-    std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
-    std::map<Genome, VCF_Info> &vcfSet,
-    const std::string &ref_string
+            bam1_t &aln, 
+            const bam_hdr_t &bamHdr,
+            const std::string &ref_string,
+            std::map<int, MultiGenomeVar> &currentVariants,
+            std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
+            ChrProcCommonContext& ctx
 ){
 
     std::map<int, int> hpCount;
@@ -70,13 +67,14 @@ void ExtractNorDataChrProcessor::processRead(
 
     /// Create a CIGAR parser using polymorphism design
     // Use extractNorDataCigarParser to process CIGAR strings for normal samples    
-    CigarParser* cigarParser = new ExtractNorDataCigarParser(*variantBase, tumVarPosVec, ref_pos, query_pos, params.qualityThreshold);
-    cigarParser->parsingCigar(aln, bamHdr, chrName, params, firstVariantIter, currentVariants, ref_string, hpCount, variantsHP, norCountPS);
+    CigarParserContext cigarCtx(aln, bamHdr, ctx.chrName, ctx.params, firstVariantIter, currentVariants, ref_string);
+    CigarParser* cigarParser = new ExtractNorDataCigarParser(cigarCtx, *variantBase, tumVarPosVec, ref_pos, query_pos, ctx.params.qualityThreshold);
+    cigarParser->parsingCigar(hpCount, variantsHP, norCountPS);
     delete cigarParser;
 
     // get the number of SVs occurring on different haplotypes in a read
-    if( aln.core.qual >= params.qualityThreshold ){
-        germlineJudgeSVHap(aln, vcfSet, hpCount, genmoeType);
+    if( aln.core.qual >= ctx.params.qualityThreshold ){
+        judger.judgeSVHap(aln, ctx.vcfSet, hpCount, ctx.genmoeType);
     }
 
     double min = 0.0;
@@ -84,9 +82,9 @@ void ExtractNorDataChrProcessor::processRead(
     int hpResult = ReadHP::unTag;
     int pqValue = 0;
     int psValue = 0;
-    double percentageThreshold = params.percentageThreshold;
+    double percentageThreshold = ctx.params.percentageThreshold;
     // determine the haplotype of the read
-    hpResult = germlineDetermineReadHap(hpCount, min, max, percentageThreshold, pqValue, psValue, norCountPS, nullptr, nullptr);
+    hpResult = judger.judgeReadHap(hpCount, min, max, percentageThreshold, pqValue, psValue, norCountPS, nullptr, nullptr);
 
     //record read hp to tumor SNP position
     for(auto pos : tumVarPosVec){
@@ -123,8 +121,14 @@ void ExtractNorDataChrProcessor::postProcess(
     } 
 }
 
-ExtractNorDataCigarParser::ExtractNorDataCigarParser(std::map<int, PosBase>& variantBase, std::vector<int>& tumVarPosVec, int& ref_pos, int& query_pos, const int& mappingQualityThr)
-:CigarParser(ref_pos, query_pos), variantBase(variantBase), tumVarPosVec(tumVarPosVec), mappingQualityThr(mappingQualityThr){
+ExtractNorDataCigarParser::ExtractNorDataCigarParser(
+    CigarParserContext& ctx,
+    std::map<int, PosBase>& variantBase,
+    std::vector<int>& tumVarPosVec,
+    int& ref_pos,
+    int& query_pos,
+    const int& mappingQualityThr)
+:CigarParser(ctx, ref_pos, query_pos), variantBase(variantBase), tumVarPosVec(tumVarPosVec), mappingQualityThr(mappingQualityThr){
 
 }
 
@@ -145,7 +149,7 @@ void ExtractNorDataCigarParser::processMatchOperation(int& length, uint32_t* cig
             tumVarPosVec.push_back(curPos);
 
             //counting current tumor SNP base and depth           
-            countBaseNucleotide(variantBase[curPos], base, *aln, mappingQualityThr);
+            countBaseNucleotide(variantBase[curPos], base, ctx.aln, mappingQualityThr);
         }
         // the indel(deletion) SNP position is the start position, and the deletion occurs at the next position
         else if(curVar.variantType == VariantType::DELETION){
@@ -156,11 +160,11 @@ void ExtractNorDataCigarParser::processMatchOperation(int& length, uint32_t* cig
         }
     }       
 
-    if ( aln->core.qual >= mappingQualityThr && (*currentVariantIter).second.isExists(NORMAL)){
+    if ( ctx.aln.core.qual >= mappingQualityThr && (*currentVariantIter).second.isExists(NORMAL)){
         // only judge the heterozygous SNP
         if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
             auto norVar = (*currentVariantIter).second.Variant[NORMAL];
-            germlineJudgeSnpHap(*chrName, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, *hpCount, *variantsHP, *norCountPS);
+            judger.judgeSnpHap(ctx.chrName, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, *hpCount, *variantsHP, *norCountPS);
         }
     }
 }
@@ -187,11 +191,11 @@ void ExtractNorDataCigarParser::processDeletionOperation(int& length, uint32_t* 
     }
 
     // only execute at the first phased normal snp
-    if ( aln->core.qual >= mappingQualityThr && (*currentVariantIter).second.isExists(NORMAL) && !alreadyJudgeDel){
+    if ( ctx.aln.core.qual >= mappingQualityThr && (*currentVariantIter).second.isExists(NORMAL) && !alreadyJudgeDel){
         if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
             // longphase v1.73 only execute once
             alreadyJudgeDel = true;
-            germlineJudgeDeletionHap(*chrName, *ref_string, ref_pos, length, query_pos, currentVariantIter, aln, *hpCount, *variantsHP, *norCountPS);
+            judger.judgeDeletionHap(ctx.chrName, ctx.ref_string, ref_pos, length, query_pos, currentVariantIter, &ctx.aln, *hpCount, *variantsHP, *norCountPS);
         }
     }
     
@@ -237,13 +241,10 @@ ExtractTumDataChrProcessor::~ExtractTumDataChrProcessor(){
 void ExtractTumDataChrProcessor::processRead(
     bam1_t &aln, 
     const bam_hdr_t &bamHdr,
-    const std::string &chrName, 
-    const HaplotagParameters &params, 
-    const Genome& genmoeType, 
+    const std::string &ref_string,
     std::map<int, MultiGenomeVar> &currentVariants,
-    std::map<int, MultiGenomeVar>::iterator &firstVariantIter, 
-    std::map<Genome, VCF_Info> &vcfSet, 
-    const std::string &ref_string
+    std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
+    ChrProcCommonContext& ctx
 ){
    
     std::map<int, int> hpCount;
@@ -269,15 +270,16 @@ void ExtractTumDataChrProcessor::processRead(
     // position relative to read
     int query_pos = 0;
 
-    ExtractTumDataCigarParser cigarParser(*somaticPosInfo, tumorAllelePosVec, tumorSnpPosVec, tumCountPS, ref_pos, query_pos, params.qualityThreshold);
-    cigarParser.parsingCigar(aln, bamHdr, chrName, params, firstVariantIter, currentVariants, ref_string, hpCount, variantsHP, norCountPS);
+    CigarParserContext cigarCtx(aln, bamHdr, ctx.chrName, ctx.params, firstVariantIter, currentVariants, ref_string);
+    ExtractTumDataCigarParser cigarParser(cigarCtx, *somaticPosInfo, tumorAllelePosVec, tumorSnpPosVec, tumCountPS, ref_pos, query_pos, ctx.params.qualityThreshold);
+    cigarParser.parsingCigar(hpCount, variantsHP, norCountPS);
 
     int pqValue = 0;   
     double normalHPsimilarity = 0.0;
     double tumorHPsimilarity = 0.0;
     //calculate germline read HP result for predict tumor purity
     //calculate somatic read HP result for somatic read consistency filter
-    int hpResult =determineReadHP(hpCount, pqValue, norCountPS, normalHPsimilarity, tumorHPsimilarity, params.percentageThreshold, nullptr, nullptr, nullptr);
+    int hpResult = somaticJudger.judgeSomaticReadHap(hpCount, pqValue, norCountPS, normalHPsimilarity, tumorHPsimilarity, ctx.params.percentageThreshold, nullptr, nullptr, nullptr);
    
     //classify read cases where tumor SNPs have low VAF in normal samples
     if(!tumorAllelePosVec.empty()){
@@ -289,19 +291,19 @@ void ExtractTumDataChrProcessor::processRead(
                 baseHP = variantsHP[pos];
             }else{
                 std::cerr << "Error (SomaticStatisticSomaticPosInfo) => can't find the position" << std::endl;
-                std::cerr << "chr:" << chrName << " pos: " << pos+1 << std::endl;
+                std::cerr << "chr:" << ctx.chrName << " pos: " << pos+1 << std::endl;
                 std::cerr << "readID: " << bam_get_qname(&aln) << std::endl;
                 exit(1);
             }
             if(baseHP != SnpHP::SOMATIC_H3){
-                std::cerr << "Error (SomaticStatisticSomaticPosInfo) => baseHP is not HP3 : chr:" << chrName << " pos: " << pos+1 << " baseHP: " << baseHP << std::endl;
+                std::cerr << "Error (SomaticStatisticSomaticPosInfo) => baseHP is not HP3 : chr:" << ctx.chrName << " pos: " << pos+1 << " baseHP: " << baseHP << std::endl;
                 exit(1);
             }
             if(hpResult == ReadHP::H1_1 || hpResult == ReadHP::H2_1 || hpResult == ReadHP::H3 || hpResult == ReadHP::unTag){
                 // record the somatic read HP for somatic read consistency filter
                 (*somaticPosInfo)[pos].somaticReadHpCount[hpResult]++;
             }else if(hpResult == ReadHP::H1 || hpResult == ReadHP::H2){
-                std::cerr << "Error (SomaticStatisticSomaticPosInfo) => error somatic read HP : chr:" << chrName << " pos: " << pos+1 << " hpResult: " << hpResult << std::endl;
+                std::cerr << "Error (SomaticStatisticSomaticPosInfo) => error somatic read HP : chr:" << ctx.chrName << " pos: " << pos+1 << " hpResult: " << hpResult << std::endl;
                 exit(1);      
             }
         }
@@ -482,14 +484,15 @@ void ExtractTumDataChrProcessor::postProcess( const std::string &chr, std::map<i
 }
 
 ExtractTumDataCigarParser::ExtractTumDataCigarParser(
-    std::map<int, SomaticData> &somaticPosInfo,
-    std::vector<int>& tumorAllelePosVec,
-    std::vector<int>& tumorSnpPosVec,
+    CigarParserContext& ctx,
+    std::map<int, SomaticData> &somaticPosInfo, 
+    std::vector<int>& tumorAllelePosVec, 
+    std::vector<int>& tumorSnpPosVec, 
     std::map<int, int>& tumCountPS,
     int& ref_pos,
     int& query_pos,
     const int& mappingQualityThr
-):CigarParser(ref_pos, query_pos),
+):CigarParser(ctx, ref_pos, query_pos),
   somaticPosInfo(somaticPosInfo),
   tumorAllelePosVec(tumorAllelePosVec),
   tumorSnpPosVec(tumorSnpPosVec),
@@ -504,8 +507,8 @@ ExtractTumDataCigarParser::~ExtractTumDataCigarParser(){
 
 void ExtractTumDataCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base){
     //waring : using ref length to split SNP and indel that will be effect case ratio result 
-    if ( aln->core.qual >= mappingQualityThr ){
-        somaticJudgeSnpHP(currentVariantIter, *chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, &tumorAllelePosVec);
+    if ( ctx.aln.core.qual >= mappingQualityThr ){
+        somaticJudger.judgeSomaticSnpHap(currentVariantIter, ctx.chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, &tumorAllelePosVec);
         if((*currentVariantIter).second.isExists(TUMOR)){
             tumorSnpPosVec.push_back((*currentVariantIter).first);
         }
@@ -518,7 +521,7 @@ void ExtractTumDataCigarParser::processMatchOperation(int& length, uint32_t* cig
 
         if(curVar.variantType == VariantType::SNP){
             //counting current tumor SNP base and depth           
-            countBaseNucleotide(somaticPosInfo[(*currentVariantIter).first].base, base, *aln, mappingQualityThr);
+            countBaseNucleotide(somaticPosInfo[(*currentVariantIter).first].base, base, ctx.aln, mappingQualityThr);
         }
     }
 }
@@ -540,37 +543,6 @@ void ExtractTumDataCigarParser::processDeletionOperation(int& length, uint32_t* 
         }
     }
 }
-
-void ExtractTumDataCigarParser::onlyTumorSNPjudgeHP(const std::string &chrName, int &curPos, MultiGenomeVar &curVar, std::string base, std::map<int, int> &hpCount, std::map<int, int> *tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){
- //the tumor SNP GT is phased heterozygous
-    //all bases of the same type at the current position in normal.bam
-
-    if(tumorAllelePosVec == nullptr){
-        std::cerr << "ERROR (SomaticDetectJudgeHP) => tumorAllelePosVec pointer cannot be nullptr"<< std::endl;
-        exit(1);
-    }
-
-    std::string& TumorRefBase = curVar.Variant[TUMOR].allele.Ref;
-    std::string& TumorAltBase = curVar.Variant[TUMOR].allele.Alt; 
-    
-    if(base == TumorAltBase){
-        hpCount[3]++;
-        if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::SOMATIC_H3;
-
-        //record postions that tagged as HP3 for calculating the confidence of somatic positions
-        (*tumorAllelePosVec).push_back(curPos);
-
-    //base is not match to TumorRefBase & TumorAltBase (other HP)
-    }else if(base != TumorRefBase && base != TumorAltBase){
-        //hpCount[4]++;
-        //if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::SOMATIC_H4;
-        //(*tumorAllelePosVec).push_back(curPos);
-    }
-
-    if(tumCountPS != nullptr) (*tumCountPS)[curVar.Variant[TUMOR].PhasedSet]++;
-}
-
-
 
 SomaticVarCaller::SomaticVarCaller(const std::vector<std::string> &chrVec, const SomaticHaplotagParameters &params)
 :params(params)
@@ -620,14 +592,16 @@ void SomaticVarCaller::variantCalling(
     //Count each base numbers at tumor SNP position in the Normal.bam
     std::cerr<< "extracting data from normal BAM... ";
     std::time_t begin = time(NULL);
+    HaplotagBamParserContext norBamCtx(sParams.basic.bamFile, sParams.basic, chrVec, chrLength, mergedChrVarinat, vcfSet, Genome::NORMAL);
     ExtractNorDataBamParser normalBamParser(*chrPosNorBase);
-    normalBamParser.parsingBam(sParams.basic.bamFile, sParams.basic, chrVec, chrLength, mergedChrVarinat, vcfSet, Genome::NORMAL);
+    normalBamParser.parsingBam(norBamCtx);
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 
     std::cerr << "extracting data from tumor BAM... ";
     begin = time(NULL);
+    HaplotagBamParserContext tumBamCtx(sParams.tumorBamFile, sParams.basic, chrVec, chrLength, mergedChrVarinat, vcfSet, Genome::TUMOR);
     ExtractTumDataBamParser tumorBamParser(*chrPosSomaticInfo, *chrReadHpResultSet, *chrTumorPosReadCorrBaseHP);
-    tumorBamParser.parsingBam(sParams.tumorBamFile, sParams.basic, chrVec, chrLength, mergedChrVarinat, vcfSet, Genome::TUMOR);
+    tumorBamParser.parsingBam(tumBamCtx);
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 
     double tumorPurity = 0.0;
@@ -1398,7 +1372,7 @@ void SomaticVarCaller::calculateReadSetHP(const std::string &chr, std::map<std::
             double tumorHPsimilarity = 0.0;
             std::map<int, int> norCountPS = (*readTotalHPcountIter).second.norCountPS;
 
-            (*readTotalHPcountIter).second.hpResult = determineReadHP(hpCount, pqValue, norCountPS, normalHPsimilarity, tumorHPsimilarity, percentageThreshold, nullptr, nullptr, nullptr);
+            (*readTotalHPcountIter).second.hpResult = somaticJudger.judgeSomaticReadHap(hpCount, pqValue, norCountPS, normalHPsimilarity, tumorHPsimilarity, percentageThreshold, nullptr, nullptr, nullptr);
             
             readTotalHPcountIter++;
         }
