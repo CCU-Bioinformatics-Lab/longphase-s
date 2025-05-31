@@ -1,6 +1,7 @@
 #ifndef SOMATIC_BENCHMARK_H
 #define SOMATIC_BENCHMARK_H
 
+#include <iomanip>
 #include "Util.h"
 #include "HaplotagType.h"
 #include "HaplotagVcfParser.h"
@@ -62,13 +63,19 @@ class SomaticReadBenchmark: public VcfParser{
         };
         
         bool openTestingFunc;
+        bool loadedBedFile;
         // chr, metrics
         std::map<std::string, SomaticReadMetrics> chrMetrics;
 
+        // chr, bed regions
         std::map<std::string, std::vector<BedRegion>> bedRegions;
 
         std::string benchmarkVcf;
+        std::string benchmarkBed;
         int mappingQualityThreshold;
+
+        std::map<Genome, int> variantInBedRegionCount;
+        std::map<Genome, int> variantOutBedRegionCount;
 
         void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         void setChrSomaticReadVecPtr(
@@ -84,12 +91,28 @@ class SomaticReadBenchmark: public VcfParser{
 
         void processBedLine(const std::string& line);
 
+        static float calculateRecall(int TP, int TP_FN){
+            if(TP_FN == 0 || TP == 0) return 0.0;
+            return (float)TP / (float)TP_FN;
+        }
+
+        static float calculatePrecision(int TP, int TP_FP){
+            if(TP_FP == 0 || TP == 0) return 0.0;
+            return (float)TP / (float)TP_FP;
+        }
+
+        static float calculateF1Score(float recall, float precision){
+            if(recall == 0.0 || precision == 0.0) return 0.0;
+            return 2 * recall * precision / (recall + precision);
+        }
+
     public:
 
-        SomaticReadBenchmark(std::string benchmarkVcf, int mappingQualityThreshold);
+        SomaticReadBenchmark(std::string benchmarkVcf, std::string benchmarkBed, int mappingQualityThreshold);
         ~SomaticReadBenchmark();
-        void setTestingFunc(bool openTestingFunc);
-        bool getTestingFunc();
+        void setEnabled(bool openTestingFunc);
+        bool isEnabled();
+        bool isLoadBedFile();
         void loadChrKey(const std::string &chr);
         void loadHighConSomatic(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         
@@ -118,15 +141,15 @@ class SomaticReadBenchmark: public VcfParser{
             std::string outputFileName,
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat
         );
-        void writeTaggedSomaticReadLog(
+        void writeTaggedSomaticReadReport(
             const std::vector<std::string>& chrVec,
             std::string outputFileName
         );
-        void writeTaggedTruthSomaticReadLog(
+        void writeTotalTruthSomaticReadReport(
             const std::vector<std::string>& chrVec,
             std::string outputFileName
         );
-        void writeTaggedReadLog(
+        void writeTaggedReadReport(
             const std::vector<std::string>& chrVec,
             std::string outputFileName
         );

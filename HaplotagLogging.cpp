@@ -86,9 +86,9 @@ void ReadHpDistriLog::writeReadHpDistriLog(const std::string logFileName, const 
         std::cerr<< "Fail to open write file: " << logFileName << "\n";
         exit(1);
     }else{
-        (*readHpDistriLog) << "####################################\n";
-        (*readHpDistriLog) << "# Somatic SNP read HP distribution #\n";
-        (*readHpDistriLog) << "####################################\n";
+        (*readHpDistriLog) << "###################################################\n";
+        (*readHpDistriLog) << "# Distribution of Read Haplotypes at Somatic SNPs #\n";
+        (*readHpDistriLog) << "###################################################\n";
         (*readHpDistriLog) << "##SomaticSNP: " << somaticSnpCount << "\n";
         (*readHpDistriLog) << "#Chr\t"
                             << "Pos\t"

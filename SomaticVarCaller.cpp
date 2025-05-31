@@ -601,6 +601,7 @@ void SomaticVarCaller::variantCalling(
     }
 
     // set filter params with tumor purity
+    std::cerr << "setting filter params with tumor purity: " << tumorPurity << std::endl;
     SetFilterParamsWithPurity(somaticParams, tumorPurity);
     
     std::cerr<< "calling somatic variants ... ";
@@ -612,7 +613,6 @@ void SomaticVarCaller::variantCalling(
         // chr, variant position
         std::map<int, SomaticData> *somaticPosInfo = nullptr;
         // read ID, reads hpResult 
-        // std::map<int, ReadHpResult> *localCallerReadHpDistri = nullptr;
         chrReadHpResult *localCallerReadHpDistri = nullptr;
         
         // pos, (endPos, denseSnpInterval)
@@ -649,7 +649,7 @@ void SomaticVarCaller::variantCalling(
         // Shannon entropy filter(temporary)
         // ShannonEntropyFilter(chr, *somaticPosInfo, currentChrVariants, ref_string);
 
-        //calibrate read HP to remove low confidence H3/H4 SNP
+        //calibrate read HP to remove low confidence H3 SNP
         calibrateReadHP(chr, *somaticPosInfo, *readHpResultSet, *tumorPosReadCorrBaseHP);
 
         //calculate all read HP result

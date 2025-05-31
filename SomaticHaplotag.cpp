@@ -1,6 +1,6 @@
 #include "SomaticHaplotag.h"
 
-#define SUBPROGRAM "somatic haplotag"
+#define SUBPROGRAM "somatic_haplotag"
 
 void SomaticHaplotagHelpManager::buildMessage() {
     // build base message

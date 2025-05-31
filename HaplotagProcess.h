@@ -48,108 +48,21 @@ struct TagReadLog{
     double deriveByHpSimilarity;
 };
 
-class HaplotagParamsMessage : public MessageManager{
-    private:
-        const HaplotagParameters& params;
-    protected:
 
+class GermlineTagLog : public HaplotagReadLog<HaplotagParameters, TagReadLog>{
+    protected:
+        virtual void addParamsMessage() override;
+
+        virtual void writeBasicColumns() override;
 
     public:
-    
-        virtual void addParamsMessage(){
-            addEntry("phased SNP file", params.snpFile);
-            addEntry("phased SV file", params.svFile);
-            addEntry("phased MOD file", params.modFile);
-            addEntry("input bam file", params.bamFile);
-            addEntry("input ref file", params.fastaFile);
-            addEntry("output bam file", params.resultPrefix + "." + params.outputFormat);
-            addEntry("number of threads", params.numThreads);
-            addEntry("write log file", params.writeReadLog);
-            addEntry("log file", params.writeReadLog ? (params.resultPrefix+".out") : "");
-            addEntry("#1", "-------------------------------------------");
-            addEntry("tag region", !params.region.empty() ? params.region : "all");
-            addEntry("filter mapping quality below", params.qualityThreshold);
-            addEntry("percentage threshold", params.percentageThreshold);
-            addEntry("tag supplementary", params.tagSupplementary);
-            addEntry("#2", "-------------------------------------------");
-        }
-
-        HaplotagParamsMessage(const HaplotagParameters& params):params(params){}
-
-        void printParamsMessage(){
-            // Print all entries with proper formatting
-            for (const auto& entry : entries) {
-                if (entry.key.at(0) == '#') {
-                    std::cerr << entry.value << "\n";
-                } else if(entry.key.at(0) == '[' || entry.key.at(0) == '\n') {
-                    std::cerr << entry.key << "\n";
-                } else {
-                    std::cerr << std::left << std::setw(31) << entry.key << ": " << entry.value << "\n";
-                }
-            }
-        }
-};
-
-// Normal header
-class GermlineTagLog : public MessageManager {
-    private:
-        const HaplotagParameters& params;
-    protected:
-
-        void checkStreamStatus() {
-            if (!tagReadLog || !tagReadLog->is_open()) {
-                throw std::runtime_error("Output stream is not valid");
-            }
-        }
-
-        void addCommonBasicEntries(){
-            addEntry("snpFile", params.snpFile);       
-            addEntry("svFile", params.svFile);       
-            addEntry("bamFile", params.bamFile);    
-            addEntry("resultPrefix", params.resultPrefix);
-            addEntry("numThreads", params.numThreads);  
-            addEntry("region", params.region);  
-            addEntry("qualityThreshold", params.qualityThreshold);         
-            addEntry("percentageThreshold", params.percentageThreshold); 
-            addEntry("tagSupplementary", params.tagSupplementary); 
-        }
-        virtual void addBasicEntries(){
-            addCommonBasicEntries();
-        }
-
-        virtual void writeBasicColumns(){
-            *tagReadLog << "#ReadID\t"
-                        << "CHROM\t"
-                        << "ReadStart\t"
-                        << "Confidnet(%)\t"
-                        << "Haplotype\t"
-                        << "PhaseSet\t"
-                        << "TotalAllele\t"
-                        << "HP1Allele\t"
-                        << "HP2Allele\t"
-                        << "phasingQuality(PQ)\t"
-                        << "(Variant,HP)\t"
-                        << "(PhaseSet,Variantcount)\n";
-        }
-
-    public:
-        std::ofstream* tagReadLog;
-
         GermlineTagLog(const HaplotagParameters& params);
         ~GermlineTagLog();
 
         virtual void writeHeader() {
-            addBasicEntries();
-            // Sort entries by order
-            sortEntries();
+            addParamsMessage();
 
-            // Write all entries
-            for (const auto& entry : entries) {
-                *tagReadLog << "##" << entry.key << ":" << entry.value << "\n";
-            }
-            
             writeBasicColumns();
-            // printMessage();
         }
 
         virtual void writeTagReadLog(TagReadLog& data);
@@ -261,8 +174,9 @@ class HaplotagProcess
 {
     private:
         HaplotagParameters &params;
+
+        virtual void printParamsMessage();
     protected:
-        HaplotagParamsMessage paramsMessage;
 
         std::vector<std::string> *chrVec;
         std::map<std::string, int> *chrLength;
@@ -290,7 +204,7 @@ class HaplotagProcess
 
         virtual void tagRead(HaplotagParameters &params, std::string& tagBamFile, const Genome& geneType);
         virtual void postprocessForHaplotag(){};
-        void printAlignmentStaristics();
+        virtual void printExecutionReport();
 
         virtual GermlineHaplotagBamParser* createHaplotagBamParser(
             ParsingBamMode mode,

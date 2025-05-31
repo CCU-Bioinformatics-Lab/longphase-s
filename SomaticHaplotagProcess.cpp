@@ -2,7 +2,7 @@
 
 
 SomaticHaplotagProcess::SomaticHaplotagProcess(SomaticHaplotagParameters &params)
-    : HaplotagProcess(params.basic),sParams(params), sParamsMessage(params), somaticBenchmark(params.benchmarkVcf, params.basic.qualityThreshold)
+    : HaplotagProcess(params.basic),sParams(params), somaticBenchmark(params.benchmarkVcf, params.benchmarkBedFile, params.basic.qualityThreshold)
 {
     hpBeforeInheritance = new ReadHpDistriLog();
     hpAfterInheritance = new ReadHpDistriLog();
@@ -13,11 +13,45 @@ SomaticHaplotagProcess::~SomaticHaplotagProcess(){
     delete hpAfterInheritance;
 }
 
+void SomaticHaplotagProcess::printParamsMessage(){
+    // std::cerr<< "=======================================\n";
+    std::cerr<< "LongPhase-S v" << sParams.basic.version << " - Somatic Haplotag\n";
+    std::cerr<< "\n";
+    std::cerr<< "[Input Files]\n";
+    std::cerr<< "phased normal SNP file       : " << sParams.basic.snpFile << "\n";
+    std::cerr<< "tumor SNP file               : " << sParams.tumorSnpFile << "\n";
+    std::cerr<< "normal BAM file              : " << sParams.basic.bamFile << "\n";
+    std::cerr<< "tumor BAM file               : " << sParams.tumorBamFile << "\n";
+    std::cerr<< "reference file               : " << sParams.basic.fastaFile << "\n";
+    std::cerr<< "\n";
+    std::cerr<< "[Output Files]\n";
+    std::cerr<< "tagged tumor BAM file        : " << sParams.basic.resultPrefix + "." + sParams.basic.outputFormat << "\n";
+    std::cerr<< "purity prediction results    : " << (sParams.predictTumorPurity ? sParams.basic.resultPrefix + "_purity.out" : "") << "\n";
+    std::cerr<< "log file                     : " << (sParams.basic.writeReadLog ? (sParams.basic.resultPrefix+".out") : "") << "\n";
+    std::cerr<< "\n";
+    std::cerr<< "[Benchmark Files]\n";
+    std::cerr<< "benchmark VCF file           : " << sParams.benchmarkVcf << "\n";
+    std::cerr<< "benchmark bed file           : " << sParams.benchmarkBedFile << "\n";
+    std::cerr<< "\n";
+    std::cerr<< "-------------------------------------------\n";
+    std::cerr<< "[Somatic Haplotag Params] " << "\n";
+    std::cerr<< "number of threads            : " << sParams.basic.numThreads << "\n";
+    std::cerr<< "tag region                   : " << (!sParams.basic.region.empty() ? sParams.basic.region : "all") << "\n";
+    std::cerr<< "filter mapping quality below : " << sParams.basic.qualityThreshold << "\n";
+    std::cerr<< "percentage threshold         : " << sParams.basic.percentageThreshold << "\n";
+    std::cerr<< "write log file               : " << (sParams.basic.writeReadLog ? "enabled" : "disabled") << "\n";
+    std::cerr<< "tag supplementary            : " << (sParams.basic.tagSupplementary ? "enabled" : "disabled") << "\n";
+    std::cerr<< "\n";
+    std::cerr<< "[Somatic Calling Params] " << "\n";
+    std::cerr<< "mapping quality              : " << sParams.basic.qualityThreshold << "\n";
+    std::cerr<< "variant filtering            : " << (sParams.enableFilter ? "enabled" : "disabled") << "\n";
+    std::cerr<< "tumor purity value           : " << (sParams.predictTumorPurity ? "auto-prediction" : std::to_string(sParams.tumorPurity)) << "\n";
+    std::cerr<< "-------------------------------------------\n";
+}
+
 void SomaticHaplotagProcess::taggingProcess()
 {
-    sParamsMessage.addParamsMessage();
-    sParamsMessage.printParamsMessage();
-
+    printParamsMessage();
     // decide on the type of tagging for VCF and BAM files
     Genome tagGeneType = TUMOR;
 
@@ -39,11 +73,12 @@ void SomaticHaplotagProcess::taggingProcess()
     // return;
 
     // remove tumor & benchmark variants out bed regions
-    if(sParams.benchmarkBedFile != ""){
+    if(somaticBenchmark.isLoadBedFile() && somaticBenchmark.isEnabled()){
         std::cerr<< "removing tumor & benchmark variants out bed regions ... ";
         std::time_t begin = time(NULL);
         somaticBenchmark.removeVariantsOutBedRegion(*mergedChrVarinat);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
+        somaticBenchmark.displayBedRegionCount(*chrVec);
     }
 
     // tag read
@@ -51,6 +86,8 @@ void SomaticHaplotagProcess::taggingProcess()
 
     // postprocess after haplotag
     postprocessForHaplotag();
+
+    printExecutionReport();
 
     return;
 };
@@ -73,7 +110,7 @@ void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
     if(sParams.benchmarkVcf != ""){
         std::time_t begin = time(NULL);
         std::cerr<< "parsing benchmark VCF ... ";
-        somaticBenchmark.setTestingFunc(true);
+        somaticBenchmark.setEnabled(true);
         somaticBenchmark.loadHighConSomatic(sParams.benchmarkVcf, vcfSet[Genome::HIGH_CON_SOMATIC], *mergedChrVarinat);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
 
@@ -81,20 +118,16 @@ void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
     }
 
     // parse benchmark bed file
-    if(sParams.benchmarkBedFile != ""){
+    if(sParams.benchmarkBedFile != "" && somaticBenchmark.isEnabled()){
         std::time_t begin = time(NULL);
         std::cerr<< "parsing benchmark bed file ... ";
         somaticBenchmark.parseBedFile(sParams.benchmarkBedFile);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
 
-        somaticBenchmark.displayBedRegionCount(vcfSet[TUMOR].chrVec);
-
         begin = time(NULL);
         std::cerr<< "marking variants in bed regions ... ";
         somaticBenchmark.markVariantsInBedRegions(vcfSet[TUMOR].chrVec, *mergedChrVarinat);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
-
-        somaticBenchmark.writeBedRegionLog(vcfSet[TUMOR].chrVec, *mergedChrVarinat, sParams.basic.resultPrefix);
     }
 }
 
@@ -147,6 +180,7 @@ void SomaticHaplotagProcess::calculateSnpCounts(){
 
 void SomaticHaplotagProcess::postprocessForHaplotag(){
     std::cerr<< "postprocess for haplotag ...\n";
+    somaticBenchmark.writeTaggedSomaticReadReport(*chrVec, sParams.basic.resultPrefix + "_tagged_somatic_read.out");
     if(sParams.basic.writeReadLog){
         hpBeforeInheritance->writeReadHpDistriLog(sParams.basic.resultPrefix + "_read_distri_before_inheritance.out", *chrVec);
         hpAfterInheritance->writeReadHpDistriLog(sParams.basic.resultPrefix + "_read_distri_after_inheritance.out", *chrVec);
@@ -155,10 +189,10 @@ void SomaticHaplotagProcess::postprocessForHaplotag(){
         //write read cover region in whole genome
         hpAfterInheritance->writeTagReadCoverRegionLog(sParams.basic.resultPrefix + "_read_cover_region.bed", *chrVec, *chrLength);
         //write somatic read log
-        somaticBenchmark.writeTaggedReadLog(*chrVec, sParams.basic.resultPrefix + "_total_tagged_read.out");
-        somaticBenchmark.writeTaggedSomaticReadLog(*chrVec, sParams.basic.resultPrefix + "_tagged_somatic_read.out");
-        somaticBenchmark.writeTaggedTruthSomaticReadLog(*chrVec, sParams.basic.resultPrefix + "_tagged_truth_somatic_read.out");
+        somaticBenchmark.writeTotalTruthSomaticReadReport(*chrVec, sParams.basic.resultPrefix + "_total_truth_somatic_read.out");
+        somaticBenchmark.writeTaggedReadReport(*chrVec, sParams.basic.resultPrefix + "_total_tagged_read.out");
         somaticBenchmark.writePosAlleleCountLog(*chrVec, sParams.basic.resultPrefix + "_allele_count.out", *mergedChrVarinat);
+        somaticBenchmark.writeBedRegionLog(*chrVec, *mergedChrVarinat, sParams.basic.resultPrefix);
     }
 }
 
@@ -197,7 +231,7 @@ SomaticHaplotagChrProcessor::SomaticHaplotagChrProcessor(
     somaticReadCounter(nullptr)
 {
 
-    bool openTestingFunc = somaticBenchmark.getTestingFunc();
+    bool enableBenckmark = somaticBenchmark.isEnabled();
     #pragma omp critical
     {
         hpBeforeInheritance.loadChrKey(chr);
@@ -205,7 +239,7 @@ SomaticHaplotagChrProcessor::SomaticHaplotagChrProcessor(
         somaticBenchmark.loadChrKey(chr);
         localHpBeforeInheritance = hpBeforeInheritance.getChrHpResultsPtr(chr);
         localHpAfterInheritance = hpAfterInheritance.getChrHpResultsPtr(chr);
-        somaticReadCounter = new SomaticReadVerifier(openTestingFunc, somaticBenchmark.getMetricsPtr(chr));
+        somaticReadCounter = new SomaticReadVerifier(enableBenckmark, somaticBenchmark.getMetricsPtr(chr));
     }
     this->chr = chr;
     begin = time(NULL);
@@ -521,6 +555,39 @@ void SomaticHaplotagCigarParser::processMatchOperation(int& length, uint32_t* ci
 
 void SomaticHaplotagCigarParser::processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel){
     somaticReadCounter.recordDelReadCount(ctx.chrName, currentVariantIter);
+}
+
+void SomaticTagLog::addParamsMessage(){
+    *tagReadLog << "##normalSnpFile:" << sParams.basic.snpFile << "\n"
+                << "##tumorSnpFile:" << sParams.tumorSnpFile << "\n"
+                << "##svFile:" << sParams.basic.svFile << "\n"
+                << "##tumorBamFile:" << sParams.tumorBamFile << "\n"
+                << "##bamFile:" << sParams.basic.bamFile << "\n"
+                << "##resultPrefix:" << sParams.basic.resultPrefix << "\n"
+                << "##numThreads:" << sParams.basic.numThreads << "\n"
+                << "##region:" << sParams.basic.region << "\n"
+                << "##qualityThreshold:" << sParams.basic.qualityThreshold << "\n"
+                << "##somaticCallingThreshold:" << sParams.basic.qualityThreshold << "\n"
+                << "##percentageThreshold:" << sParams.basic.percentageThreshold << "\n"
+                << "##tagSupplementary:" << sParams.basic.tagSupplementary << "\n";
+}
+
+void SomaticTagLog::writeBasicColumns(){
+    *tagReadLog << "#ReadID\t"
+                << "CHROM\t"
+                << "ReadStart\t"
+                << "Confidnet(%)\t"
+                << "deriveByHpSimilarity\t"
+                << "Haplotype\t"
+                << "PhaseSet\t"
+                << "TotalAllele\t"
+                << "HP1Allele\t"
+                << "HP2Allele\t"
+                << "HP3Allele\t"
+                << "HP4Allele\t"
+                << "phasingQuality(PQ)\t"
+                << "(Variant,HP)\t"
+                << "(PhaseSet,Variantcount)\n";
 }
 
 void SomaticTagLog::writeTagReadLog(TagReadLog& data) {

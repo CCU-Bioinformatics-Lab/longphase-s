@@ -9,38 +9,6 @@
 #include "SomaticBenchmark.h"
 #include "HaplotagLogging.h"
 
-class SomaticHaplotagParamsMessage : public HaplotagParamsMessage{
-    private:
-        const SomaticHaplotagParameters& sParams;
-    public:
-        SomaticHaplotagParamsMessage(const SomaticHaplotagParameters& sParams)
-        :HaplotagParamsMessage(sParams.basic),sParams(sParams){}
-
-        virtual void addParamsMessage() override {
-            HaplotagParamsMessage::addParamsMessage();
-            insertAfterKey("tumor SNP file", sParams.tumorSnpFile, "phased SNP file");
-            insertAfterKey("input tumor bam file", sParams.tumorBamFile, "input bam file");
-            insertAfterKey("[haplotag params]"," ", "#1");
-
-            insertAfterKey("\n[somatic calling params]"," ", "tag supplementary");
-            insertAfterKey("somatic calling mapping quality", sParams.basic.qualityThreshold, "\n[somatic calling params]");
-            insertAfterKey("enable somatic variant filter", sParams.enableFilter, "somatic calling mapping quality");
-            insertAfterKey("predict tumor purity", sParams.predictTumorPurity, "enable somatic variant filter");
-
-            std::string tumorPurityStr;
-            if(sParams.predictTumorPurity){
-                tumorPurityStr = "none";
-            }else{
-                tumorPurityStr = std::to_string(sParams.tumorPurity);
-            }
-
-            insertAfterKey("tumor purity value", tumorPurityStr, "predict tumor purity");
-
-            // sort the entries by order
-            sortEntries();
-        } 
-};
-
 // Tumor specific header
 class SomaticTagLog : public GermlineTagLog {
     private:
@@ -49,32 +17,9 @@ class SomaticTagLog : public GermlineTagLog {
         SomaticTagLog(const SomaticHaplotagParameters& sParams) : GermlineTagLog(sParams.basic), sParams(sParams){}
         ~SomaticTagLog(){};
 
-        void addBasicEntries() override {
-            // add basic entries
-            addCommonBasicEntries();
-            // add tumor specific entries
-            insertAfterKey("tumorSnpFile", sParams.tumorSnpFile, "snpFile");
-            insertAfterKey("tumorBamFile", sParams.tumorBamFile, "bamFile");
-            insertAfterKey("somaticCallingThreshold", sParams.basic.qualityThreshold, "region");
-        }
+        void addParamsMessage() override;
 
-        void writeBasicColumns() override {
-            *tagReadLog << "#ReadID\t"
-                        << "CHROM\t"
-                        << "ReadStart\t"
-                        << "Confidnet(%)\t"
-                        << "deriveByHpSimilarity\t"
-                        << "Haplotype\t"
-                        << "PhaseSet\t"
-                        << "TotalAllele\t"
-                        << "HP1Allele\t"
-                        << "HP2Allele\t"
-                        << "HP3Allele\t"
-                        << "HP4Allele\t"
-                        << "phasingQuality(PQ)\t"
-                        << "(Variant,HP)\t"
-                        << "(PhaseSet,Variantcount)\n";
-        }
+        void writeBasicColumns() override;
 
         void writeTagReadLog(TagReadLog& data) override;
 };
@@ -197,9 +142,8 @@ class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
 class SomaticHaplotagProcess: public HaplotagProcess{
     private:
         SomaticHaplotagParameters& sParams;
+        virtual void printParamsMessage() override;
     protected:
-
-        SomaticHaplotagParamsMessage sParamsMessage;
 
         ReadHpDistriLog *hpBeforeInheritance;
         ReadHpDistriLog *hpAfterInheritance;

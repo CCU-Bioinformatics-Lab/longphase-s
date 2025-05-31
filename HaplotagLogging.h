@@ -11,138 +11,6 @@ struct chrReadHpResult{
     void recordAlignCoverRegion(int& curVarPos, int &startPos, int &endPos);
 };
 
-
-class LogEntry {
-    public:
-        std::string key;
-        std::string value;
-        size_t order;
-
-        LogEntry(const std::string& k, const std::string& v, size_t o) 
-            : key(k), value(v), order(o) {}
-};
-
-class MessageManager{
-    protected:
-        std::vector<LogEntry> entries;
-        size_t currentOrder;
-
-        //Generally add entry (add at the end)
-        template<typename T>
-        void addEntry(const std::string& key, const T& value) {
-            std::string valueStr = transformValueToString(value);
-
-            entries.emplace_back(key, valueStr, currentOrder);
-            // std::cerr << "Added entry: " << key << ":" << valueStr << " at index " << currentOrder << std::endl;
-            currentOrder++;
-        }
-
-        // Insert entry after a specific order
-        template<typename T>
-        void insertByIndex(const std::string& key, const T& value, size_t insertIndex) {
-            // move the order of the entries after the insertIndex
-            for (auto& entry : entries) {
-                if (entry.order >= insertIndex) {
-                    entry.order ++;
-                }
-            }
-            std::string valueStr = transformValueToString(value);
-            entries.emplace_back(key, valueStr, insertIndex);
-            // std::cerr << "Inserted entry: " << key << ":" << valueStr << " at index " << insertIndex << std::endl;
-        }
-
-
-        // Insert a new message after a specific key
-        // If the target key is not found, append the message at the end
-        template<typename T>
-        void insertAfterKey(const std::string& newKey, const T& newValue, const std::string& targetKey) {
-            // Find the position of the target key
-            auto it = std::find_if(entries.begin(), entries.end(),
-                [&targetKey](const LogEntry& entry) { return entry.key == targetKey; });
-            
-            if (it == entries.end()) {
-                // If target key not found, append to the end
-                std::cerr << "[ERROR](insertAfterKey) Target key not found: " << targetKey << std::endl;
-                exit(1);
-            }
-            
-            // Calculate insertion position (target key's order + 1)
-            size_t insertIndex = it->order + 1;
-            
-            // Increment order for all entries after the insertion point
-            for (auto& entry : entries) {
-                if (entry.order >= insertIndex) {
-                    entry.order++;
-                }
-            }
-            
-            // Insert the new entry
-            std::string valueStr = transformValueToString(newValue);
-            entries.emplace_back(newKey, valueStr, insertIndex);
-        }
-
-        void sortEntries(){
-            std::sort(entries.begin(), entries.end(), [](const LogEntry& a, const LogEntry& b) {
-                return a.order < b.order;
-            });
-        }
-
-        void printMessage(){
-            // Write all entries
-            for (const auto& entry : entries) {
-                std::cout << entry.key << ":" << entry.value << "\n";
-            }
-        }
-
-        // basic type
-        template<typename T>
-        std::string transformValueToString(const T& value) {
-            return std::to_string(value);
-        }
-
-        // Template Specialization for std::string
-        std::string transformValueToString(const std::string& value) {
-            return value;
-        }
-
-        // Template Specialization for bool
-        std::string transformValueToString(const bool& value) {
-            return value ? "true" : "false";
-        }
-
-        // Template Specialization for const char*
-        std::string transformValueToString(const char* value) {
-            return value;
-        }
-
-        // Template Specialization for char[]
-        template<size_t N>
-        std::string transformValueToString(const char (&value)[N]) {
-            return std::string(value);
-        }
-
-        // Template Specialization for double
-        std::string transformValueToString(const double& value) {
-            std::ostringstream oss;
-            oss << std::fixed << std::setprecision(2) << value;
-            return oss.str();
-        }
-
-        // Template Specialization for float
-        std::string transformValueToString(const float& value) {
-            std::ostringstream oss;
-            oss << std::fixed << std::setprecision(2) << value;
-            return oss.str();
-        }
-
-    public:
-        MessageManager() : currentOrder(0) {}
-
-        virtual ~MessageManager() = default;
-
-};
-
-
 class ReadHpDistriLog{
     private :
         struct coverRegionInfo{
@@ -174,6 +42,46 @@ class ReadHpDistriLog{
         void writePosCoverRegionLog(const std::string logFileName, const std::vector<std::string> &chrVec);
         void writeTagReadCoverRegionLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, int> &chrLength);
         void removeNotDeriveByH1andH2pos(const std::vector<std::string> &chrVec);
+};
+
+template<typename ParamType, typename LogType>
+class HaplotagReadLog{
+    protected:
+        const ParamType& params;
+
+        void checkStreamStatus() {
+            if (!tagReadLog || !tagReadLog->is_open()) {
+                throw std::runtime_error("Output stream is not valid");
+            }
+        }
+
+        virtual void addParamsMessage() = 0;
+
+        virtual void writeBasicColumns() = 0;
+
+    public:
+        std::ofstream* tagReadLog;
+
+        HaplotagReadLog(const ParamType& params, std::string fileName) : params(params) {
+            tagReadLog = new std::ofstream(fileName);
+            if(!tagReadLog->is_open()){
+                std::cerr<< "Fail to open write file: " << fileName << "\n";
+                exit(1);
+            }
+        };
+
+        virtual ~HaplotagReadLog(){
+            tagReadLog->close();
+            if(tagReadLog) delete tagReadLog;
+        };
+
+        virtual void writeHeader() {
+            addParamsMessage();
+
+            writeBasicColumns();
+        }
+
+        virtual void writeTagReadLog(LogType& data) = 0;
 };
 
 #endif

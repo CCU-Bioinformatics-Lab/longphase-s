@@ -2,10 +2,29 @@
 
 PurityPredictionProcess::PurityPredictionProcess(PurityPredictionParameters& params)
     : HaplotagProcess(params.basic), params(params) {
+    tumorPurity = 0.0;
 }
 
 PurityPredictionProcess::~PurityPredictionProcess() {
 
+}
+
+void PurityPredictionProcess::printParamsMessage() {
+    std::cerr<< "LongPhase-S v" << params.basic.version << " - Predict Tumor Purity\n";
+    std::cerr<< "\n";
+    std::cerr<< "[Input Files]\n";
+    std::cerr<< "phased normal SNP file       : " << params.basic.snpFile << "\n";
+    std::cerr<< "tumor SNP file               : " << params.tumorSnpFile << "\n";
+    std::cerr<< "normal BAM file              : " << params.basic.bamFile << "\n";
+    std::cerr<< "tumor BAM file               : " << params.tumorBamFile << "\n";
+    std::cerr<< "reference file               : " << params.basic.fastaFile << "\n\n";
+    std::cerr<< "[Output Files]\n";
+    std::cerr<< "purity prediction results : " << params.basic.resultPrefix + "_purity.out" << "\n";
+    std::cerr<< "-------------------------------------------\n";
+    std::cerr<< "[Purity Prediction Params] " << "\n";
+    std::cerr<< "number of threads            : " << params.basic.numThreads << "\n";
+    std::cerr<< "predict region               : " << (!params.basic.region.empty() ? params.basic.region : "all") << "\n";
+    std::cerr<< "-------------------------------------------\n";
 }
 
 void PurityPredictionProcess::parseVariantFiles(VcfParser& vcfParser) {
@@ -25,9 +44,7 @@ void PurityPredictionProcess::parseVariantFiles(VcfParser& vcfParser) {
 
 void PurityPredictionProcess::predictPurity() {
     // set the tumor genome type for parsing all Genotype
-
-    paramsMessage.addParamsMessage();
-    paramsMessage.printParamsMessage();
+    printParamsMessage();
 
     Genome geneType = TUMOR;
 
@@ -42,7 +59,15 @@ void PurityPredictionProcess::predictPurity() {
     //predict tumor purity 
     SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(*chrVec);
     somaticVarCaller->extractSomaticData(params.basic.bamFile, params.tumorBamFile, params.basic, *chrVec, *chrLength, *mergedChrVarinat, vcfSet);
-    somaticVarCaller->runTumorPurityPredictor(params.basic.writeReadLog, params.basic.resultPrefix+"_test");
-
+    tumorPurity = somaticVarCaller->runTumorPurityPredictor(params.basic.writeReadLog, params.basic.resultPrefix+"_test");
     delete somaticVarCaller;
+
+    printExecutionReport();
+}
+
+void PurityPredictionProcess::printExecutionReport(){
+    std::cerr<< "-------------------------------------------\n";
+    std::cerr<< "total process time:    " << difftime(time(NULL), processBegin) << "s\n";
+    std::cerr<< "predicted tumor purity: " << tumorPurity << "\n";
+    std::cerr<< "-------------------------------------------\n";
 }

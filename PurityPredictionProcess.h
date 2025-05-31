@@ -9,11 +9,13 @@
 
 class PurityPredictionProcess : public HaplotagProcess {
     private:
+        double tumorPurity;
         PurityPredictionParameters& params;
+        virtual void printParamsMessage() override;
 
     protected:
         virtual void parseVariantFiles(VcfParser& vcfParser) override;
-
+        virtual void printExecutionReport() override;
     public:
         PurityPredictionProcess(PurityPredictionParameters& params);
         ~PurityPredictionProcess();

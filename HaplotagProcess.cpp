@@ -1,7 +1,7 @@
 #include "HaplotagProcess.h"
 
 HaplotagProcess::HaplotagProcess(HaplotagParameters &params):
-params(params),paramsMessage(params),chrVec(nullptr),chrLength(nullptr),readStats(),processBegin(time(NULL))
+params(params),chrVec(nullptr),chrLength(nullptr),readStats(),processBegin(time(NULL))
 {
     //initialize variable
     vcfSet[Genome::NORMAL] = VCF_Info{.gene_type = Genome::NORMAL};
@@ -13,18 +13,30 @@ params(params),paramsMessage(params),chrVec(nullptr),chrLength(nullptr),readStat
 }
 
 HaplotagProcess::~HaplotagProcess(){
-    printAlignmentStaristics();
-
     delete mergedChrVarinat;
 };
 
+void HaplotagProcess::printParamsMessage(){
+    std::cerr<< "phased SNP file:   " << params.snpFile             << "\n";
+    std::cerr<< "phased SV file:    " << params.svFile              << "\n";
+    std::cerr<< "phased MOD file:   " << params.modFile             << "\n";
+    std::cerr<< "input bam file:    " << params.bamFile             << "\n";
+    std::cerr<< "input ref file:    " << params.fastaFile           << "\n";
+    std::cerr<< "output bam file:   " << params.resultPrefix + "." + params.outputFormat << "\n";
+    std::cerr<< "number of threads: " << params.numThreads          << "\n";
+    std::cerr<< "write log file:    " << (params.writeReadLog ? "true" : "false") << "\n";
+    std::cerr<< "log file:          " << (params.writeReadLog ? (params.resultPrefix+".out") : "") << "\n";
+    std::cerr<< "-------------------------------------------\n";
+    std::cerr<< "tag region:                    " << (!params.region.empty() ? params.region : "all") << "\n";
+    std::cerr<< "filter mapping quality below:  " << params.qualityThreshold    << "\n";
+    std::cerr<< "percentage threshold:          " << params.percentageThreshold << "\n";
+    std::cerr<< "tag supplementary:             " << (params.tagSupplementary ? "true" : "false") << "\n";
+    std::cerr<< "-------------------------------------------\n";
+}
 
 void HaplotagProcess::taggingProcess()
 {
-  
-    paramsMessage.addParamsMessage();
-    paramsMessage.printParamsMessage();
-    
+    printParamsMessage();
     // decide on the type of tagging for VCF and BAM files
     Genome tagGeneType = NORMAL;
 
@@ -40,6 +52,8 @@ void HaplotagProcess::taggingProcess()
     // postprocess after haplotag
     postprocessForHaplotag();
 
+    printExecutionReport();
+    
     return;
 };
 
@@ -122,7 +136,7 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, std::string& tagBamFil
     return;
 }
 
-void HaplotagProcess::printAlignmentStaristics(){
+void HaplotagProcess::printExecutionReport(){
     std::cerr<< "-------------------------------------------\n";
     std::cerr<< "total process time:    " << difftime(time(NULL), processBegin) << "s\n";
     std::cerr<< "total alignment:       " << readStats.totalAlignment     << "\n";
@@ -148,17 +162,36 @@ void HaplotagProcess::printAlignmentStaristics(){
 }
 
 GermlineTagLog::GermlineTagLog(const HaplotagParameters& params) 
-    : params(params), tagReadLog(nullptr) {
-    tagReadLog = new std::ofstream(params.resultPrefix+".out");
-    if(!tagReadLog->is_open()){
-        std::cerr<< "Fail to open write file: " << params.resultPrefix+".out" << "\n";
-        exit(1);
-    }
+    : HaplotagReadLog<HaplotagParameters, TagReadLog>(params, params.resultPrefix+".out"){
 }
 
-GermlineTagLog::~GermlineTagLog(){
-    tagReadLog->close();
-    delete tagReadLog;
+GermlineTagLog::~GermlineTagLog(){}
+
+void GermlineTagLog::addParamsMessage(){
+    *tagReadLog << "##snpFile:" << params.snpFile << "\n"
+                << "##svFile:" << params.svFile << "\n"
+                << "##bamFile:" << params.bamFile << "\n"
+                << "##resultPrefix:" << params.resultPrefix << "\n"
+                << "##numThreads:" << params.numThreads << "\n"
+                << "##region:" << params.region << "\n"
+                << "##qualityThreshold:" << params.qualityThreshold << "\n"
+                << "##percentageThreshold:" << params.percentageThreshold << "\n"
+                << "##tagSupplementary:" << params.tagSupplementary << "\n";
+}
+
+void GermlineTagLog::writeBasicColumns(){
+    *tagReadLog << "#ReadID\t"
+                << "CHROM\t"
+                << "ReadStart\t"
+                << "Confidnet(%)\t"
+                << "Haplotype\t"
+                << "PhaseSet\t"
+                << "TotalAllele\t"
+                << "HP1Allele\t"
+                << "HP2Allele\t"
+                << "phasingQuality(PQ)\t"
+                << "(Variant,HP)\t"
+                << "(PhaseSet,Variantcount)\n";
 }
 
 void GermlineTagLog::writeTagReadLog(TagReadLog& data){

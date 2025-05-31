@@ -210,7 +210,7 @@ class TumorPurityPredictor{
         void removeOutliers(std::vector<PurityData> &purityFeatureValueVec, BoxPlotValue &plotValue);
         void markStatisticFlag(std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo);
 
-        void writePurityLog(double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold);
+        void writePurityResult(double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold);
 };
 
 #endif

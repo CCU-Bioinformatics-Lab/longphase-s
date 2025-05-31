@@ -139,22 +139,27 @@ void SomaticReadVerifier::recordTaggedRead(const std::string &chr, std::string &
     metrics->totalReadVec.push_back(tmp);
 }
 
-SomaticReadBenchmark::SomaticReadBenchmark(std::string benchmarkVcf, int mappingQualityThreshold){
+SomaticReadBenchmark::SomaticReadBenchmark(std::string benchmarkVcf, std::string benchmarkBed, int mappingQualityThreshold){
     setParseSnpFile(true);
     openTestingFunc = false;
     this->benchmarkVcf = benchmarkVcf;
+    this->benchmarkBed = benchmarkBed;
     this->mappingQualityThreshold = mappingQualityThreshold;
 }
 SomaticReadBenchmark::~SomaticReadBenchmark(){
 
 }
 
-void SomaticReadBenchmark::setTestingFunc(bool openTestingFunc){
+void SomaticReadBenchmark::setEnabled(bool openTestingFunc){
     this->openTestingFunc = openTestingFunc;
 }
 
-bool SomaticReadBenchmark::getTestingFunc(){
+bool SomaticReadBenchmark::isEnabled(){
     return openTestingFunc;
+}
+
+bool SomaticReadBenchmark::isLoadBedFile(){
+    return loadedBedFile;
 }
 
 void SomaticReadBenchmark::loadChrKey(const std::string &chr){
@@ -206,6 +211,8 @@ void SomaticReadBenchmark::parserProcess(std::string &input, VCF_Info &Info, std
 }
 
 void SomaticReadBenchmark::parseBedFile(const std::string& bedFile) {
+    if(!openTestingFunc) return;
+
     std::ifstream file(bedFile);
     if (!file.is_open()) {
         std::cerr << "Failed to open BED file: " << bedFile << std::endl;
@@ -217,6 +224,7 @@ void SomaticReadBenchmark::parseBedFile(const std::string& bedFile) {
         if (line.empty() || line[0] == '#') continue;
         processBedLine(line);
     }
+    loadedBedFile = true;
 }
 
 void SomaticReadBenchmark::processBedLine(const std::string& line) {
@@ -229,13 +237,7 @@ void SomaticReadBenchmark::processBedLine(const std::string& line) {
 }
 
 void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat) {
-    int tumorInBedRegionCount = 0;
-    int tumorOutBedRegionCount = 0;
-    int normalInBedRegionCount = 0;
-    int normalOutBedRegionCount = 0;
-    int benchmarkInBedRegionCount = 0;
-    int benchmarkOutBedRegionCount = 0;
-
+    if(!openTestingFunc || !loadedBedFile) return;
     for (auto& chr : chrVec) {
         auto& chrPosVariants = mergedChrVarinat[chr];
         
@@ -246,13 +248,13 @@ void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &ch
             for (auto& curVar : chrPosVariants) {
                 curVar.second.isInBedRegion = false;
                 if(curVar.second.isExists(Genome::TUMOR)) {
-                    tumorOutBedRegionCount++;
+                    variantOutBedRegionCount[Genome::TUMOR]++;
                 }
                 if(curVar.second.isExists(Genome::NORMAL)) {
-                    normalOutBedRegionCount++;
+                    variantOutBedRegionCount[Genome::NORMAL]++;
                 }
                 if(curVar.second.isExists(Genome::HIGH_CON_SOMATIC)){
-                    benchmarkOutBedRegionCount++;
+                    variantOutBedRegionCount[Genome::HIGH_CON_SOMATIC]++;
                 }
             }
             continue;
@@ -264,13 +266,13 @@ void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &ch
             for (auto& curVar : chrPosVariants) {
                 curVar.second.isInBedRegion = false;
                 if(curVar.second.isExists(Genome::TUMOR)) {
-                    tumorOutBedRegionCount++;
+                    variantOutBedRegionCount[Genome::TUMOR]++;
                 }
                 if(curVar.second.isExists(Genome::NORMAL)) {
-                    normalOutBedRegionCount++;
+                    variantOutBedRegionCount[Genome::NORMAL]++;
                 }
                 if(curVar.second.isExists(Genome::HIGH_CON_SOMATIC)){
-                    benchmarkOutBedRegionCount++;
+                    variantOutBedRegionCount[Genome::HIGH_CON_SOMATIC]++;
                 }
             }
             continue;
@@ -294,40 +296,36 @@ void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &ch
                 variantPos <= regionIter->end) {
                 varPosIter->second.isInBedRegion = true;
                 if(varPosIter->second.isExists(Genome::TUMOR)) {
-                    tumorInBedRegionCount++;
+                    variantInBedRegionCount[Genome::TUMOR]++;
                 }
                 if(varPosIter->second.isExists(Genome::NORMAL)) {
-                    normalInBedRegionCount++;
+                    variantInBedRegionCount[Genome::NORMAL]++;
                 }
                 if(varPosIter->second.isExists(Genome::HIGH_CON_SOMATIC)){
-                    benchmarkInBedRegionCount++;
+                    variantInBedRegionCount[Genome::HIGH_CON_SOMATIC]++;
                 }
             } else {
                 varPosIter->second.isInBedRegion = false;
                 if(varPosIter->second.isExists(Genome::TUMOR)) {
-                    tumorOutBedRegionCount++;
+                    variantOutBedRegionCount[Genome::TUMOR]++;
                 }
                 if(varPosIter->second.isExists(Genome::NORMAL)) {
-                    normalOutBedRegionCount++;
+                    variantOutBedRegionCount[Genome::NORMAL]++;
                 }
                 if(varPosIter->second.isExists(Genome::HIGH_CON_SOMATIC)){
-                    benchmarkOutBedRegionCount++;
+                    variantOutBedRegionCount[Genome::HIGH_CON_SOMATIC]++;
                 }
             }
             
             ++varPosIter;
         }
     }
-    
-    std::cout << "Tumor in bed region count: " << tumorInBedRegionCount << "\n";
-    std::cout << "Tumor out bed region count: " << tumorOutBedRegionCount << "\n";
-    // std::cout << "Normal in bed region count: " << normalInBedRegionCount << "\n";
-    // std::cout << "Normal out bed region count: " << normalOutBedRegionCount << "\n";
-    std::cout << "Benchmark in bed region count: " << benchmarkInBedRegionCount << "\n";
-    std::cout << "Benchmark out bed region count: " << benchmarkOutBedRegionCount << "\n";
+
 }
 
 void SomaticReadBenchmark::removeVariantsOutBedRegion(std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+    if(!openTestingFunc || !loadedBedFile) return;
+
     //remove variants out bed region
     for (auto& chrPair : mergedChrVarinat) {
         auto& chrPosVariants = chrPair.second;
@@ -366,6 +364,7 @@ void SomaticReadBenchmark::removeVariantsOutBedRegion(std::map<std::string, std:
 void SomaticReadBenchmark::writeBedRegionLog(const std::vector<std::string>& chrVec,
                                            const std::map<std::string, std::map<int, MultiGenomeVar>>& mergedChrVarinat,
                                            const std::string& outPrefix) {
+    if(!openTestingFunc || !loadedBedFile) return;
     std::ofstream inBedLog(outPrefix + "_var_in_bed.out");
     std::ofstream outBedLog(outPrefix + "_var_out_bed.out");
     
@@ -462,7 +461,7 @@ void SomaticReadBenchmark::writePosAlleleCountLog(
     refAltCountLog = nullptr;
 }
 
-void SomaticReadBenchmark::writeTaggedReadLog(
+void SomaticReadBenchmark::writeTaggedReadReport(
     const std::vector<std::string>& chrVec,
     std::string outputFileName
 ){
@@ -479,12 +478,15 @@ void SomaticReadBenchmark::writeTaggedReadLog(
 
     writeReadLog(chrVec, outputFileName, somaticReadVecMap);
 }
-void SomaticReadBenchmark::writeTaggedSomaticReadLog(
+void SomaticReadBenchmark::writeTaggedSomaticReadReport(
     const std::vector<std::string>& chrVec,
     std::string outputFileName
 ){
     // if not open testing function, return
     if(!openTestingFunc) return;
+
+    time_t begin = time(NULL);
+    std::cerr << "write somatic haplotag metrics report... ";
 
     std::map<std::string, std::vector<SomaticReadLog>*> somaticReadVecMap;
 
@@ -495,14 +497,16 @@ void SomaticReadBenchmark::writeTaggedSomaticReadLog(
     }
 
     writeReadLog(chrVec, outputFileName, somaticReadVecMap);
+    std::cerr<< difftime(time(NULL), begin) << "s\n";
 }
 
-void SomaticReadBenchmark::writeTaggedTruthSomaticReadLog(
+void SomaticReadBenchmark::writeTotalTruthSomaticReadReport(
     const std::vector<std::string>& chrVec,
     std::string outputFileName
 ){
     // if not open testing function, return
     if(!openTestingFunc) return;
+
 
     std::map<std::string, std::vector<SomaticReadLog>*> somaticReadVecMap;
 
@@ -513,6 +517,7 @@ void SomaticReadBenchmark::writeTaggedTruthSomaticReadLog(
     }
 
     writeReadLog(chrVec, outputFileName, somaticReadVecMap);
+
 }
 
 void SomaticReadBenchmark::setChrSomaticReadVecPtr(
@@ -534,15 +539,20 @@ void SomaticReadBenchmark::writeReadLog(
     std::ofstream *somaticReadLog=NULL;
     somaticReadLog=new std::ofstream(outputFileName);
 
+    int totalReads = 0;
+
+    // all truth somatic reads
     int totalTruthSomaticReads = 0;
     std::map<std::string, int> truthSomaticReadsMap;
 
+    // all tagged truth somatic reads(TP)
     int totalTaggedTruthSomaticReads = 0;
     std::map<std::string, int> taggedTruthSomaticReadsMap;
 
-    int totalReads = 0;
+    // all tagged somatic reads(TP+FP)
     int totalTaggedSomaticReads = 0;
-    std::map<std::string, int> taggedReadsMap;
+    std::map<std::string, int> toatlTaggedSomaticReadsMap;
+
 
     for(auto chr: chrVec){
         for(auto readIter :chrMetrics[chr].readsCrossingHighConSnpVec){
@@ -560,53 +570,86 @@ void SomaticReadBenchmark::writeReadLog(
         }
         for(auto readIter :chrMetrics[chr].totalReadVec){
             if(readIter.hpResult == "1-1" || readIter.hpResult == "2-1" || readIter.hpResult == "3"){
-                taggedReadsMap[readIter.hpResult]++;
+                toatlTaggedSomaticReadsMap[readIter.hpResult]++;
                 totalTaggedSomaticReads++;
             }
             totalReads++;
         }
     }
 
-
     if(!somaticReadLog->is_open()){
         std::cerr<< "Fail to open write file: " << outputFileName << "\n";
         exit(1);
-    }else{
-        (*somaticReadLog) << "#####################\n";
-        (*somaticReadLog) << "# Somatic Reads Log #\n";
-        (*somaticReadLog) << "#####################\n";
-        (*somaticReadLog) << "##Benchmark VCF: "  << benchmarkVcf << "\n";
-        (*somaticReadLog) << "##MappingQualityThreshold: "  << mappingQualityThreshold << "\n";
-        (*somaticReadLog) << "##Tatal reads: "  << totalReads << "\n";
-        (*somaticReadLog) << "##Tatal truth somatic reads: "  << totalTruthSomaticReads << "\n";
-        (*somaticReadLog) << "##Tatal truth H1-1: "  << truthSomaticReadsMap["1-1"] << "\n";
-        (*somaticReadLog) << "##Tatal truth H2-1: "  << truthSomaticReadsMap["2-1"] << "\n";
-        (*somaticReadLog) << "##Tatal truth H3: "  << truthSomaticReadsMap["3"] << "\n";
-        (*somaticReadLog) << "##Tatal tagged truth somatic reads: "  << totalTaggedTruthSomaticReads << "\n";
-        (*somaticReadLog) << "##Tatal tagged truth H1-1: "  << taggedTruthSomaticReadsMap["1-1"] << "\n";
-        (*somaticReadLog) << "##Tatal tagged truth H2-1: "  << taggedTruthSomaticReadsMap["2-1"] << "\n";
-        (*somaticReadLog) << "##Tatal tagged truth H3: "  << taggedTruthSomaticReadsMap["3"] << "\n";
-        (*somaticReadLog) << "##Tatal tagged somatic reads: "  << totalTaggedSomaticReads << "\n";
-        (*somaticReadLog) << "##Tatal tagged H1-1: "  << taggedReadsMap["1-1"] << "\n";
-        (*somaticReadLog) << "##Tatal tagged H2-1: "  << taggedReadsMap["2-1"] << "\n";
-        (*somaticReadLog) << "##Tatal tagged H3: "  << taggedReadsMap["3"] << "\n";
-        (*somaticReadLog) << "##Recall: "  << (float)totalTaggedTruthSomaticReads / (float)totalTruthSomaticReads << "\n";
-        (*somaticReadLog) << "##H1-1 Recall: "  << (float)taggedTruthSomaticReadsMap["1-1"] / (float)truthSomaticReadsMap["1-1"] << "\n";
-        (*somaticReadLog) << "##H2-1 Recall: "  << (float)taggedTruthSomaticReadsMap["2-1"] / (float)truthSomaticReadsMap["2-1"] << "\n";
-        (*somaticReadLog) << "##H3 Recall: "  << (float)taggedTruthSomaticReadsMap["3"] / (float)truthSomaticReadsMap["3"] << "\n";
-        (*somaticReadLog) << "##Precision: "  << (float)totalTaggedTruthSomaticReads / (float)totalTaggedSomaticReads << "\n";
-        (*somaticReadLog) << "##H1-1 Precision: "  << (float)taggedTruthSomaticReadsMap["1-1"] / (float)taggedReadsMap["1-1"] << "\n";
-        (*somaticReadLog) << "##H2-1 Precision: "  << (float)taggedTruthSomaticReadsMap["2-1"] / (float)taggedReadsMap["2-1"] << "\n";
-        (*somaticReadLog) << "##H3 Precision: "  << (float)taggedTruthSomaticReadsMap["3"] / (float)taggedReadsMap["3"] << "\n";
-        (*somaticReadLog) << "#CHROM\t"
-                          << "ReadID\t"
-                          << "germlineVarSimilarity\t"
-                          << "deriveByHpSimilarity\t"
-                          << "germlineSnpCount\t"
-                          << "tumorSnpCount\t"
-                          << "Haplotype\t"
-                          << "somaticVariant,HP\n";
     }
+    float recall = calculateRecall(totalTaggedTruthSomaticReads, totalTruthSomaticReads);;
+    float precision = calculatePrecision(totalTaggedTruthSomaticReads, totalTaggedSomaticReads);
+    float f1_score = calculateF1Score(recall, precision);
+
+
+    (*somaticReadLog) << "############################\n";
+    (*somaticReadLog) << "# Somatic Haplotag Metrics #\n";
+    (*somaticReadLog) << "############################\n";
+    (*somaticReadLog) << "##Benchmark VCF File: "  << benchmarkVcf << "\n";
+    (*somaticReadLog) << "##Benchmark Bed File: "  << benchmarkBed << "\n";
+    (*somaticReadLog) << "##MappingQualityThreshold: "  << mappingQualityThreshold << "\n";
+    (*somaticReadLog) << "##Tatal reads: "  << totalReads << "\n";
+    (*somaticReadLog) << "##Tatal truth somatic reads: "  << totalTruthSomaticReads << "\n";
+    (*somaticReadLog) << "##Tatal truth H1-1: "  << truthSomaticReadsMap["1-1"] << "\n";
+    (*somaticReadLog) << "##Tatal truth H2-1: "  << truthSomaticReadsMap["2-1"] << "\n";
+    (*somaticReadLog) << "##Tatal truth H3: "  << truthSomaticReadsMap["3"] << "\n";
+    
+    int separatorLength = 95;
+    int columnWidth = 15;
+
+    (*somaticReadLog) << std::left << std::setw(columnWidth) << "## Haplotype" 
+                    << std::setw(columnWidth) << "Precision" 
+                    << std::setw(columnWidth) << "Recall" 
+                    << std::setw(columnWidth) << "F1-Score"
+                    << std::setw(columnWidth) << "TP" 
+                    << std::setw(columnWidth) << "FP" 
+                    << std::setw(columnWidth) << "FN" << "\n";
+    (*somaticReadLog) << "##" << std::string(separatorLength, '-') << "\n";
+    
+    std::vector<std::string> haplotypes = {"1-1", "2-1", "3"};
+    for(const auto& hp : haplotypes) {
+        int tp = taggedTruthSomaticReadsMap[hp];
+        int fp = toatlTaggedSomaticReadsMap[hp] - taggedTruthSomaticReadsMap[hp];
+        int fn = truthSomaticReadsMap[hp] - taggedTruthSomaticReadsMap[hp];
+        
+        float precision = calculatePrecision(tp, tp + fp);
+        float recall = calculateRecall(tp, tp + fn);
+        float f1 = calculateF1Score(recall, precision);
+
+        
+        (*somaticReadLog) << std::left << std::setw(columnWidth) << ("## H" + hp)
+                        << std::setw(columnWidth) << std::fixed << std::setprecision(4) << precision
+                        << std::setw(columnWidth) << std::fixed << std::setprecision(4) << recall
+                        << std::setw(columnWidth) << std::fixed << std::setprecision(4) << f1 
+                        << std::setw(columnWidth) << tp
+                        << std::setw(columnWidth) << fp  
+                        << std::setw(columnWidth) << fn << "\n";
+    }
+
+    // overall statistics
+    (*somaticReadLog) << "##" << std::string(separatorLength, '-') << "\n";
+    (*somaticReadLog) << std::left << std::setw(columnWidth) << "## Overall"
+                    << std::setw(columnWidth) << std::fixed << std::setprecision(4) << precision
+                    << std::setw(columnWidth) << std::fixed << std::setprecision(4) << recall
+                    << std::setw(columnWidth) << std::fixed << std::setprecision(4) << f1_score 
+                    << std::setw(columnWidth) << totalTaggedTruthSomaticReads
+                    << std::setw(columnWidth) << totalTaggedSomaticReads - totalTaggedTruthSomaticReads
+                    << std::setw(columnWidth) << totalTruthSomaticReads - totalTaggedTruthSomaticReads << "\n";
+    
+    (*somaticReadLog) << "##\n";
+
+    (*somaticReadLog) << "#CHROM\t"
+                        << "ReadID\t"
+                        << "germlineVarSimilarity\t"
+                        << "deriveByHpSimilarity\t"
+                        << "germlineSnpCount\t"
+                        << "tumorSnpCount\t"
+                        << "Haplotype\t"
+                        << "somaticVariant,HP\n";
 
     for(auto chr: chrVec){
         for(auto somaticRead: *somaticReadVecMap[chr]){
@@ -647,9 +690,21 @@ void SomaticReadBenchmark::displaySomaticVarCount(std::vector<std::string> &chrV
 }
 
 void SomaticReadBenchmark::displayBedRegionCount(std::vector<std::string> &chrVec){
+    if(!openTestingFunc || !loadedBedFile) return;
     int totalBedRegionCount = 0;
     for(auto &chr : chrVec){
         totalBedRegionCount += bedRegions[chr].size();
     }
     std::cout << "Total bed regions: " << totalBedRegionCount << "\n";
+    std::cout << "--------------------------------" << "\n";
+    std::cout << "Variant in bed region count: " << "\n";
+    std::cout << "  -Tumor: " << variantInBedRegionCount[Genome::TUMOR] << "\n";
+    std::cout << "  -Normal: " << variantInBedRegionCount[Genome::NORMAL] << "\n";
+    std::cout << "  -Benchmark: " << variantInBedRegionCount[Genome::HIGH_CON_SOMATIC] << "\n";
+    std::cout << "\n";
+    std::cout << "Variant out bed region count: " << "\n";
+    std::cout << "  -Tumor: " << variantOutBedRegionCount[Genome::TUMOR] << "\n";
+    std::cout << "  -Normal: " << variantOutBedRegionCount[Genome::NORMAL] << "\n";
+    std::cout << "  -Benchmark: " << variantOutBedRegionCount[Genome::HIGH_CON_SOMATIC] << "\n";
+    std::cout << "--------------------------------" << "\n";
 }

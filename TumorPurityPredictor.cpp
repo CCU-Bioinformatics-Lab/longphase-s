@@ -24,14 +24,14 @@ double TumorPurityPredictor::predictTumorPurity(){
         // build the feature value vector with first stage filter
         buildPurityFeatureValueVec(purityFeatureValueVec);
 
-        std::cerr << "initial data size: " << initial_data_size << std::endl;
-        std::cerr << "\n==========first filter==========" << std::endl;
-        std::cerr << "[INFO] Data count: " << purityFeatureValueVec.size() << std::endl;
-        std::cerr << "[INFO] imbalanceRatioInNorBam == 0.0: " << filterCounts.imbalanceRatioInNorBam << std::endl;
-        std::cerr << "[INFO] imbalanceRatio == 0.0: " << filterCounts.imbalanceRatio << std::endl;
-        std::cerr << "[INFO] imbalanceRatioInNorBam <= 0.7: " << filterCounts.imbalanceRatioInNorBamMaxThr << std::endl;
-        std::cerr << "[INFO] readHpCountInNorBam <= 5: " << filterCounts.readHpCountInNorBam << std::endl;
-        std::cerr << "[INFO] percentageOfGermlineHpInNorBam: >= 0.7 " << filterCounts.percentageOfGermlineHp << std::endl;
+        // std::cerr << "initial data size: " << initial_data_size << std::endl;
+        // std::cerr << "\n==========first filter==========" << std::endl;
+        // std::cerr << "[INFO] Data count: " << purityFeatureValueVec.size() << std::endl;
+        // std::cerr << "[INFO] imbalanceRatioInNorBam == 0.0: " << filterCounts.imbalanceRatioInNorBam << std::endl;
+        // std::cerr << "[INFO] imbalanceRatio == 0.0: " << filterCounts.imbalanceRatio << std::endl;
+        // std::cerr << "[INFO] imbalanceRatioInNorBam <= 0.7: " << filterCounts.imbalanceRatioInNorBamMaxThr << std::endl;
+        // std::cerr << "[INFO] readHpCountInNorBam <= 5: " << filterCounts.readHpCountInNorBam << std::endl;
+        // std::cerr << "[INFO] percentageOfGermlineHpInNorBam: >= 0.7 " << filterCounts.percentageOfGermlineHp << std::endl;
 
         // find the threshold of germlineReadHpCount for peak valley filter
         int germlineReadHpCountThreshold = findPeakValleythreshold(purityFeatureValueVec);
@@ -39,23 +39,23 @@ double TumorPurityPredictor::predictTumorPurity(){
         // peak valley filter
         peakValleyFilter(purityFeatureValueVec, germlineReadHpCountThreshold);
 
-        std::cerr << "\n==========second filter==========" << std::endl;
-        std::cerr << "[INFO] germlineReadHpCountThreshold: " << germlineReadHpCountThreshold << std::endl;
-        std::cerr << "[INFO] filter peakValley count: " << filterCounts.peakValley << std::endl;
-        std::cerr << "[INFO] Data count: " << purityFeatureValueVec.size() << std::endl;
+        // std::cerr << "\n==========second filter==========" << std::endl;
+        // std::cerr << "[INFO] germlineReadHpCountThreshold: " << germlineReadHpCountThreshold << std::endl;
+        // std::cerr << "[INFO] filter peakValley count: " << filterCounts.peakValley << std::endl;
+        // std::cerr << "[INFO] Data count: " << purityFeatureValueVec.size() << std::endl;
 
         BoxPlotValue plotValue = statisticPurityData(purityFeatureValueVec);
 
         //remove outliers for reduce noise 
         size_t iteration_times = 1;
         for(size_t i = 0; i < iteration_times; i++){
-            std::printf("[INFO]==========iteration %ld==========\n", i+1);
+            // std::printf("[INFO]==========iteration %ld==========\n", i+1);
             // remove outliers for reduce noise
             removeOutliers(purityFeatureValueVec, plotValue);
             // statistic the data
             plotValue = statisticPurityData(purityFeatureValueVec);
-            std::printf("[INFO] wisker : lower = %f, upper = %f\n", plotValue.lowerWhisker, plotValue.upperWhisker);
-            std::printf("[INFO] after remove outliers: %ld, data size: %ld\n", filterCounts.outliers, plotValue.data_size);
+            // std::printf("[INFO] wisker : lower = %f, upper = %f\n", plotValue.lowerWhisker, plotValue.upperWhisker);
+            // std::printf("[INFO] after remove outliers: %ld, data size: %ld\n", filterCounts.outliers, plotValue.data_size);
         }
 
 
@@ -72,17 +72,17 @@ double TumorPurityPredictor::predictTumorPurity(){
         }
 
         std::cerr<< difftime(time(NULL), begin) << "s\n";
-        std::cerr << "[INFO] ===== tumor purity ===== : " << purity << std::endl;
-        std::cerr << "[INFO] median: " << plotValue.median << std::endl;
-        std::cerr << "[INFO] iqr: " << plotValue.iqr << std::endl;
-        std::cerr << "[INFO] q1: " << plotValue.q1 << std::endl;
-        std::cerr << "[INFO] q3: " << plotValue.q3 << std::endl;
-        std::cerr << "[INFO] lowerWhisker: " << plotValue.lowerWhisker << std::endl;
-        std::cerr << "[INFO] upperWhisker: " << plotValue.upperWhisker << std::endl;
-        std::cerr << "[INFO] outliers: " << plotValue.outliers << std::endl;
+        // std::cerr << "[INFO] ===== tumor purity ===== : " << purity << std::endl;
+        // std::cerr << "[INFO] median: " << plotValue.median << std::endl;
+        // std::cerr << "[INFO] iqr: " << plotValue.iqr << std::endl;
+        // std::cerr << "[INFO] q1: " << plotValue.q1 << std::endl;
+        // std::cerr << "[INFO] q3: " << plotValue.q3 << std::endl;
+        // std::cerr << "[INFO] lowerWhisker: " << plotValue.lowerWhisker << std::endl;
+        // std::cerr << "[INFO] upperWhisker: " << plotValue.upperWhisker << std::endl;
+        // std::cerr << "[INFO] outliers: " << plotValue.outliers << std::endl;
         
         // write purity log
-        writePurityLog(purity, plotValue, iteration_times, germlineReadHpCountThreshold);
+        writePurityResult(purity, plotValue, iteration_times, germlineReadHpCountThreshold);
     }catch(const std::exception& e){
         std::cerr << "[ERROR] " << e.what() << std::endl;
         std::cerr << "[ERROR] Failed to predict tumor purity, set purity to 0.0" << std::endl;
@@ -155,7 +155,7 @@ void TumorPurityPredictor::buildPurityFeatureValueVec(std::vector<PurityData> &p
 
 int TumorPurityPredictor::findPeakValleythreshold(const std::vector<PurityData> &purityFeatureValueVec){
     
-    std::cerr << "[INFO] peak valley filter ..." << std::endl;
+    // std::cerr << "[INFO] peak valley filter ..." << std::endl;
     int threshold = 0;
 
     try{
@@ -166,7 +166,7 @@ int TumorPurityPredictor::findPeakValleythreshold(const std::vector<PurityData> 
         histogram.calculateStatistics();
 
         double sigma = 0.5;
-        std::cerr << "[INFO] apply gaussian filter with sigma: " << sigma << std::endl;
+        // std::cerr << "[INFO] apply gaussian filter with sigma: " << sigma << std::endl;
         // apply gaussian filter
         Histogram smoothedHistogram = histogram.getSmoothedHistogram(sigma);
 
@@ -198,9 +198,9 @@ int TumorPurityPredictor::findPeakValleythreshold(const std::vector<PurityData> 
         threshold = peakSet.getThreshold();
 
         // print the exec_log
-        for(const auto& log : peakSet.exec_log){
-            std::cout << log << std::endl;
-        }
+        // for(const auto& log : peakSet.exec_log){
+        //     std::cout << log << std::endl;
+        // }
 
         //write histogram to file
         if(writeLog){   
@@ -232,7 +232,6 @@ void TumorPurityPredictor::peakValleyFilter(std::vector<PurityData> &purityFeatu
         if((*vecFeatureIter).germlineReadHpCountInNorBam < germlineReadHpCountThreshold){
             filterCounts.peakValley++;
             // flag the position as not used for purity prediction
-            // chrPosSomaticInfo[(*vecFeatureIter).chr][(*vecFeatureIter).pos].statisticPurity = false;
             chrPosSomaticFlag[(*vecFeatureIter).chr][(*vecFeatureIter).pos].statisticPurity = false;
             vecFeatureIter = purityFeatureValueVec.erase(vecFeatureIter);
         }else{
@@ -250,7 +249,6 @@ void TumorPurityPredictor::removeOutliers(std::vector<PurityData> &purityFeature
             std::string chr = (*vecIter).chr;
             int pos = (*vecIter).pos;
             //flag the position as not used for purity prediction
-            // chrPosSomaticInfo[chr][pos].statisticPurity = false;
             chrPosSomaticFlag[chr][pos].statisticPurity = false;
             vecIter = purityFeatureValueVec.erase(vecIter);
             filterCounts.outliers++;
@@ -338,47 +336,50 @@ void TumorPurityPredictor::markStatisticFlag(std::map<std::string, std::map<int,
     }
 }
 
-void TumorPurityPredictor::writePurityLog(double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold){
+void TumorPurityPredictor::writePurityResult(double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold){
     try{
-        std::ofstream purityLog = std::ofstream(resultPrefix+"_purity.out");
+        std::ofstream purityResult = std::ofstream(resultPrefix+"_purity.out");
 
-        if(!purityLog.is_open()){
+        if(!purityResult.is_open()){
             throw std::runtime_error("Failed to open purity log file: " + resultPrefix+"_purity.out");
         }
+        purityResult << "#==================================\n";
+        purityResult << "# TUMOR PURITY PREDICTION REPORT\n";
+        purityResult << "#==================================\n";
 
-        purityLog << "#Initial data size: " << initial_data_size << std::endl;
-        purityLog << "#==========filter parameters==========" << std::endl;
-        purityLog << "#GERMLINE_HP_IMBALANCE_RATIO_MIN_THR: " << GERMLINE_HP_IMBALANCE_RATIO_MIN_THR << std::endl;
-        purityLog << "#GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MIN_THR: " << GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MIN_THR << std::endl;
-        purityLog << "#GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MAX_THR: " << GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MAX_THR << std::endl;
-        purityLog << "#GERMLINE_HP_PERCENTAGE_IN_NOR_BAM_MAX_THR: " << GERMLINE_HP_PERCENTAGE_IN_NOR_BAM_MAX_THR << std::endl;
-        purityLog << "#GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR: " << GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR << std::endl;
-        purityLog << "#GERMLINE_HP_READ_COUNT_IN_NOR_BAM_DYNAMIC_THR: " << germlineReadHpCountThreshold << std::endl;
+        purityResult << "#Initial data size: " << initial_data_size << std::endl;
+        purityResult << "#==========filter parameters==========" << std::endl;
+        purityResult << "#GERMLINE_HP_IMBALANCE_RATIO_MIN_THR: " << GERMLINE_HP_IMBALANCE_RATIO_MIN_THR << std::endl;
+        purityResult << "#GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MIN_THR: " << GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MIN_THR << std::endl;
+        purityResult << "#GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MAX_THR: " << GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MAX_THR << std::endl;
+        purityResult << "#GERMLINE_HP_PERCENTAGE_IN_NOR_BAM_MAX_THR: " << GERMLINE_HP_PERCENTAGE_IN_NOR_BAM_MAX_THR << std::endl;
+        purityResult << "#GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR: " << GERMLINE_HP_READ_COUNT_IN_NOR_BAM_MIN_THR << std::endl;
+        purityResult << "#GERMLINE_HP_READ_COUNT_IN_NOR_BAM_DYNAMIC_THR: " << germlineReadHpCountThreshold << std::endl;
 
-        purityLog << "#==========initial filter out data count==========" << std::endl;
-        purityLog << "#imbalanceRatioInNorBam: " << filterCounts.imbalanceRatioInNorBam << std::endl;
-        purityLog << "#imbalanceRatio: " << filterCounts.imbalanceRatio << std::endl;
-        purityLog << "#imbalanceRatioInNorBam_over_thr: " << filterCounts.imbalanceRatioInNorBamMaxThr << std::endl;
-        purityLog << "#readHpCountInNorBam: " << filterCounts.readHpCountInNorBam << std::endl;
-        purityLog << "#percentageOfGermlineHpInNorBam: " << filterCounts.percentageOfGermlineHp << std::endl;
+        purityResult << "#==========Initial filter out data count==========" << std::endl;
+        purityResult << "#imbalanceRatioInNorBam: " << filterCounts.imbalanceRatioInNorBam << std::endl;
+        purityResult << "#imbalanceRatio: " << filterCounts.imbalanceRatio << std::endl;
+        purityResult << "#imbalanceRatioInNorBam_over_thr: " << filterCounts.imbalanceRatioInNorBamMaxThr << std::endl;
+        purityResult << "#readHpCountInNorBam: " << filterCounts.readHpCountInNorBam << std::endl;
+        purityResult << "#percentageOfGermlineHpInNorBam: " << filterCounts.percentageOfGermlineHp << std::endl;
 
-        purityLog << "#==========second filter out data count==========" << std::endl;
-        purityLog << "#peakValley count: " << filterCounts.peakValley << std::endl;
+        purityResult << "#==========Second filter out data count==========" << std::endl;
+        purityResult << "#peakValley count: " << filterCounts.peakValley << std::endl;
 
-        purityLog << "#==========wisker filter out data count==========" << std::endl;
-        purityLog << "#iteration times: " << iteration_times << std::endl;
-        purityLog << "#remove outliers: " << filterCounts.outliers << std::endl;
-        purityLog << "#==========purity prediction===========" << std::endl;
-        purityLog << "Tumor purity: " << purity << std::endl;
-        purityLog << "Data size: " << plotValue.data_size << std::endl;
-        purityLog << "Median: " << plotValue.median << std::endl;
-        purityLog << "Q1: " << plotValue.q1 << std::endl;
-        purityLog << "Q3: " << plotValue.q3 << std::endl;
-        purityLog << "IQR: " << plotValue.iqr << std::endl;
-        purityLog << "Whiskers: " << plotValue.lowerWhisker << " to " << plotValue.upperWhisker << std::endl;
-        purityLog << "Outliers: " << plotValue.outliers << std::endl;
+        purityResult << "#==========Whisker filter out data count==========" << std::endl;
+        purityResult << "#iteration times: " << iteration_times << std::endl;
+        purityResult << "#remove outliers: " << filterCounts.outliers << std::endl;
+        purityResult << "#==========Prediction result===========" << std::endl;
+        purityResult << "Tumor purity: " << purity << std::endl;
+        purityResult << "Data size: " << plotValue.data_size << std::endl;
+        purityResult << "Median: " << plotValue.median << std::endl;
+        purityResult << "Q1: " << plotValue.q1 << std::endl;
+        purityResult << "Q3: " << plotValue.q3 << std::endl;
+        purityResult << "IQR: " << plotValue.iqr << std::endl;
+        purityResult << "Whiskers: " << plotValue.lowerWhisker << " to " << plotValue.upperWhisker << std::endl;
+        purityResult << "Outliers: " << plotValue.outliers << std::endl;
 
-        purityLog.close();
+        purityResult.close();
     }catch(const std::exception& e){
         std::cerr << "[ERROR] :" << e.what() << std::endl;
         std::cerr << "[ERROR] : Failed to write purity log" << std::endl;
