@@ -4,9 +4,63 @@
 #include "Util.h" 
 #include "HaplotagType.h"
 #include "HaplotagParsingBam.h"
+#include "SomaticHaplotagProcess.h"
 #include "TumorPurityPredictor.h"
 #include "HaplotagLogging.h"
 
+struct CallerContext
+{
+    std::string normalBamFile;
+    std::string tumorBamFile;
+    std::string normalSnpFile;
+    std::string tumorSnpFile;
+    std::string fastaFile;
+    CallerContext(std::string normalBamFile, std::string tumorBamFile, std::string normalSnpFile, std::string tumorSnpFile, std::string fastaFile)
+    :normalBamFile(normalBamFile), tumorBamFile(tumorBamFile), normalSnpFile(normalSnpFile), tumorSnpFile(tumorSnpFile), fastaFile(fastaFile){}
+};
+
+struct CallerConfig
+{
+    bool enableFilter = true;
+    bool predictTumorPurity = true;
+    double tumorPurity = 0.0;
+    CallerConfig() = default;
+    CallerConfig(bool filter, bool predict, double purity)
+        : enableFilter(filter), predictTumorPurity(predict), tumorPurity(purity) {}
+};
+
+struct SomaticVarCallerParaemter
+{
+    // Determine whether to apply the filter
+    bool applyFilter;
+    // Determine whether to write log file
+    bool writeVarLog;  
+    
+    // Tumor purity
+    float tumorPurity;
+
+    // Maximum normal VAF threshold
+    float norVAF_maxThr;
+    int norDepth_minThr;
+
+    // Messy read ratio threshold
+    float MessyReadRatioThreshold;
+    int ReadCount_minThr;
+
+    // Haplotag consistency filter threshold
+    float HapConsistency_VAF_maxThr;
+    int HapConsistency_ReadCount_maxThr;
+    int HapConsistency_somaticRead_minThr;
+
+    // Interval SNP count filter threshold
+    float IntervalSnpCount_VAF_maxThr;
+    int IntervalSnpCount_ReadCount_maxThr;
+    int IntervalSnpCount_minThr;
+    float zScore_maxThr;
+
+    // Below the mapping quality read ratio threshold
+    float LowMpqRatioThreshold; 
+};
 
 struct ReadVarHpCount{
     int HP1;
@@ -52,39 +106,6 @@ struct DenseSnpInterval{
     }
 };
 
-struct SomaticVarCallerParaemter
-{
-    // Determine whether to apply the filter
-    bool applyFilter;
-    // Determine whether to write log file
-    bool writeVarLog;  
-    
-    // Tumor purity
-    float tumorPurity;
-
-    // Maximum normal VAF threshold
-    float norVAF_maxThr;
-    int norDepth_minThr;
-
-    // Messy read ratio threshold
-    float MessyReadRatioThreshold;
-    int ReadCount_minThr;
-
-    // Haplotag consistency filter threshold
-    float HapConsistency_VAF_maxThr;
-    int HapConsistency_ReadCount_maxThr;
-    int HapConsistency_somaticRead_minThr;
-
-    // Interval SNP count filter threshold
-    float IntervalSnpCount_VAF_maxThr;
-    int IntervalSnpCount_ReadCount_maxThr;
-    int IntervalSnpCount_minThr;
-    float zScore_maxThr;
-
-    // Below the mapping quality read ratio threshold
-    float LowMpqRatioThreshold; 
-};
-
 
 class ExtractNorDataChrProcessor : public ChromosomeProcessor{
     private:
@@ -99,7 +120,7 @@ class ExtractNorDataChrProcessor : public ChromosomeProcessor{
             const std::string &ref_string,
             std::map<int, MultiGenomeVar> &currentVariants,
             std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
-            ChrProcCommonContext& ctx
+            ChrProcContext& ctx
         ) override;
 
         //override postProcess
@@ -152,7 +173,11 @@ class ExtractNorDataBamParser : public HaplotagBamParser{
         };
 
     public:
-        ExtractNorDataBamParser(std::map<std::string, std::map<int, PosBase>>& chrPosNorBase);
+        ExtractNorDataBamParser(
+            const ParsingBamConfig& config,
+            const ParsingBamControl& control,
+            std::map<std::string, std::map<int, PosBase>>& chrPosNorBase
+        );
         ~ExtractNorDataBamParser();
         void displayPosInfo(std::string chr, int pos);
 };
@@ -179,7 +204,7 @@ class ExtractTumDataChrProcessor : public ChromosomeProcessor{
             const std::string &ref_string,
             std::map<int, MultiGenomeVar> &currentVariants,
             std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
-            ChrProcCommonContext& ctx
+            ChrProcContext& ctx
         ) override;
 
 
@@ -246,6 +271,8 @@ class ExtractTumDataBamParser : public HaplotagBamParser{
         };
     public:
         ExtractTumDataBamParser(
+            const ParsingBamConfig& config,
+            const ParsingBamControl& control,
             std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo,
             std::map<std::string, std::map<std::string, ReadVarHpCount>>& chrReadHpResultSet,
             std::map<std::string, std::map<int, std::map<std::string, int>>>& chrTumorPosReadCorrBaseHP
@@ -258,6 +285,9 @@ class SomaticVarCaller{
     private:
         
         static constexpr int INTERVAL_SNP_MAX_DISTANCE = 5000;
+
+        const CallerConfig &callerCfg;
+        const ParsingBamConfig &bamCfg;
 
         const std::vector<std::string>& chrVec;
 
@@ -303,7 +333,7 @@ class SomaticVarCaller{
             chrReadHpResult &localReadHpDistri
         );
         
-        void writeSomaticVarCallingLog(const SomaticHaplotagParameters &params, const SomaticVarCallerParaemter &somaticParams, const std::vector<std::string> &chrVec
+        void writeSomaticVarCallingLog(const CallerContext &ctx, const SomaticVarCallerParaemter &somaticParams, const std::vector<std::string> &chrVec
                                      , std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         void writeOtherSomaticHpLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         void writeDenseTumorSnpIntervalLog(const std::string logFileName, const std::vector<std::string> &chrVec);
@@ -323,11 +353,11 @@ class SomaticVarCaller{
     protected:
 
     public:
-        SomaticVarCaller(const std::vector<std::string> &chrVec);
+        SomaticVarCaller(const CallerConfig &callerCfg, const ParsingBamConfig &bamCfg, const std::vector<std::string> &chrVec);
         virtual ~SomaticVarCaller();
 
         void variantCalling(
-            const SomaticHaplotagParameters &params,
+            const CallerContext &ctx,
             const std::vector<std::string> &chrVec,
             const std::map<std::string, int> &chrLength,
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
@@ -337,7 +367,8 @@ class SomaticVarCaller{
         void extractSomaticData(
             const std::string &normalBamFile,
             const std::string &tumorBamFile,
-            const HaplotagParameters &basicParams,
+            const std::string &fastaFile,
+            const ParsingBamConfig &config,
             const std::vector<std::string> &chrVec,
             const std::map<std::string, int> &chrLength,
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,

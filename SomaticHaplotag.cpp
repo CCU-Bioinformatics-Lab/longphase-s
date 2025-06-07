@@ -2,24 +2,31 @@
 
 #define SUBPROGRAM "somatic_haplotag"
 
-void SomaticHaplotagHelpManager::buildMessage() {
-    // build base message
-    HaplotagHelpManager::buildMessage();
+constexpr const char *CORRECT_USAGE_MESSAGE =
+"Usage: "  " " SUBPROGRAM " [OPTION] ... READSFILE\n"
+"      --help                          display this help and exit.\n\n"
+"required arguments:\n"
+"      -s, --snp-file=NAME             input normal sample SNP VCF file.\n"
+"      -b, --bam-file=NAME             input normal sample BAM file.\n"
+"      --tumor-snp-file=NAME           input tumor sample SNP VCF file.\n"
+"      --tumor-bam-file=NAME           input tumor sample BAM file for somatic haplotag.\n"
+"      -r, --reference=NAME            reference FASTA.\n\n"
+"optional arguments:\n"
+"      --tagSupplementary              tag supplementary alignment. default:false\n"
+"      -q, --qualityThreshold=Num      not tag alignment if the mapping quality less than threshold. default:1\n"
+"      -p, --percentageThreshold=Num   the alignment will be tagged according to the haplotype corresponding to most alleles.\n"
+"                                      if the alignment has no obvious corresponding haplotype, it will not be tagged. default:0.6\n"
+"      -t, --threads=Num               number of thread. default:1\n"
+"      -o, --out-prefix=NAME           prefix of phasing result. default:result\n"
+"      --cram                          the output file will be in the cram format. default:bam\n"
+"      --region=REGION                 tagging include only reads/variants overlapping those regions. default:\"\"(all regions)\n"
+"                                      input format:chrom (consider entire chromosome)\n"
+"                                                   chrom:start (consider region from this start to end of chromosome)\n"
+"                                                   chrom:start-end\n"
+"      --log                           an additional log file records the result of each read. default:false\n\n"
+"somatic variant calling arguments:\n"
+"      --tumor-purity=Num              tumor purity value (0.1~1.0) used to adjust somatic variant calling sensitivity and specificity.\n";
 
-    //clear the section item
-    clearSectionItem(REQUIRED_SECTION);
-    // Required arguments - Somatic mode
-    addSectionItem(REQUIRED_SECTION, "      -s, --snp-file=NAME             input normal sample SNP VCF file.");
-    addSectionItem(REQUIRED_SECTION, "      -b, --bam-file=NAME             input normal sample BAM file.");
-    addSectionItem(REQUIRED_SECTION, "      --tumor-snp-file=NAME           input tumor sample SNP VCF file.");
-    addSectionItem(REQUIRED_SECTION, "      --tumor-bam-file=NAME           input tumor sample BAM file for mutation tagging.");
-    addSectionItem(REQUIRED_SECTION, "      -r, --reference=NAME            reference FASTA.\n");
-
-    addSectionItem(OPTIONAL_SECTION, " ");
-    
-    addSection(SOMATIC_VARIANT_CALLING_SECTION);
-    addItem("      --tumor-purity=Num              tumor purity value (0.1~1.0) used to adjust somatic variant calling sensitivity and specificity.");
-}
 
 void SomaticHaplotagOptionDefiner::defineOptions(ArgumentManager& manager) {
     // base haplotag options
@@ -39,9 +46,9 @@ void ParamsHandler<SomaticHaplotagParameters>::initialize(SomaticHaplotagParamet
     ParamsHandler<HaplotagParameters>::initialize(params.basic, version);
 
     params.tumorPurity = 0.2;
-    params.tumorPurity = 0.2;
     params.enableFilter = true;
     params.predictTumorPurity = true;
+    params.metricsSuffix = "_somatic_haplotag.metrics";
 }
 
 bool ParamsHandler<SomaticHaplotagParameters>::loadArgument(SomaticHaplotagParameters& params, char& opt, std::istringstream& arg) {
@@ -96,8 +103,8 @@ bool ParamsHandler<SomaticHaplotagParameters>::validateNumericParameter(SomaticH
 
 void ParamsHandler<SomaticHaplotagParameters>::recordCommand(SomaticHaplotagParameters& params, int argc, char** argv) {
     for(int i = 0; i < argc; ++i){
-        params.basic.command.append(argv[i]);
-        params.basic.command.append(" ");
+        params.basic.config.command.append(argv[i]);
+        params.basic.config.command.append(" ");
     }
 }
 
@@ -107,10 +114,9 @@ int ParamsHandler<SomaticHaplotagParameters>::getHelpEnumNum() {
 
 int SomaticHaplotagMain(int argc, char** argv, std::string in_version){
     
-    SomaticHaplotagArgumentManager optionManager(SUBPROGRAM, in_version);
+    SomaticHaplotagArgumentManager optionManager(SUBPROGRAM, in_version, CORRECT_USAGE_MESSAGE);
 
     optionManager.setOptions();
-    optionManager.setHelpMessage();
 
     optionManager.parseOptions(argc, argv);
 

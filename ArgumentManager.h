@@ -95,127 +95,6 @@ namespace FileValidator{
     bool validateOptionalFile(const std::string& filePath, const std::string& fileDescription, const std::string& programName);
 }
 
-/**
- * @brief Help message management class - Manages and formats help/usage information
- * 
- * This class provides a structured way to build and display help messages for command-line
- * applications. It organizes help content into sections with headers and items, allowing
- * for clean and consistent help message formatting.
- * 
- * Features:
- * - Section-based organization of help content
- * - Hierarchical structure with headers and items
- * - Dynamic content modification through inheritance
- * - Consistent formatting across different applications
- * 
- * The class uses a section-based approach where each section has:
- * - A header string (e.g., "Required Arguments:", "Optional Arguments:")
- * - A list of items describing individual options or usage information
- * 
- * Derived classes can override buildMessage() to create application-specific
- * help content and modifyMessage() to customize existing content.
- * 
- * Usage:
- * ```cpp
- * class MyHelpManager : public HelpMessageManager {
- * public:
- *     void buildMessage() override {
- *         addSection("Usage:");
- *         addItem("myprogram [OPTIONS] input.file");
- *         addSection("Options:");
- *         addItem("-h, --help    Show this help");
- *     }
- * };
- * ```
- */
-// Help message management class
-class HelpMessageManager {
-    protected:
-        const std::string REQUIRED_SECTION = "required arguments:";
-        const std::string OPTIONAL_SECTION = "optional arguments:";
-        
-        /**
-         * @brief Structure representing a help section with header and items
-         */
-        struct HelpSection {
-            std::string header;
-            std::vector<std::string> items;
-        };
-        
-        std::vector<HelpSection> sections;
-        std::string programName;
-        
-        /**
-         * @brief Add a new section with the given header
-         * @param header The section header text
-         */
-        void addSection(const std::string& header);
-
-        /**
-         * @brief Remove a section by header
-         * @param header The header of the section to remove
-         */
-        void removeSection(const std::string& header);
-        
-        /**
-         * @brief Add an item to the current section
-         * @param item The item text to add
-         */
-        void addItem(const std::string& item);
-        
-        /**
-         * @brief Add an item to a specific section by name
-         * @param sectionName The name of the target section
-         * @param newItem The item text to add
-         */
-        void addSectionItem(const std::string& sectionName, const std::string& newItem);
-
-        /**
-         * @brief Remove an item from a specific section by name
-         * @param sectionName The name of the target section
-         * @param removeItem The item text to remove
-         */
-        void removeSectionItem(const std::string& sectionName, const std::string& removeItem);
-        
-        /**
-         * @brief Clear all items from a specific section
-         * @param sectionName The name of the section to clear
-         */
-        void clearSectionItem(const std::string& sectionName);
-
-    public:
-        HelpMessageManager(const std::string& program) : programName(program) {}
-        
-        virtual ~HelpMessageManager() = default;
-        
-        /**
-         * @brief Build the basic message structure
-         * 
-         * This virtual method should be overridden by derived classes to build
-         * the complete help message structure. The default implementation is empty.
-         */
-        virtual void buildMessage() {}
-        
-        /**
-         * @brief Allow derived classes to modify existing help messages
-         * 
-         * This method can be used to customize or extend help messages after
-         * the basic structure has been built.
-         */
-        virtual void modifyMessage() {}
-        
-        /**
-         * @brief Print the help message to standard output
-         */
-        virtual void printHelp() const;
-        
-        /**
-         * @brief Get the complete help message as a string
-         * @return The formatted help message string
-         */
-        virtual std::string getHelpMessage() const;
-};
-
 
 /**
  * @brief Option definer base class - Uses strategy pattern to define command line options
@@ -317,25 +196,15 @@ class OptionDefiner {
 class ArgumentManager {
 
     protected:
+        // program name and version
         std::string programName;
         std::string version;
+        const char* HELP_MESSAGE;
+
         std::vector<struct option> longOpts;
         std::string shortOpts;
 
-        HelpMessageManager* helpManager;
         OptionDefiner* optionDefiner;
-
-        // Create the help message manager and option definer
-        /**
-         * @brief Factory method to create appropriate HelpMessageManager
-         * @param program The program name for help message display
-         * @return Pointer to HelpMessageManager instance
-         * 
-         * This factory method should be overridden by derived classes to return
-         * the appropriate HelpMessageManager subclass for their specific needs.
-         * The returned object will be used to build and display help messages.
-         */
-        virtual HelpMessageManager* createHelpManager(const std::string& program) = 0;
         
         /**
          * @brief Factory method to create appropriate OptionDefiner
@@ -385,12 +254,6 @@ class ArgumentManager {
         void addOption(const struct option& opt);
 
         /**
-         * @brief Remove an option from the options list
-         * @param name The name of the option to remove
-         */
-        void removeOption(const std::string& name);
-
-        /**
          * @brief Initialize command-line options using OptionDefiner strategy
          * 
          * This method creates an OptionDefiner instance via createOptionDefiner()
@@ -403,33 +266,20 @@ class ArgumentManager {
         }
 
         /**
-         * @brief Initialize help message using HelpMessageManager
-         * 
-         * This method creates a HelpMessageManager instance via createHelpManager()
-         * and calls its buildMessage() method to construct the help content.
-         * The help manager can then be used to display help information.
-         */
-        void setHelpMessage(){
-            helpManager = createHelpManager(programName);
-            helpManager->buildMessage();
-        };
-
-        /**
          * @brief Clean up allocated resources
          * 
          * Safely deletes HelpMessageManager and OptionDefiner instances
          * if they have been allocated.
          */
         void destroy(){
-            if(helpManager) delete helpManager;
             if(optionDefiner) delete optionDefiner;
         };
 
         // Parse command line options
         virtual void parseOptions(int argc, char** argv);
 
-        ArgumentManager(const std::string& program, const std::string& version)
-         : programName(program), version(version) {};
+        ArgumentManager(const std::string& program, const std::string& version, const char* HELP_MESSAGE)
+         : programName(program), version(version), HELP_MESSAGE(HELP_MESSAGE) {};
         
         virtual ~ArgumentManager(){
             destroy();
@@ -494,17 +344,13 @@ class ArgumentTemManager : public ArgumentManager{
             paramsHandler.recordCommand(params, argc, argv);
         };
 
-        virtual HelpMessageManager* createHelpManager(const std::string& program) override {
-            return new HelpMessageManager(program);
-        };
-
         virtual int getHelpEnumNum() override {
             return ParamsHandler<Params>::getHelpEnumNum();
         };
         
     public:
-        ArgumentTemManager(const std::string& program, const std::string& version)
-         : ArgumentManager(program, version) {};
+        ArgumentTemManager(const std::string& program, const std::string& version, const char* HELP_MESSAGE)
+         : ArgumentManager(program, version, HELP_MESSAGE) {};
 
         Params getParams() const {
             return params;

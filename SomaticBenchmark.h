@@ -9,14 +9,14 @@
 struct SomaticReadLog{
     std::string chr;
     std::string readID;
-    std::string hpResult;
+    int hpResult;
     //pos, hp
     std::map<int, int> somaticSnpHp;
     float germlineVarSimilarity;
     float deriveByHpSimilarity;
     int germlineSnpCount;
     int tumorSnpCount;
-    SomaticReadLog(): chr(""), readID(""), hpResult(""), germlineVarSimilarity(0.0), deriveByHpSimilarity(0.0), germlineSnpCount(0), tumorSnpCount(0){}
+    SomaticReadLog(): chr(""), readID(""), hpResult(ReadHP::unTag), germlineVarSimilarity(0.0), deriveByHpSimilarity(0.0), germlineSnpCount(0), tumorSnpCount(0){}
 };
 
 
@@ -29,9 +29,9 @@ struct SomaticReadMetrics{
     };
 
     std::map<int, RefAltDelCount> posAltRefDelCount;
-    std::vector<std::pair<int, int>> highConSomaticPos;
+    std::vector<std::pair<int, int>> truthSomaticPosVec;
     std::vector<SomaticReadLog> totalReadVec;
-    std::vector<SomaticReadLog> readsCrossingHighConSnpVec;
+    std::vector<SomaticReadLog> coverTruthSomaticPosReadVec;
     std::vector<SomaticReadLog> taggedSomaticReadVec;
 };
 
@@ -42,7 +42,7 @@ class SomaticReadVerifier{
 
         SomaticReadMetrics *metrics;
 
-        SomaticReadLog createBasicSomaticReadLog(const std::string &chr, std::string &readID, std::string &hpResult, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, int> &hpCount);
+        SomaticReadLog createBasicSomaticReadLog(const std::string &chr, std::string &readID, int &hpResult, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, int> &hpCount);
     
     public:
         SomaticReadVerifier(bool openTestingFunc, SomaticReadMetrics *metrics);
@@ -50,8 +50,8 @@ class SomaticReadVerifier{
 
         void recordDelReadCount(const std::string &chr, std::map<int, MultiGenomeVar>::iterator &currentVariantIter);
         void recordRefAltAlleleCount(const std::string &chr, std::string &base, std::map<int, MultiGenomeVar>::iterator &currentVariantIter);
-        void recordCrossingHighConSnpRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, MultiGenomeVar> &currentChrVariants);
-        void recordTaggedRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, MultiGenomeVar> &currentChrVariants);
+        void recordCrossingHighConSnpRead(const std::string &chr, std::string &readID, int &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, MultiGenomeVar> &currentChrVariants);
+        void recordTaggedRead(const std::string &chr, std::string &readID, int &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, MultiGenomeVar> &currentChrVariants);
 };
 
 class SomaticReadBenchmark: public VcfParser{

@@ -117,10 +117,9 @@ void BamFileRAII::destroy(){
 
 
 HaplotagBamParser::HaplotagBamParser(
-    ParsingBamMode mode,
-    bool writeOutputBam,
-    bool mappingQualityFilter
-): mode(mode), writeOutputBam(writeOutputBam), mappingQualityFilter(mappingQualityFilter)
+    const ParsingBamConfig &config,
+    const ParsingBamControl &control
+): config(config), control(control)
 {
 
 }
@@ -129,10 +128,10 @@ HaplotagBamParser::~HaplotagBamParser(){
 
 }
 
-void HaplotagBamParser::parsingBam(HaplotagBamParserContext& ctx){
+void HaplotagBamParser::parsingBam(BamParserContext& ctx){
     try{
 
-        if(mode == ParsingBamMode::MULTI_THREAD && writeOutputBam) {
+        if(control.mode == ParsingBamMode::MULTI_THREAD && control.writeOutputBam) {
             throw std::runtime_error("Cannot set Multi Thread mode when writeOutputBam is true");
         }
 
@@ -146,18 +145,18 @@ void HaplotagBamParser::parsingBam(HaplotagBamParserContext& ctx){
         
         std::vector<int> last_pos;
         // get the last variant position of the reference
-        getLastVarPos(last_pos, ctx.chrVec, ctx.mergedChrVarinat, ctx.genmoeType);
+        getLastVarPos(last_pos, ctx.chrVec, ctx.mergedChrVarinat, ctx.genomeSample);
         // reference fasta parser
-        FastaParser fastaParser(ctx.params.fastaFile, ctx.chrVec, last_pos, ctx.params.numThreads);
+        FastaParser fastaParser(ctx.fastaFile, ctx.chrVec, last_pos, config.numThreads);
 
         // init data structure and get core n
         htsThreadPool threadPool = {NULL, 0};
         // creat thread pool
-        if (!(threadPool.pool = hts_tpool_init(ctx.params.numThreads))) {
+        if (!(threadPool.pool = hts_tpool_init(config.numThreads))) {
             throw std::runtime_error("Error creating thread pool");
         }
 
-        switch(mode){
+        switch(control.mode){
             case ParsingBamMode::SINGLE_THREAD:
                 // Process the BAM file using a single thread
                 std::cerr<< "[single thread]";
@@ -171,7 +170,7 @@ void HaplotagBamParser::parsingBam(HaplotagBamParserContext& ctx){
                 break;
 
             default:
-                throw std::runtime_error("Unsupported parsing bam mode: " + std::to_string(mode));
+                throw std::runtime_error("Unsupported parsing bam mode: " + std::to_string(control.mode));
         }
 
         hts_tpool_destroy(threadPool.pool);
@@ -184,17 +183,17 @@ void HaplotagBamParser::parsingBam(HaplotagBamParserContext& ctx){
 }
 
 void HaplotagBamParser::processBamParallel(
-    HaplotagBamParserContext& ctx,
+    BamParserContext& ctx,
     const FastaParser &fastaParser,
     htsThreadPool &threadPool
 ){
     // loop all chromosome
-    #pragma omp parallel for schedule(dynamic) num_threads(ctx.params.numThreads) 
+    #pragma omp parallel for schedule(dynamic) num_threads(config.numThreads) 
     for(auto chr : ctx.chrVec ){
         // bam file resource allocation
-        BamFileRAII bamRAII(ctx.BamFile, ctx.params.fastaFile, threadPool, ctx.params.version, ctx.params.command, ctx.params.resultPrefix, ctx.params.outputFormat, writeOutputBam);
+        BamFileRAII bamRAII(ctx.BamFile, ctx.fastaFile, threadPool, config.version, config.command, config.resultPrefix, config.outputFormat, control.writeOutputBam);
 
-        ChrProcCommonContext commonCtx(chr, ctx.chrLength.at(chr), ctx.params, ctx.genmoeType, ctx.vcfSet);
+        ChrProcContext commonCtx(chr, ctx.chrLength.at(chr), config, ctx.genomeSample, ctx.vcfSet);
         //create the chromosome processor
         auto chrProcessor = createProcessor(chr);
         chrProcessor->processSingleChromosome(commonCtx, bamRAII, fastaParser, ctx.mergedChrVarinat);
@@ -202,19 +201,19 @@ void HaplotagBamParser::processBamParallel(
 }
 
 void HaplotagBamParser::processBamWithOutput(
-    HaplotagBamParserContext& ctx,
+    BamParserContext& ctx,
     const FastaParser &fastaParser,
     htsThreadPool &threadPool
 ){
     // bam file resource allocation
-    BamFileRAII bamRAII(ctx.BamFile, ctx.params.fastaFile, threadPool, ctx.params.version, ctx.params.command, ctx.params.resultPrefix, ctx.params.outputFormat, writeOutputBam);
+    BamFileRAII bamRAII(ctx.BamFile, ctx.fastaFile, threadPool, config.version, config.command, config.resultPrefix, config.outputFormat, control.writeOutputBam);
     // loop all chromosome
     for(auto chr : ctx.chrVec ){
         //create the chromosome processor
         std::time_t begin = time(NULL);
         std::cerr<<"chr: " << chr << " ... " ;
 
-        ChrProcCommonContext commonCtx(chr, ctx.chrLength.at(chr), ctx.params, ctx.genmoeType, ctx.vcfSet);
+        ChrProcContext commonCtx(chr, ctx.chrLength.at(chr), config, ctx.genomeSample, ctx.vcfSet);
         //create the chromosome processor
         auto chrProcessor = createProcessor(chr);
         chrProcessor->processSingleChromosome(commonCtx, bamRAII, fastaParser, ctx.mergedChrVarinat);
@@ -226,20 +225,20 @@ void HaplotagBamParser::getLastVarPos(
     std::vector<int>& last_pos, 
     const std::vector<std::string>& chrVec, 
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
-    const Genome& genmoeType
+    const Genome& genomeSample
 ){
     for( auto chr : chrVec ){
         bool existLastPos = false;
 
         for (auto lastVariantIter = mergedChrVarinat[chr].rbegin(); lastVariantIter != mergedChrVarinat[chr].rend(); ++lastVariantIter) {
-            if (genmoeType == NORMAL) {
+            if (genomeSample == NORMAL) {
                 if ((*lastVariantIter).second.isExists(NORMAL) && (*lastVariantIter).second.Variant[NORMAL].isExistPhasedSet()) {
                     last_pos.push_back((*lastVariantIter).first);
                         existLastPos = true;
                         break;
                     }
             }
-            else if (genmoeType == TUMOR) {
+            else if (genomeSample == TUMOR) {
                 if ((*lastVariantIter).second.isExists(TUMOR) || 
                     ((*lastVariantIter).second.isExists(NORMAL) && (*lastVariantIter).second.Variant[NORMAL].isExistPhasedSet())) {
                     last_pos.push_back((*lastVariantIter).first);
@@ -247,7 +246,7 @@ void HaplotagBamParser::getLastVarPos(
                     break;
                 }
             }else{
-                std::cerr << "ERROR (getRefLastVarPos) => unsupported genome type: " << genmoeType << std::endl;
+                std::cerr << "ERROR (getRefLastVarPos) => unsupported genome sample: " << genomeSample << std::endl;
                 exit(EXIT_SUCCESS);
             }
         }
@@ -269,14 +268,14 @@ ChromosomeProcessor::~ChromosomeProcessor(){
 }
 
 void ChromosomeProcessor::processSingleChromosome(
-    ChrProcCommonContext& ctx,
+    ChrProcContext& ctx,
     BamFileRAII& bamRAII,
     const FastaParser& fastaParser,
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat  
 ){
     const std::string& chr = ctx.chrName;
     const int& chrLength = ctx.chrLength;
-    const HaplotagParameters& params = ctx.params; 
+    const ParsingBamConfig& params = ctx.params; 
 
     // records all variants within this chromosome.
     std::map<int, MultiGenomeVar> currentVariants;
@@ -709,7 +708,7 @@ void GermlineHaplotagStrategy::judgeDeletionHap(
     }
 }
 
-void GermlineHaplotagStrategy::judgeSVHap(const bam1_t &aln, std::map<Genome, VCF_Info> &vcfSet, std::map<int, int>& hpCount, const int& genmoeType){
+void GermlineHaplotagStrategy::judgeSVHap(const bam1_t &aln, std::map<Genome, VCF_Info> &vcfSet, std::map<int, int>& hpCount, const int& genomeSample){
     auto readIter = vcfSet[Genome::NORMAL].readSVHapCount.find(bam_get_qname(&aln));
     if( readIter != vcfSet[Genome::NORMAL].readSVHapCount.end()){
         hpCount[SnpHP::GERMLINE_H1] += vcfSet[Genome::NORMAL].readSVHapCount[bam_get_qname(&aln)][0];
@@ -784,29 +783,32 @@ void SomaticJudgeHapStrategy::judgeSomaticSnpHap(std::map<int, MultiGenomeVar>::
     // both normal and tumor samples that do not exist in the high-confidence set
     if(curVar.isExists(NORMAL) && curVar.isExists(TUMOR)){
         // the tumor & normal SNP GT are phased heterozygous 
-        if((curVar.Variant[NORMAL].is_phased_hetero) && (curVar.Variant[TUMOR].is_phased_hetero)){ 
+        if((curVar.Variant[NORMAL].GT == GenomeType::PHASED_HETERO) && 
+            (curVar.Variant[TUMOR].GT == GenomeType::PHASED_HETERO)){ 
             judgeNormalSnpHap(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
 
         }
         //the normal SNP GT is phased heterozgous & the tumor SNP GT is unphased heterozgous 
-        else if((curVar.Variant[NORMAL].is_phased_hetero) && (curVar.Variant[TUMOR].is_unphased_hetero)){   
+        else if((curVar.Variant[NORMAL].GT == GenomeType::PHASED_HETERO) && 
+                (curVar.Variant[TUMOR].GT == GenomeType::UNPHASED_HETERO)){   
             judgeNormalSnpHap(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
 
         }
         //the normal SNP GT is phased heterozgous & the tumor SNP GT is homozygous 
-        else if((curVar.Variant[NORMAL].is_phased_hetero) && (curVar.Variant[TUMOR].is_homozygous)){ 
+        else if((curVar.Variant[NORMAL].GT == GenomeType::PHASED_HETERO) && 
+                (curVar.Variant[TUMOR].GT == GenomeType::UNPHASED_HOMO)){ 
             judgeNormalSnpHap(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
         }
     // only normal SNP at the current position
     }else if(curVar.isExists(NORMAL)){
         // the normal SNP GT is phased heterozgous SNP
-        if((curVar.Variant[NORMAL].is_phased_hetero)){
+        if((curVar.Variant[NORMAL].GT == GenomeType::PHASED_HETERO)){
             judgeNormalSnpHap(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
         }
     // only tumor SNP at the current position
     }else if(curVar.isExists(TUMOR)){
         //the tumor SNP GT is phased heterozygous
-        if(curVar.Variant[TUMOR].is_phased_hetero == true){
+        if(curVar.Variant[TUMOR].GT == GenomeType::PHASED_HETERO){
             if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
                 if(!curVar.Variant[TUMOR].isExistPhasedSet()){
                     std::cerr<< curPos << "\t"
@@ -818,12 +820,12 @@ void SomaticJudgeHapStrategy::judgeSomaticSnpHap(std::map<int, MultiGenomeVar>::
                 }
             }
         //the tumor SNP GT is unphased heterozygous
-        }else if(curVar.Variant[TUMOR].is_unphased_hetero == true){
+        }else if(curVar.Variant[TUMOR].GT == GenomeType::UNPHASED_HETERO){
             if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
                 judgeTumorOnlySnpHap(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec);
             }           
         //the tumor SNP GT is homozygous
-        }else if(curVar.Variant[TUMOR].is_homozygous == true){
+        }else if(curVar.Variant[TUMOR].GT == GenomeType::UNPHASED_HOMO){
             if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
                 judgeTumorOnlySnpHap(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec);
             }
@@ -1065,7 +1067,7 @@ void SomaticHaplotagStrategy::judgeTumorOnlySnpHap(const std::string &chrName, i
             //std::cerr << "Somatic SNP: " << curPos << " " << base << " -> " << TumorRefBase << "|" << TumorAltBase << std::endl;
         }
 
-        if(curVar.Variant[TUMOR].is_phased_hetero){
+        if(curVar.Variant[TUMOR].GT == GenomeType::PHASED_HETERO){
             if(tumCountPS != nullptr) (*tumCountPS)[curVar[TUMOR].PhasedSet]++;
         }
     }

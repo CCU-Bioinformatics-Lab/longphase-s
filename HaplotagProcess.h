@@ -6,6 +6,17 @@
 #include "HaplotagVcfParser.h"
 #include "HaplotagLogging.h"
 
+struct HaplotagParameters
+{
+    std::string snpFile;
+    std::string svFile;
+    std::string modFile;
+    std::string bamFile;
+    std::string fastaFile;
+    
+    ParsingBamConfig config;
+};
+
 struct ReadStatistics {
     // reads HP count
     std::map<int, int> totalHpCount;
@@ -103,7 +114,7 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
             const std::string &ref_string,
             std::map<int, MultiGenomeVar> &currentVariants,
             std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
-            ChrProcCommonContext& ctx
+            ChrProcContext& ctx
         ) override;
 
         virtual int judgeHaplotype(
@@ -114,9 +125,9 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
             GermlineTagLog *tagResult,
             int &pqValue,
             int &psValue,
-            const int tagGeneType,
+            const int tagSample,
             const std::string &ref_string,
-            const HaplotagParameters &params,
+            const ParsingBamConfig &params,
             std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
             std::map<int, MultiGenomeVar> &currentChrVariants,
             std::map<Genome, VCF_Info> &vcfSet
@@ -149,7 +160,14 @@ class GermlineHaplotagBamParser: public HaplotagBamParser{
         GermlineTagLog *tagResult;
 
         std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) override{
-            return std::unique_ptr<ChromosomeProcessor>(new GermlineHaplotagChrProcessor(writeOutputBam, mappingQualityFilter, readStats, tagResult));
+            return std::unique_ptr<ChromosomeProcessor>(
+                new GermlineHaplotagChrProcessor(
+                    control.writeOutputBam,
+                    control.mappingQualityFilter,
+                    readStats,
+                    tagResult
+                )
+            );
         };
 
         // create tag read log
@@ -159,9 +177,8 @@ class GermlineHaplotagBamParser: public HaplotagBamParser{
 
     public:
         GermlineHaplotagBamParser(
-            ParsingBamMode mode,
-            bool writeOutputBam,
-            bool mappingQualityFilter,
+            const ParsingBamConfig &config,
+            const ParsingBamControl &control,
             ReadStatistics& readStats,
             const HaplotagParameters& params
         );
@@ -197,22 +214,21 @@ class HaplotagProcess
 
         // load SNP, SV, MOD vcf file
         virtual void parseVariantFiles(VcfParser& vcfParser);
-        // decide which genome type chrVec and chrLength belong to
+        // decide which genome sample chrVec and chrLength belong to
         virtual void setChrVecAndChrLength();
         // update chromosome processing based on region
         void setProcessingChromRegion();
 
-        virtual void tagRead(HaplotagParameters &params, std::string& tagBamFile, const Genome& geneType);
+        virtual void tagRead(HaplotagParameters &params, std::string& tagBamFile, const Genome& geneSample);
         virtual void postprocessForHaplotag(){};
         virtual void printExecutionReport();
 
         virtual GermlineHaplotagBamParser* createHaplotagBamParser(
-            ParsingBamMode mode,
-            bool writeOutputBam,
-            bool mappingQualityFilter,
+            const ParsingBamConfig &config,
+            const ParsingBamControl &control,
             ReadStatistics& readStats
         ){
-            return new GermlineHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats, params);
+            return new GermlineHaplotagBamParser(config, control, readStats, params);
         }
 
         virtual std::string getNormalSnpParsingMessage(){

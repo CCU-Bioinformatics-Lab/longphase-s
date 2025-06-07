@@ -7,57 +7,77 @@ class HaplotagBamParser;
 class ChromosomeProcessor;
 class CigarParser;
 
-struct excutionParams{
-    std::string& version;
-    std::string& command;
+enum ParsingBamMode{
+    SINGLE_THREAD = 0,
+    MULTI_THREAD = 1
 };
 
-struct HaplotagBamParserContext{
+// struct ParsingBamConfig{
+//     int numThreads;
+//     int qualityThreshold;
+//     double percentageThreshold;
+//     std::string resultPrefix;
+//     std::string region;
+//     std::string command;
+//     std::string version;
+//     std::string outputFormat;
+
+//     bool tagSupplementary;
+//     bool writeReadLog;
+// };
+
+struct ParsingBamControl{
+    ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;
+    bool writeOutputBam = false;
+    bool mappingQualityFilter = false;
+};
+
+struct BamParserContext{
     const std::string &BamFile;
-    const HaplotagParameters &params; 
+    const std::string &fastaFile;
     const std::vector<std::string> &chrVec; 
     const std::map<std::string, int> &chrLength; 
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat; 
     std::map<Genome, VCF_Info> &vcfSet;
-    const Genome genmoeType;
+    const Genome genomeSample;
     
-    HaplotagBamParserContext(
+    BamParserContext(
         const std::string &BamFile, 
-        const HaplotagParameters &params, 
+        const std::string &fastaFile,
         const std::vector<std::string> &chrVec, 
         const std::map<std::string, int> &chrLength, 
         std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
         std::map<Genome, VCF_Info> &vcfSet,
-        const Genome genmoeType
+        const Genome genomeSample
     ): 
     BamFile(BamFile),
-    params(params),
+    fastaFile(fastaFile),
     chrVec(chrVec),
     chrLength(chrLength),
     mergedChrVarinat(mergedChrVarinat),
     vcfSet(vcfSet),
-    genmoeType(genmoeType)
+    genomeSample(genomeSample)
     {}
 };
 
-struct ChrProcCommonContext{
+struct ChrProcContext{
     const std::string &chrName; 
     const int& chrLength;
-    const HaplotagParameters &params; 
-    const Genome genmoeType;
+    const ParsingBamConfig &params; 
+    const Genome genomeSample;
     std::map<Genome, VCF_Info> &vcfSet; 
 
-    ChrProcCommonContext(
+    ChrProcContext(
         const std::string &chrName,
         const int& chrLength,
-        const HaplotagParameters &params,
-        const Genome genmoeType,
+        const ParsingBamConfig &params,
+        const Genome genomeSample,
         std::map<Genome, VCF_Info> &vcfSet
     ):
     chrName(chrName),
     chrLength(chrLength),
     params(params),
-    genmoeType(genmoeType),
+    genomeSample(genomeSample),
     vcfSet(vcfSet)
     {}
 };
@@ -66,7 +86,7 @@ struct CigarParserContext{
     const bam1_t& aln;
     const bam_hdr_t& bamHdr;
     const std::string& chrName;
-    const HaplotagParameters& params;
+    const ParsingBamConfig& params;
     std::map<int, MultiGenomeVar>::iterator& firstVariantIter;
     std::map<int, MultiGenomeVar>& currentVariants;
     const std::string& ref_string;
@@ -75,7 +95,7 @@ struct CigarParserContext{
         const bam1_t& aln,
         const bam_hdr_t& bamHdr,
         const std::string& chrName,
-        const HaplotagParameters& params,
+        const ParsingBamConfig& params,
         std::map<int, MultiGenomeVar>::iterator& firstVariantIter,
         std::map<int, MultiGenomeVar>& currentVariants,
         const std::string& ref_string
@@ -124,7 +144,7 @@ class GermlineHaplotagStrategy{
             const bam1_t &aln,
             std::map<Genome, VCF_Info> &vcfSet,
             std::map<int, int>& hpCount,
-            const int& tagGeneType
+            const int& tagSample
         );
 
         int judgeReadHap(
@@ -221,11 +241,6 @@ class SomaticHaplotagStrategy: public SomaticJudgeHapStrategy{
     public:
 };
 
-enum ParsingBamMode{
-    SINGLE_THREAD = 0,
-    MULTI_THREAD = 1
-};
-
 class BamFileRAII {
     private:
         bool writeOutputBam;
@@ -261,24 +276,21 @@ class BamFileRAII {
 
 class HaplotagBamParser{
     private:
-        ParsingBamMode mode;
-
         void processBamParallel(
-            HaplotagBamParserContext& ctx,
+            BamParserContext& ctx,
             const FastaParser &fastaParser,
             htsThreadPool &threadPool
         );
 
-
         void processBamWithOutput(
-            HaplotagBamParserContext& ctx,
+            BamParserContext& ctx,
             const FastaParser &fastaParser,
             htsThreadPool &threadPool
         );
     protected: 
+        const ParsingBamConfig& config;
+        const ParsingBamControl& control;
 
-        bool writeOutputBam;
-        bool mappingQualityFilter;
         // Factory method to create a chromosome processor
         virtual std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) = 0;
 
@@ -286,18 +298,17 @@ class HaplotagBamParser{
             std::vector<int>& last_pos,
             const std::vector<std::string>& chrVec,
             std::map<std::string,std::map<int, MultiGenomeVar>> &mergedChrVarinat,
-            const Genome& geneType
+            const Genome& geneSample
         );
 
     public:
         HaplotagBamParser(
-            ParsingBamMode mode = ParsingBamMode::MULTI_THREAD,
-            bool writeOutputBam = false, 
-            bool mappingQualityFilter = false
+            const ParsingBamConfig &config, 
+            const ParsingBamControl &control
         );
         virtual ~HaplotagBamParser();
 
-        void parsingBam(HaplotagBamParserContext& ctx);
+        void parsingBam(BamParserContext& ctx);
 
 };
 
@@ -320,7 +331,7 @@ class ChromosomeProcessor{
             const std::string &ref_string,
             std::map<int, MultiGenomeVar> &currentVariants,
             std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
-            ChrProcCommonContext& ctx
+            ChrProcContext& ctx
         ) = 0;
 
         virtual void postProcess(
@@ -342,7 +353,7 @@ class ChromosomeProcessor{
         virtual ~ChromosomeProcessor();
 
         void processSingleChromosome(
-            ChrProcCommonContext& ctx,
+            ChrProcContext& ctx,
             BamFileRAII& bamRAII,
             const FastaParser& fastaParser,
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat        
@@ -385,18 +396,6 @@ class CigarParser{
         CigarParser(CigarParserContext& ctx, int& ref_pos, int& query_pos);
 
         virtual ~CigarParser();
-        // void parsingCigar(
-        //     const bam1_t& aln,
-        //     const bam_hdr_t& bamHdr,
-        //     const std::string& chrName,
-        //     const HaplotagParameters& params,
-        //     std::map<int, MultiGenomeVar>::iterator& firstVariantIter,
-        //     std::map<int, MultiGenomeVar>& currentVariants,
-        //     const std::string& ref_string,
-        //     std::map<int, int>& hpCount,
-        //     std::map<int, int>& variantsHP,
-        //     std::map<int, int>& norCountPS
-        // );
 
         void parsingCigar(
             std::map<int, int>& hpCount,

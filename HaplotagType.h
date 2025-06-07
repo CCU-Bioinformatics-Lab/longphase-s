@@ -28,18 +28,10 @@ enum SomaticHaplotagOption{
     TUMOR_PURITY
 };
 
-struct HaplotagParameters
-{
+struct ParsingBamConfig{
     int numThreads;
     int qualityThreshold;
-    
     double percentageThreshold;
-    
-    std::string snpFile;
-    std::string svFile;
-    std::string modFile;
-    std::string bamFile;
-    std::string fastaFile;
     std::string resultPrefix;
     std::string region;
     std::string command;
@@ -50,33 +42,18 @@ struct HaplotagParameters
     bool writeReadLog;
 };
 
-struct SomaticHaplotagParameters
-{
-    HaplotagParameters basic;
-    // Somatic haplotag parameters
-    std::string tumorSnpFile;   
-    std::string tumorBamFile;  
-    std::string benchmarkVcf;
-    std::string benchmarkBedFile;
-    
-    double tumorPurity;
-    bool predictTumorPurity;
-
-    bool enableFilter;
-};
-
-struct PurityPredictionParameters
-{
-    HaplotagParameters basic;
-    std::string tumorBamFile;
-    std::string tumorSnpFile;
-};
-
 enum Genome
 {
     NORMAL = 0,
     TUMOR = 1,
-    HIGH_CON_SOMATIC = 2
+    TRUTH_SOMATIC = 2
+};
+
+enum GenomeType{
+    NONE_GT = 0,
+    PHASED_HETERO = 1,
+    UNPHASED_HETERO = 2,
+    UNPHASED_HOMO = 3
 };
 
 enum Nitrogenous
@@ -96,6 +73,7 @@ enum VariantType
     DELETION = 3,
     MNP = 4
 };
+
 
 enum SnpHP
 {
@@ -133,9 +111,7 @@ struct VarData{
 
     VariantType variantType;
 
-    bool is_phased_hetero;
-    bool is_homozygous;
-    bool is_unphased_hetero;
+    GenomeType GT;
 
     bool isExistPhasedSet(){
         return PhasedSet != NONE_PHASED_SET;
@@ -155,23 +131,22 @@ struct VarData{
         }
     }
 
-    VarData(): PhasedSet(NONE_PHASED_SET), HP1(""), HP2(""), variantType(VariantType::NONE_VAR)
-             , is_phased_hetero(false), is_homozygous(false), is_unphased_hetero(false){}
+    VarData(): PhasedSet(NONE_PHASED_SET), HP1(""), HP2(""), variantType(VariantType::NONE_VAR), GT(GenomeType::NONE_GT){}
 };
 
 struct MultiGenomeVar{
-    // record the variants from the normal and tumor VCF files (normal:0, tumor:1, HighCon:2)
+    // record the variants from the normal and tumor VCF files (normal, tumor, truth_somatic)
     std::map<Genome, VarData> Variant;
     bool isSomaticVariant;
     int somaticReadDeriveByHP;
     bool isInBedRegion;
 
-    bool isExists(Genome type){
-        return Variant.find(type) != Variant.end();
+    bool isExists(Genome sample){
+        return Variant.find(sample) != Variant.end();
     }
 
-    VarData& operator[](Genome type){
-        return Variant[type];
+    VarData& operator[](Genome sample){
+        return Variant[sample];
     }
     
     MultiGenomeVar(): isSomaticVariant(false), somaticReadDeriveByHP(0), isInBedRegion(true){}
@@ -296,7 +271,7 @@ struct VCF_Info
     // read id, sv haplotype, count
     std::map<std::string, std::map<int, int>> readSVHapCount;
 
-    Genome gene_type;
+    Genome sample;
 };
 
 
@@ -314,5 +289,25 @@ struct ReadHpResult{
                     coverRegionStartPos(INT_MAX), coverRegionEndPos(INT_MIN){}
 };
         
+
+// ReadHP related utility functions
+namespace ReadHapUtil {
+    inline std::string readHapIntToString(int hpResult) {
+        switch(hpResult) {
+            case ReadHP::unTag: return ".";
+            case ReadHP::H1:    return "1";
+            case ReadHP::H2:    return "2";
+            case ReadHP::H3:    return "3";
+            case ReadHP::H4:    return "4";
+            case ReadHP::H1_1:  return "1-1";
+            case ReadHP::H2_1:  return "2-1";
+            case ReadHP::H1_2:  return "1-2";
+            case ReadHP::H2_2:  return "2-2";
+            default:
+                std::cerr << "[ERROR] (ReadHapUtil::toString) => Unsupported HP result: " << static_cast<int>(hpResult) << std::endl;
+                exit(1);
+        }
+    }
+}
 
 #endif

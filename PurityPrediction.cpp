@@ -2,23 +2,26 @@
 
 #define SUBPROGRAM "purity prediction"
 
-void PurityPredictionHelpManager::buildMessage() {
-    // build base message
-    HaplotagHelpManager::buildMessage();
-
-    //clear the section item
-    clearSectionItem(REQUIRED_SECTION);
-
-    addSectionItem(REQUIRED_SECTION, "      -s, --snp-file=NAME             input normal sample SNP VCF file.");
-    addSectionItem(REQUIRED_SECTION, "      -b, --bam-file=NAME             input normal sample BAM file");
-    addSectionItem(REQUIRED_SECTION, "      --tumor-snp-file=NAME           input tumor sample SNP VCF file.");
-    addSectionItem(REQUIRED_SECTION, "      --tumor-bam-file=NAME           input tumor sample BAM file.");
-    addSectionItem(REQUIRED_SECTION, "      -r, --reference=NAME            reference FASTA.\n");
-
-    clearSectionItem(OPTIONAL_SECTION);
-    addSectionItem(OPTIONAL_SECTION, "      -t, --threads=Num               number of thread. default:1");
-    addSectionItem(OPTIONAL_SECTION, "      -o, --out-prefix=NAME           prefix of tumor purity prediction result. default:result");
-}
+constexpr const char *CORRECT_USAGE_MESSAGE =
+"Usage: "  " " SUBPROGRAM " [OPTION] ... READSFILE\n"
+"      --help                          display this help and exit.\n\n"
+"required arguments:\n"
+"      -s, --snp-file=NAME             input normal sample SNP VCF file.\n"
+"      -b, --bam-file=NAME             input normal sample BAM file.\n"
+"      --tumor-snp-file=NAME           input tumor sample SNP VCF file.\n"
+"      --tumor-bam-file=NAME           input tumor sample BAM file.\n"
+"      -r, --reference=NAME            reference FASTA.\n\n"
+"optional arguments:\n"
+"      --tagSupplementary              include supplementary alignments in haplotype statistics. default:true\n"
+"      -q, --qualityThreshold=Num      exclude reads with mapping quality below threshold. default:20\n"
+"      -p, --percentageThreshold=Num   include alignments in statistics based on haplotype allele percentage.\n"
+"                                      alignments without clear haplotype assignment are excluded. default:0.6\n"
+"      -t, --threads=Num               number of thread. default:1\n"
+"      -o, --out-prefix=NAME           prefix of tumor purity prediction result. default:result\n"
+"      --region=REGION                 tumor purity prediction include only reads/variants overlapping those regions. default:\"\"(all regions)\n"
+"                                      input format:chrom (consider entire chromosome)\n"
+"                                                   chrom:start (consider region from this start to end of chromosome)\n"
+"                                                   chrom:start-end\n";
 
 void PurityPredictionOptionDefiner::defineOptions(ArgumentManager& manager) {
     // base haplotag options
@@ -32,8 +35,8 @@ void PurityPredictionOptionDefiner::defineOptions(ArgumentManager& manager) {
 void ParamsHandler<PurityPredictionParameters>::initialize(PurityPredictionParameters& params, const std::string& version) {
 
     ParamsHandler<HaplotagParameters>::initialize(params.basic, version);
-    params.basic.qualityThreshold = 20;
-    params.basic.tagSupplementary = true;
+    params.basic.config.qualityThreshold = 20;
+    params.basic.config.tagSupplementary = true;
 }
 
 bool ParamsHandler<PurityPredictionParameters>::loadArgument(PurityPredictionParameters& params, char& opt, std::istringstream& arg) {
@@ -72,8 +75,8 @@ bool ParamsHandler<PurityPredictionParameters>::validateNumericParameter(PurityP
 
 void ParamsHandler<PurityPredictionParameters>::recordCommand(PurityPredictionParameters& params, int argc, char** argv) {
     for(int i = 0; i < argc; ++i){
-        params.basic.command.append(argv[i]);
-        params.basic.command.append(" ");
+        params.basic.config.command.append(argv[i]);
+        params.basic.config.command.append(" ");
     }
 }
 
@@ -83,10 +86,9 @@ int ParamsHandler<PurityPredictionParameters>::getHelpEnumNum(){
 
 int PurityPredictionMain(int argc, char** argv, std::string in_version){
 
-    PurityPredictionArgumentManager optionManager(SUBPROGRAM, in_version);
+    PurityPredictionArgumentManager optionManager(SUBPROGRAM, in_version, CORRECT_USAGE_MESSAGE);
 
     optionManager.setOptions();
-    optionManager.setHelpMessage();
 
     optionManager.parseOptions(argc, argv);
 

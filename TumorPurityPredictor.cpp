@@ -6,7 +6,9 @@ TumorPurityPredictor::TumorPurityPredictor(
     std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo,
     const bool writeLog,
     const std::string& resultPrefix
-) :chrVec(chrVec), chrPosNorBase(chrPosNorBase), chrPosSomaticInfo(chrPosSomaticInfo), writeLog(writeLog), resultPrefix(resultPrefix), initial_data_size(0){}
+) :chrVec(chrVec), chrPosNorBase(chrPosNorBase), 
+   chrPosSomaticInfo(chrPosSomaticInfo),
+   writeLog(writeLog), resultPrefix(resultPrefix), initial_data_size(0){}
 
 TumorPurityPredictor::~TumorPurityPredictor(){
 
@@ -929,7 +931,7 @@ int PeakProcessor::getThreshold(){
 
 std::string PeakProcessor::transformTrend(const PeakTrend &trend) {
     switch(trend) {
-        case PeakTrend::NONE: return "NONE";
+        case PeakTrend::NONE_PT: return "NONE";
         case PeakTrend::UP: return "UP";
         case PeakTrend::DOWN: return "DOWN";
         case PeakTrend::FLAG: return "FLAG";
@@ -948,10 +950,10 @@ void PeakProcessor::writePeakValleyLog(
     double &peak_threshold,
     double &sigma) {
 
-    std::string postfix = "_germlineReadHpCountInNorBam_histogram.out";
-    std::ofstream histogramFile(resultPrefix + postfix);
+    std::string suffix = "_germlineReadHpCountInNorBam_histogram.out";
+    std::ofstream histogramFile(resultPrefix + suffix);
     if(!histogramFile.is_open()){
-        std::cerr << "[WARNING] Failed to open histogram log file: " << resultPrefix + postfix << std::endl;        
+        std::cerr << "[WARNING] Failed to open histogram log file: " << resultPrefix + suffix << std::endl;        
         return;
     }
 

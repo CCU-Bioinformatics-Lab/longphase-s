@@ -21,14 +21,6 @@ struct ParamsHandler<PurityPredictionParameters>{
 };
 
 
-class PurityPredictionHelpManager : public HaplotagHelpManager {
-    public:
-        PurityPredictionHelpManager(const std::string& program) : HaplotagHelpManager(program) {}
-        virtual void buildMessage() override;
-        virtual ~PurityPredictionHelpManager() = default;
-    
-};
-
 class PurityPredictionOptionDefiner : public HaplotagOptionDefiner {
     public:
         virtual void defineOptions(ArgumentManager& manager) override;
@@ -37,17 +29,14 @@ class PurityPredictionOptionDefiner : public HaplotagOptionDefiner {
 
 class PurityPredictionArgumentManager : public ArgumentTemManager<PurityPredictionParameters> {
     protected:
-        virtual HelpMessageManager* createHelpManager(const std::string& program) override {
-            return new PurityPredictionHelpManager(program);
-        }
 
         virtual OptionDefiner* createOptionDefiner() override {
             return new PurityPredictionOptionDefiner;
         }
 
     public:
-        PurityPredictionArgumentManager(const std::string& program, const std::string& version)
-         : ArgumentTemManager<PurityPredictionParameters>(program, version) {}
+        PurityPredictionArgumentManager(const std::string& program, const std::string& version, const char* HELP_MESSAGE)
+         : ArgumentTemManager<PurityPredictionParameters>(program, version, HELP_MESSAGE) {}
         virtual ~PurityPredictionArgumentManager() = default;
 };
 

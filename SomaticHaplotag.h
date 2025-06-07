@@ -5,6 +5,7 @@
 #include "ArgumentManager.h"
 #include "SomaticHaplotagProcess.h"
 
+
 template<>
 struct ParamsHandler<SomaticHaplotagParameters>{
     static void initialize(SomaticHaplotagParameters& params, const std::string& version);
@@ -21,16 +22,6 @@ struct ParamsHandler<SomaticHaplotagParameters>{
 };
 
 
-class SomaticHaplotagHelpManager : public HaplotagHelpManager {
-    protected:
-        const std::string SOMATIC_VARIANT_CALLING_SECTION = "somatic variant calling arguments:";
-    public:
-        SomaticHaplotagHelpManager(const std::string& program) : HaplotagHelpManager(program) {}
-        virtual void buildMessage() override;
-        virtual ~SomaticHaplotagHelpManager() = default;
-    
-};
-
 class SomaticHaplotagOptionDefiner : public HaplotagOptionDefiner {
     public:
         virtual void defineOptions(ArgumentManager& manager) override;
@@ -39,17 +30,14 @@ class SomaticHaplotagOptionDefiner : public HaplotagOptionDefiner {
 
 class SomaticHaplotagArgumentManager : public ArgumentTemManager<SomaticHaplotagParameters> {
     protected:
-        virtual HelpMessageManager* createHelpManager(const std::string& program) override {
-            return new SomaticHaplotagHelpManager(program);
-        }
 
         virtual OptionDefiner* createOptionDefiner() override {
             return new SomaticHaplotagOptionDefiner;
         }
 
     public:
-        SomaticHaplotagArgumentManager(const std::string& program, const std::string& version)
-         : ArgumentTemManager<SomaticHaplotagParameters>(program, version) {}
+        SomaticHaplotagArgumentManager(const std::string& program, const std::string& version, const char* HELP_MESSAGE)
+         : ArgumentTemManager<SomaticHaplotagParameters>(program, version, HELP_MESSAGE) {}
         virtual ~SomaticHaplotagArgumentManager() = default;
 };
 

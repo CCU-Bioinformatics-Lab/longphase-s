@@ -6,7 +6,7 @@
 
 
 enum PeakTrend{
-    NONE = 0,
+    NONE_PT = 0,
     UP = 1,
     DOWN = 2,
     FLAG = 3
@@ -60,8 +60,8 @@ struct Peak{
 
     Peak(size_t index = 0, double height = 0) 
         : histo_index(index), height(height), 
-          left_trend(PeakTrend::NONE), 
-          right_trend(PeakTrend::NONE),
+          left_trend(PeakTrend::NONE_PT), 
+          right_trend(PeakTrend::NONE_PT),
           is_main_peak(false){} 
 };
 
@@ -185,7 +185,7 @@ class TumorPurityPredictor{
         std::map<std::string, std::map<int, SomaticData>> chrPosSomaticFlag;
 
         const bool writeLog;
-        const std::string& resultPrefix;    
+        const std::string& resultPrefix;   
 
         size_t initial_data_size;
         FilterCounts filterCounts;

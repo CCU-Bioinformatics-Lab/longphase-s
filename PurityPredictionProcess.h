@@ -2,10 +2,15 @@
 #define PURITY_PREDICTION_PROCESS_H
 
 #include "HaplotagProcess.h"
-#include "PurityPrediction.h"
 #include "SomaticVarCaller.h"
 #include "TumorPurityPredictor.h"
 
+struct PurityPredictionParameters
+{
+    HaplotagParameters basic;
+    std::string tumorBamFile;
+    std::string tumorSnpFile;
+};
 
 class PurityPredictionProcess : public HaplotagProcess {
     private:

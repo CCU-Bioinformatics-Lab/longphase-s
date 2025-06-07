@@ -1,11 +1,11 @@
 #include "HaplotagVcfParser.h"
 
-VcfParser::VcfParser(Genome tagGeneType){
-    this->tagGeneType = tagGeneType;
-    reset();
-}
-
-VcfParser::VcfParser(){
+VcfParser::VcfParser(Genome tagSample): tagSample(tagSample){
+    this->tagSample = tagSample;
+    this->mode = VCF_PARSER_LOAD_NODE;
+    this->resultVcf = nullptr;
+    this->commandline = "";
+    this->version = "";
     reset();
 }
 
@@ -19,10 +19,11 @@ void VcfParser::reset(){
     parseMODFile = false;
     integerPS = false;
     psIndex.clear();
+    writeCommandline = false;
 }
 
-void VcfParser::variantParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
-
+void VcfParser::parsingVCF(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+    mode = VCF_PARSER_LOAD_NODE;
     if( variantFile.find("gz") != std::string::npos ){
         // .vcf.gz 
         compressParser(variantFile, Info, mergedChrVarinat);
@@ -36,6 +37,39 @@ void VcfParser::variantParser(std::string &variantFile, VCF_Info &Info, std::map
         exit(EXIT_FAILURE);
     }
     return;
+}
+
+void VcfParser::writingResultVCF(
+    std::string &variantFile,
+    VCF_Info &Info,
+    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
+    const std::string &outputPrefix
+){
+    mode = VCF_PARSER_WRITE_NODE;
+
+    resultVcf = new std::ofstream(outputPrefix + "_SC.vcf");
+    if(!resultVcf->is_open()){
+        std::cerr<<"Fail to open output file: " << outputPrefix << "_SC.vcf\n";
+        exit(EXIT_FAILURE);
+    }
+    
+    if( variantFile.find("gz") != std::string::npos ){
+        // .vcf.gz 
+        compressParser(variantFile, Info, mergedChrVarinat);
+    }
+    else if( variantFile.find("vcf") != std::string::npos ){
+        // .vcf
+        unCompressParser(variantFile, Info, mergedChrVarinat);
+    }
+    else{
+        std::cerr<<"file: "<< variantFile << "\nnot vcf file. please check filename extension\n";
+        exit(EXIT_FAILURE);
+    }
+    return;
+
+    resultVcf->close();
+    delete resultVcf;
+    resultVcf = nullptr;
 }
 
 void VcfParser::compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
@@ -82,7 +116,7 @@ void VcfParser::compressParser(std::string &variantFile, VCF_Info &Info, std::ma
             for (char* eol; (cur<end) && (eol = std::find(cur, end, '\n')) < end; cur = eol + 1)
             {
                 std::string input = std::string(cur, eol);
-                parserProcess(input, Info, mergedChrVarinat);
+                processLine(input, Info, mergedChrVarinat);
             }
             // any trailing data in [eol, end) now is a partial line
             offset = std::copy(cur, end, buffer);
@@ -104,25 +138,23 @@ void VcfParser::unCompressParser(std::string &variantFile, VCF_Info &Info, std::
         std::string input;
         while(! originVcf.eof() ){
             std::getline(originVcf, input);
-            parserProcess(input, Info, mergedChrVarinat);
+            processLine(input, Info, mergedChrVarinat);
         }
     }
 }
 
-void VcfParser::setParseSnpFile(bool parseSnpFile){
-    this->parseSnpFile = parseSnpFile;
-}
-
-void VcfParser::setParseSVFile(bool parseSVFile){
-    this->parseSVFile = parseSVFile;
-} 
-
-void VcfParser::setParseMODFile(bool parseMODFile){
-    this->parseMODFile = parseMODFile;
-}
-
-bool VcfParser::getParseSnpFile(){
-    return this->parseSnpFile;
+void VcfParser::processLine(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+    switch(mode){
+        case VCF_PARSER_LOAD_NODE:
+            parserProcess(input, Info, mergedChrVarinat);
+            break;
+        case VCF_PARSER_WRITE_NODE:
+            writeProcess(input, Info, mergedChrVarinat);
+            break;
+        default:
+            std::cerr<< "[ERROR](VcfParser::processLine): invalid mode\n";
+            exit(EXIT_FAILURE);
+    }
 }
 
 void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
@@ -222,7 +254,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                 VarData varData;
                 varData.allele.Ref = fields[3];
                 varData.allele.Alt = fields[4];
-                varData.is_phased_hetero = true;
+                varData.GT = GenomeType::PHASED_HETERO;
                 varData.setVariantType();
                 
                 if(integerPS){
@@ -247,9 +279,9 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                     varData.HP2 = fields[3];
                 }
 
-                if(Info.gene_type == NORMAL){
+                if(Info.sample == NORMAL){
                     mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;
-                }else if(Info.gene_type == TUMOR){
+                }else if(Info.sample == TUMOR){
                     mergedChrVarinat[chr][pos].Variant[TUMOR] = varData;
                 }
             }
@@ -318,7 +350,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
             }
         }
         // record unphased tumor SNPs
-        else if((tagGeneType == Genome::TUMOR)){
+        else if((tagSample == Genome::TUMOR)){
             //homozygous SNPs
             if( fields[9][modifu_start] == '1' && fields[9][modifu_start+1] == '/' && fields[9][modifu_start+2] == '1' ){
                 if(parseSnpFile){
@@ -326,12 +358,12 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                     VarData varData;
                     varData.allele.Ref = fields[3];
                     varData.allele.Alt = fields[4];
-                    varData.is_homozygous = true;
+                    varData.GT = GenomeType::UNPHASED_HOMO;
                     varData.setVariantType();
 
-                    if(Info.gene_type == NORMAL){
+                    if(Info.sample == NORMAL){
                         mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;
-                    }else if(Info.gene_type == TUMOR){
+                    }else if(Info.sample == TUMOR){
                         mergedChrVarinat[chr][pos].Variant[TUMOR] = varData;
                     }
                 }
@@ -342,17 +374,104 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                     VarData varData;
                     varData.allele.Ref = fields[3];
                     varData.allele.Alt = fields[4];
-                    
-                    varData.is_unphased_hetero = true;
+
+                    varData.GT = GenomeType::UNPHASED_HETERO;
                     varData.setVariantType();
 
-                    if(Info.gene_type == NORMAL){
+                    if(Info.sample == NORMAL){
                         mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;
-                    }else if(Info.gene_type == TUMOR){
+                    }else if(Info.sample == TUMOR){
                         mergedChrVarinat[chr][pos].Variant[TUMOR] = varData;
                     }
                 }
             }
         }
     }
+}
+
+void VcfParser::writeProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+    if(resultVcf == nullptr){
+        std::cerr<< "[ERROR](VcfParser::writeProcess): resultVcf is nullptr\n";
+        exit(EXIT_FAILURE);
+    }
+
+    if(input.length() >= 2 && input.substr(0, 2) == "##"){
+        *resultVcf << input << std::endl;
+    }else if (input.length() >= 6 && (input.substr(0, 6) == "#CHROM" || input.substr(0, 6) == "#chrom")){
+        // format line 
+        if( writeCommandline == false ){
+            *resultVcf << "##longphase_s_version=" << version << std::endl;
+            *resultVcf << "##commandline=" << commandline << std::endl;
+            writeCommandline = true;
+        }    
+        *resultVcf << input << std::endl;
+    }else{
+        std::istringstream iss(input);
+        std::vector<std::string> fields((std::istream_iterator<std::string>(iss)),std::istream_iterator<std::string>());
+
+        if( fields.size() == 0 )
+            return;
+
+        if (fields.size() >= 7){
+            // trans to 0-base
+            int pos = std::stoi( fields[1] ) - 1;
+            std::string chr = fields[0];
+
+            auto chrIt = mergedChrVarinat.find(chr);
+            if (chrIt != mergedChrVarinat.end()) {
+
+                auto posIt = chrIt->second.find(pos);
+                if (posIt != chrIt->second.end()) {
+                    
+                    auto varIt = posIt->second.Variant.find(TUMOR);
+                    if (varIt != posIt->second.Variant.end()) {
+                    
+                        if (posIt->second.isSomaticVariant) {
+                            if (fields[6] != "PASS") {
+                                fields[6] = "PASS";
+                            }
+                        } else {
+                            if (fields[6] == "PASS") {
+                                fields[6] = "LowQual";
+                            }
+                        }
+
+                        std::string output = fields[0];
+                        for (size_t i = 1; i < fields.size(); ++i) {
+                            output += "\t" + fields[i];
+                        }
+                        *resultVcf << output << std::endl;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void VcfParser::setMode(VcfParserMode mode){
+    this->mode = mode;
+}
+
+void VcfParser::setParseSnpFile(bool parseSnpFile){
+    this->parseSnpFile = parseSnpFile;
+}
+
+void VcfParser::setParseSVFile(bool parseSVFile){
+    this->parseSVFile = parseSVFile;
+} 
+
+void VcfParser::setParseMODFile(bool parseMODFile){
+    this->parseMODFile = parseMODFile;
+}
+
+bool VcfParser::getParseSnpFile(){
+    return this->parseSnpFile;
+}
+
+void VcfParser::setCommandLine(std::string &commandline){
+    this->commandline = commandline;
+}
+
+void VcfParser::setVersion(std::string &version){
+    this->version = version;
 }

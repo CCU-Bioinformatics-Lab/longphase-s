@@ -12,22 +12,22 @@ SomaticReadVerifier::~SomaticReadVerifier(){
 void SomaticReadVerifier::recordDelReadCount(const std::string &chr, std::map<int, MultiGenomeVar>::iterator &currentVariantIter){
     if(!openTestingFunc) return;
     
-    if(currentVariantIter->second.isExists(HIGH_CON_SOMATIC)){
+    if(currentVariantIter->second.isExists(TRUTH_SOMATIC)){
         int pos = (*currentVariantIter).first;
         metrics->posAltRefDelCount[pos].delCount++;
 
         //record somatic position for record crossing high con snp read
-        metrics->highConSomaticPos.push_back(std::make_pair(pos, SnpHP::NONE_SNP));
+        metrics->truthSomaticPosVec.push_back(std::make_pair(pos, SnpHP::NONE_SNP));
     }
 }
 
 void SomaticReadVerifier::recordRefAltAlleleCount(const std::string &chr, std::string &base, std::map<int, MultiGenomeVar>::iterator &currentVariantIter){
     if(!openTestingFunc) return;
 
-    if(currentVariantIter->second.isExists(HIGH_CON_SOMATIC)){
+    if(currentVariantIter->second.isExists(TRUTH_SOMATIC)){
         int pos = currentVariantIter->first;
-        std::string& refAllele = currentVariantIter->second.Variant[HIGH_CON_SOMATIC].allele.Ref;
-        std::string& altAllele = currentVariantIter->second.Variant[HIGH_CON_SOMATIC].allele.Alt;
+        std::string& refAllele = currentVariantIter->second.Variant[TRUTH_SOMATIC].allele.Ref;
+        std::string& altAllele = currentVariantIter->second.Variant[TRUTH_SOMATIC].allele.Alt;
 
         int baseHP = SnpHP::NONE_SNP;
 
@@ -38,11 +38,11 @@ void SomaticReadVerifier::recordRefAltAlleleCount(const std::string &chr, std::s
             baseHP = SnpHP::SOMATIC_H3;
         }
         //record somatic position for record crossing high con snp read
-        metrics->highConSomaticPos.push_back(std::make_pair(pos, baseHP));
+        metrics->truthSomaticPosVec.push_back(std::make_pair(pos, baseHP));
     }
 }
 
-SomaticReadLog SomaticReadVerifier::createBasicSomaticReadLog(const std::string &chr, std::string &readID, std::string &hpResult, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, int> &hpCount){
+SomaticReadLog SomaticReadVerifier::createBasicSomaticReadLog(const std::string &chr, std::string &readID, int &hpResult, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, int> &hpCount){
     SomaticReadLog tmp;
     tmp.chr = chr;
     tmp.readID = readID;
@@ -55,7 +55,7 @@ SomaticReadLog SomaticReadVerifier::createBasicSomaticReadLog(const std::string 
     return tmp;
 }
 
-void SomaticReadVerifier::recordCrossingHighConSnpRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, MultiGenomeVar> &currentChrVariants){
+void SomaticReadVerifier::recordCrossingHighConSnpRead(const std::string &chr, std::string &readID, int &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, MultiGenomeVar> &currentChrVariants){
     // if not open testing function, return
     if(!openTestingFunc) return;
 
@@ -64,7 +64,7 @@ void SomaticReadVerifier::recordCrossingHighConSnpRead(const std::string &chr, s
     bool isCrossHighConSomatic = false;
     bool existHighConVaraints = false;
 
-    for(auto varIter : metrics->highConSomaticPos){
+    for(auto varIter : metrics->truthSomaticPosVec){
         int pos = varIter.first;
         int baseHP = varIter.second;
 
@@ -82,38 +82,38 @@ void SomaticReadVerifier::recordCrossingHighConSnpRead(const std::string &chr, s
         //exist high con variants alt allele
         if(existHighConVaraints){
             //correction hpResult that exist high con variants
-            if(hpResult == "1"){
-                tmp.hpResult = "1-1";
-            }else if(hpResult == "2"){
-                tmp.hpResult = "2-1";
-            }else if(hpResult == "."){
-                tmp.hpResult = "3";
+            if(hpResult == ReadHP::H1){
+                tmp.hpResult = ReadHP::H1_1;
+            }else if(hpResult == ReadHP::H2){
+                tmp.hpResult = ReadHP::H2_1;
+            }else if(hpResult == ReadHP::unTag){
+                tmp.hpResult = ReadHP::H3;
             }
         }else{
             //correction hpResult that not exist high con variants
-            if(hpResult == "2-1"){
-                tmp.hpResult = "2";
-            }else if(hpResult == "1-1"){
-                tmp.hpResult = "1";
-            }else if(hpResult == "3"){
-                tmp.hpResult = ".";
+            if(hpResult == ReadHP::H2_1){
+                tmp.hpResult = ReadHP::H2;
+            }else if(hpResult == ReadHP::H1_1){
+                tmp.hpResult = ReadHP::H1;
+            }else if(hpResult == ReadHP::H3){
+                tmp.hpResult = ReadHP::unTag;
             }
         }
     }
 
     if(isCrossHighConSomatic){
-        metrics->readsCrossingHighConSnpVec.push_back(tmp);
+        metrics->coverTruthSomaticPosReadVec.push_back(tmp);
     }
     
     //clear high con somatic position in current read for next read
-    if(!metrics->highConSomaticPos.empty()){
-        metrics->highConSomaticPos.clear();
+    if(!metrics->truthSomaticPosVec.empty()){
+        metrics->truthSomaticPosVec.clear();
     }
 }
 
-void SomaticReadVerifier::recordTaggedRead(const std::string &chr, std::string &readID, std::string &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, MultiGenomeVar> &currentChrVariants){
+void SomaticReadVerifier::recordTaggedRead(const std::string &chr, std::string &readID, int &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, MultiGenomeVar> &currentChrVariants){
     // if not open testing function, return
-    if(!openTestingFunc || hpResult == ".") return;
+    if(!openTestingFunc || hpResult == ReadHP::unTag) return;
 
     SomaticReadLog tmp = createBasicSomaticReadLog(chr, readID, hpResult, norHPsimilarity, deriveByHpSimilarity, hpCount);
 
@@ -124,7 +124,7 @@ void SomaticReadVerifier::recordTaggedRead(const std::string &chr, std::string &
         int pos = varIter->first;
         int snpHP = varIter->second;
         if(currentChrVariants.find(pos) != currentChrVariants.end()){
-            if(currentChrVariants[pos].isExists(HIGH_CON_SOMATIC) && (snpHP == SnpHP::SOMATIC_H3)){
+            if(currentChrVariants[pos].isExists(TRUTH_SOMATIC) && (snpHP == SnpHP::SOMATIC_H3)){
                 tmp.somaticSnpHp[pos] = snpHP;
                 readExistHighConSomatic = true;
             }
@@ -142,6 +142,7 @@ void SomaticReadVerifier::recordTaggedRead(const std::string &chr, std::string &
 SomaticReadBenchmark::SomaticReadBenchmark(std::string benchmarkVcf, std::string benchmarkBed, int mappingQualityThreshold){
     setParseSnpFile(true);
     openTestingFunc = false;
+    loadedBedFile = false;
     this->benchmarkVcf = benchmarkVcf;
     this->benchmarkBed = benchmarkBed;
     this->mappingQualityThreshold = mappingQualityThreshold;
@@ -168,7 +169,7 @@ void SomaticReadBenchmark::loadChrKey(const std::string &chr){
 
 void SomaticReadBenchmark::loadHighConSomatic(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     if(!openTestingFunc) return;
-    variantParser(input, Info, mergedChrVarinat);
+    parsingVCF(input, Info, mergedChrVarinat);
 }
 
 void SomaticReadBenchmark::parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
@@ -205,7 +206,7 @@ void SomaticReadBenchmark::parserProcess(std::string &input, VCF_Info &Info, std
         VarData varData;
         varData.allele.Ref = fields[3];
         varData.allele.Alt = fields[4];
-        mergedChrVarinat[chr][pos].Variant[Genome::HIGH_CON_SOMATIC] = varData;
+        mergedChrVarinat[chr][pos].Variant[Genome::TRUTH_SOMATIC] = varData;
 
     }
 }
@@ -213,18 +214,23 @@ void SomaticReadBenchmark::parserProcess(std::string &input, VCF_Info &Info, std
 void SomaticReadBenchmark::parseBedFile(const std::string& bedFile) {
     if(!openTestingFunc) return;
 
-    std::ifstream file(bedFile);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open BED file: " << bedFile << std::endl;
+    if( bedFile.find("bed.gz") != std::string::npos){
+        std::cerr << "[Warning] BED .gz files are not supported. Please use an uncompressed .bed file: " << bedFile << std::endl;
         return;
+    }else if( bedFile.find("bed") != std::string::npos){
+        std::ifstream file(bedFile);
+        if (!file.is_open()) {
+            std::cerr << "[Error] Failed to open BED file: " << bedFile << std::endl;
+            return;
+        }
+        
+        std::string line;
+        while (std::getline(file, line)) {
+            if (line.empty() || line[0] == '#') continue;
+            processBedLine(line);
+        }
+        loadedBedFile = true;
     }
-    
-    std::string line;
-    while (std::getline(file, line)) {
-        if (line.empty() || line[0] == '#') continue;
-        processBedLine(line);
-    }
-    loadedBedFile = true;
 }
 
 void SomaticReadBenchmark::processBedLine(const std::string& line) {
@@ -253,8 +259,8 @@ void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &ch
                 if(curVar.second.isExists(Genome::NORMAL)) {
                     variantOutBedRegionCount[Genome::NORMAL]++;
                 }
-                if(curVar.second.isExists(Genome::HIGH_CON_SOMATIC)){
-                    variantOutBedRegionCount[Genome::HIGH_CON_SOMATIC]++;
+                if(curVar.second.isExists(Genome::TRUTH_SOMATIC)){
+                    variantOutBedRegionCount[Genome::TRUTH_SOMATIC]++;
                 }
             }
             continue;
@@ -271,8 +277,8 @@ void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &ch
                 if(curVar.second.isExists(Genome::NORMAL)) {
                     variantOutBedRegionCount[Genome::NORMAL]++;
                 }
-                if(curVar.second.isExists(Genome::HIGH_CON_SOMATIC)){
-                    variantOutBedRegionCount[Genome::HIGH_CON_SOMATIC]++;
+                if(curVar.second.isExists(Genome::TRUTH_SOMATIC)){
+                    variantOutBedRegionCount[Genome::TRUTH_SOMATIC]++;
                 }
             }
             continue;
@@ -301,8 +307,8 @@ void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &ch
                 if(varPosIter->second.isExists(Genome::NORMAL)) {
                     variantInBedRegionCount[Genome::NORMAL]++;
                 }
-                if(varPosIter->second.isExists(Genome::HIGH_CON_SOMATIC)){
-                    variantInBedRegionCount[Genome::HIGH_CON_SOMATIC]++;
+                if(varPosIter->second.isExists(Genome::TRUTH_SOMATIC)){
+                    variantInBedRegionCount[Genome::TRUTH_SOMATIC]++;
                 }
             } else {
                 varPosIter->second.isInBedRegion = false;
@@ -312,8 +318,8 @@ void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &ch
                 if(varPosIter->second.isExists(Genome::NORMAL)) {
                     variantOutBedRegionCount[Genome::NORMAL]++;
                 }
-                if(varPosIter->second.isExists(Genome::HIGH_CON_SOMATIC)){
-                    variantOutBedRegionCount[Genome::HIGH_CON_SOMATIC]++;
+                if(varPosIter->second.isExists(Genome::TRUTH_SOMATIC)){
+                    variantOutBedRegionCount[Genome::TRUTH_SOMATIC]++;
                 }
             }
             
@@ -334,7 +340,7 @@ void SomaticReadBenchmark::removeVariantsOutBedRegion(std::map<std::string, std:
         while (varPosIter != chrPosVariants.end()) {
             if (!varPosIter->second.isInBedRegion) {
                 bool hasTumor = varPosIter->second.isExists(Genome::TUMOR);
-                bool hasHighCon = varPosIter->second.isExists(Genome::HIGH_CON_SOMATIC);
+                bool hasHighCon = varPosIter->second.isExists(Genome::TRUTH_SOMATIC);
                 
                 if (hasTumor || hasHighCon) {
                     // if no exist NORMAL data, remove the whole position
@@ -347,7 +353,7 @@ void SomaticReadBenchmark::removeVariantsOutBedRegion(std::map<std::string, std:
                             varPosIter->second.Variant.erase(Genome::TUMOR);
                         }
                         if (hasHighCon) {
-                            varPosIter->second.Variant.erase(Genome::HIGH_CON_SOMATIC);
+                            varPosIter->second.Variant.erase(Genome::TRUTH_SOMATIC);
                         }
                         ++varPosIter;
                     }
@@ -448,8 +454,8 @@ void SomaticReadBenchmark::writePosAlleleCountLog(
         for(auto &posIter : chrMetrics[chr].posAltRefDelCount){
             (*refAltCountLog) << chr << "\t"
                               << posIter.first << "\t"
-                              << mergedChrVarinat[chr][posIter.first].Variant[HIGH_CON_SOMATIC].allele.Ref << "\t"
-                              << mergedChrVarinat[chr][posIter.first].Variant[HIGH_CON_SOMATIC].allele.Alt << "\t"
+                              << mergedChrVarinat[chr][posIter.first].Variant[TRUTH_SOMATIC].allele.Ref << "\t"
+                              << mergedChrVarinat[chr][posIter.first].Variant[TRUTH_SOMATIC].allele.Alt << "\t"
                               << posIter.second.refCount << "\t"
                               << posIter.second.altCount << "\t"
                               << posIter.second.delCount << "\n";
@@ -512,7 +518,7 @@ void SomaticReadBenchmark::writeTotalTruthSomaticReadReport(
 
     auto metricsIter = chrMetrics.begin();
     while(metricsIter != chrMetrics.end()){
-        setChrSomaticReadVecPtr(metricsIter->first, somaticReadVecMap, metricsIter->second.readsCrossingHighConSnpVec);
+        setChrSomaticReadVecPtr(metricsIter->first, somaticReadVecMap, metricsIter->second.coverTruthSomaticPosReadVec);
         metricsIter++;
     }
 
@@ -543,33 +549,33 @@ void SomaticReadBenchmark::writeReadLog(
 
     // all truth somatic reads
     int totalTruthSomaticReads = 0;
-    std::map<std::string, int> truthSomaticReadsMap;
+    std::map<int, int> truthSomaticReadsMap;
 
     // all tagged truth somatic reads(TP)
     int totalTaggedTruthSomaticReads = 0;
-    std::map<std::string, int> taggedTruthSomaticReadsMap;
+    std::map<int, int> taggedTruthSomaticReadsMap;
 
     // all tagged somatic reads(TP+FP)
     int totalTaggedSomaticReads = 0;
-    std::map<std::string, int> toatlTaggedSomaticReadsMap;
+    std::map<int, int> toatlTaggedSomaticReadsMap;
 
 
     for(auto chr: chrVec){
-        for(auto readIter :chrMetrics[chr].readsCrossingHighConSnpVec){
-            if(readIter.hpResult == "1-1" || readIter.hpResult == "2-1" || readIter.hpResult == "3"){
+        for(auto readIter :chrMetrics[chr].coverTruthSomaticPosReadVec){
+            if(readIter.hpResult == ReadHP::H1_1 || readIter.hpResult == ReadHP::H2_1 || readIter.hpResult == ReadHP::H3){
                 truthSomaticReadsMap[readIter.hpResult]++;
                 totalTruthSomaticReads++;
             }
         }
 
         for(auto readIter :chrMetrics[chr].taggedSomaticReadVec){
-            if(readIter.hpResult == "1-1" || readIter.hpResult == "2-1" || readIter.hpResult == "3"){
+            if(readIter.hpResult == ReadHP::H1_1 || readIter.hpResult == ReadHP::H2_1 || readIter.hpResult == ReadHP::H3){
                 totalTaggedTruthSomaticReads++;
                 taggedTruthSomaticReadsMap[readIter.hpResult]++;
             }
         }
         for(auto readIter :chrMetrics[chr].totalReadVec){
-            if(readIter.hpResult == "1-1" || readIter.hpResult == "2-1" || readIter.hpResult == "3"){
+            if(readIter.hpResult == ReadHP::H1_1 || readIter.hpResult == ReadHP::H2_1 || readIter.hpResult == ReadHP::H3){
                 toatlTaggedSomaticReadsMap[readIter.hpResult]++;
                 totalTaggedSomaticReads++;
             }
@@ -594,23 +600,23 @@ void SomaticReadBenchmark::writeReadLog(
     (*somaticReadLog) << "##MappingQualityThreshold: "  << mappingQualityThreshold << "\n";
     (*somaticReadLog) << "##Tatal reads: "  << totalReads << "\n";
     (*somaticReadLog) << "##Tatal truth somatic reads: "  << totalTruthSomaticReads << "\n";
-    (*somaticReadLog) << "##Tatal truth H1-1: "  << truthSomaticReadsMap["1-1"] << "\n";
-    (*somaticReadLog) << "##Tatal truth H2-1: "  << truthSomaticReadsMap["2-1"] << "\n";
-    (*somaticReadLog) << "##Tatal truth H3: "  << truthSomaticReadsMap["3"] << "\n";
+    (*somaticReadLog) << "##Tatal truth H1-1: "  << truthSomaticReadsMap[ReadHP::H1_1] << "\n";
+    (*somaticReadLog) << "##Tatal truth H2-1: "  << truthSomaticReadsMap[ReadHP::H2_1] << "\n";
+    (*somaticReadLog) << "##Tatal truth H3: "  << truthSomaticReadsMap[ReadHP::H3] << "\n";
     
     int separatorLength = 95;
     int columnWidth = 15;
 
     (*somaticReadLog) << std::left << std::setw(columnWidth) << "## Haplotype" 
-                    << std::setw(columnWidth) << "Precision" 
-                    << std::setw(columnWidth) << "Recall" 
-                    << std::setw(columnWidth) << "F1-Score"
-                    << std::setw(columnWidth) << "TP" 
-                    << std::setw(columnWidth) << "FP" 
-                    << std::setw(columnWidth) << "FN" << "\n";
+                      << std::setw(columnWidth) << "Precision" 
+                      << std::setw(columnWidth) << "Recall" 
+                      << std::setw(columnWidth) << "F1-Score"
+                      << std::setw(columnWidth) << "TP" 
+                      << std::setw(columnWidth) << "FP" 
+                      << std::setw(columnWidth) << "FN" << "\n";
     (*somaticReadLog) << "##" << std::string(separatorLength, '-') << "\n";
     
-    std::vector<std::string> haplotypes = {"1-1", "2-1", "3"};
+    std::vector<ReadHP> haplotypes = {ReadHP::H1_1, ReadHP::H2_1, ReadHP::H3};
     for(const auto& hp : haplotypes) {
         int tp = taggedTruthSomaticReadsMap[hp];
         int fp = toatlTaggedSomaticReadsMap[hp] - taggedTruthSomaticReadsMap[hp];
@@ -620,8 +626,9 @@ void SomaticReadBenchmark::writeReadLog(
         float recall = calculateRecall(tp, tp + fn);
         float f1 = calculateF1Score(recall, precision);
 
-        
-        (*somaticReadLog) << std::left << std::setw(columnWidth) << ("## H" + hp)
+        std::string hpStr = ReadHapUtil::readHapIntToString(hp);
+
+        (*somaticReadLog) << std::left << std::setw(columnWidth) << ("## H" + hpStr)
                         << std::setw(columnWidth) << std::fixed << std::setprecision(4) << precision
                         << std::setw(columnWidth) << std::fixed << std::setprecision(4) << recall
                         << std::setw(columnWidth) << std::fixed << std::setprecision(4) << f1 
@@ -643,13 +650,13 @@ void SomaticReadBenchmark::writeReadLog(
     (*somaticReadLog) << "##\n";
 
     (*somaticReadLog) << "#CHROM\t"
-                        << "ReadID\t"
-                        << "germlineVarSimilarity\t"
-                        << "deriveByHpSimilarity\t"
-                        << "germlineSnpCount\t"
-                        << "tumorSnpCount\t"
-                        << "Haplotype\t"
-                        << "somaticVariant,HP\n";
+                      << "ReadID\t"
+                      << "germlineVarSimilarity\t"
+                      << "deriveByHpSimilarity\t"
+                      << "germlineSnpCount\t"
+                      << "tumorSnpCount\t"
+                      << "Haplotype\t"
+                      << "somaticVariant,HP\n";
 
     for(auto chr: chrVec){
         for(auto somaticRead: *somaticReadVecMap[chr]){
@@ -659,7 +666,7 @@ void SomaticReadBenchmark::writeReadLog(
                             << somaticRead.deriveByHpSimilarity << "\t"
                             << somaticRead.germlineSnpCount << "\t"
                             << somaticRead.tumorSnpCount << "\t"
-                            << "H" << somaticRead.hpResult << "\t";
+                            << "H" << ReadHapUtil::readHapIntToString(somaticRead.hpResult) << "\t";
 
             for(auto SnpHp: somaticRead.somaticSnpHp){
                 (*somaticReadLog) << SnpHp.first+1 << "," << SnpHp.second << "\t";
@@ -679,7 +686,7 @@ void SomaticReadBenchmark::displaySomaticVarCount(std::vector<std::string> &chrV
     for(auto &chr : chrVec){
         std::map<int, MultiGenomeVar>::iterator chrVariantIter = mergedChrVarinat[chr].begin();
         while(chrVariantIter != mergedChrVarinat[chr].end()){
-            if(chrVariantIter->second.isExists(Genome::HIGH_CON_SOMATIC)){
+            if(chrVariantIter->second.isExists(Genome::TRUTH_SOMATIC)){
                 totalVariantCount++;
             }
             chrVariantIter++;
@@ -700,11 +707,11 @@ void SomaticReadBenchmark::displayBedRegionCount(std::vector<std::string> &chrVe
     std::cout << "Variant in bed region count: " << "\n";
     std::cout << "  -Tumor: " << variantInBedRegionCount[Genome::TUMOR] << "\n";
     std::cout << "  -Normal: " << variantInBedRegionCount[Genome::NORMAL] << "\n";
-    std::cout << "  -Benchmark: " << variantInBedRegionCount[Genome::HIGH_CON_SOMATIC] << "\n";
+    std::cout << "  -Benchmark: " << variantInBedRegionCount[Genome::TRUTH_SOMATIC] << "\n";
     std::cout << "\n";
     std::cout << "Variant out bed region count: " << "\n";
     std::cout << "  -Tumor: " << variantOutBedRegionCount[Genome::TUMOR] << "\n";
     std::cout << "  -Normal: " << variantOutBedRegionCount[Genome::NORMAL] << "\n";
-    std::cout << "  -Benchmark: " << variantOutBedRegionCount[Genome::HIGH_CON_SOMATIC] << "\n";
+    std::cout << "  -Benchmark: " << variantOutBedRegionCount[Genome::TRUTH_SOMATIC] << "\n";
     std::cout << "--------------------------------" << "\n";
 }

@@ -1,117 +1,5 @@
 #include "ArgumentManager.h"
 
-void HelpMessageManager::addSection(const std::string& header) {
-    sections.push_back({header, {}});
-}
-
-void HelpMessageManager::addItem(const std::string& item) {
-    if (!sections.empty()) {
-        sections.back().items.push_back(item);
-    }
-}
-
-void HelpMessageManager::removeSection(const std::string& header) {
-    bool found = false;
-    std::vector<HelpSection>::iterator iter = sections.begin();
-    while(iter != sections.end()){
-        if(iter->header == header){
-            iter = sections.erase(iter);
-            found = true;
-            break;
-        }
-        ++iter;
-    }
-
-    if (!found) {
-        std::cerr << "Section '" << header << "' not found." << std::endl;
-        exit(EXIT_FAILURE);
-    }
-}
-
-void HelpMessageManager::addSectionItem(const std::string& sectionName, const std::string& newItem) {
-    bool found = false;
-    for (auto& section : sections) {
-        if (section.header == sectionName) {
-            section.items.push_back(newItem);
-            found = true;
-            break;
-        }
-    }
-
-    if (!found) {
-        std::cerr << "Section '" << sectionName << "' not found." << std::endl;
-        exit(EXIT_FAILURE);
-    }
-}
-
-void HelpMessageManager::removeSectionItem(const std::string& sectionName, const std::string& removeItem) {
-    bool sectionFound = false;
-    bool itemFound = false;
-    std::vector<HelpSection>::iterator iter = sections.begin();
-    while(iter != sections.end()){
-        if (iter->header == sectionName) {
-            sectionFound = true;
-            
-            std::vector<std::string>::iterator itemIter = iter->items.begin();
-            while(itemIter != iter->items.end()){
-                if(*itemIter == removeItem){
-                    itemIter = iter->items.erase(itemIter);
-                    itemFound = true;
-                    break;
-                }
-                ++itemIter;
-            }
-            if (!itemFound) {
-                std::cerr << "Item '" << removeItem << "' not found in section '" << sectionName << "'." << std::endl;
-                exit(EXIT_FAILURE);
-            }
-            break;
-        }
-        ++iter;
-    }
-
-    if (!sectionFound) {
-        std::cerr << "Section '" << sectionName << "' not found." << std::endl;
-        exit(EXIT_FAILURE);
-    }
-}
-
-void HelpMessageManager::clearSectionItem(const std::string& sectionName) {
-    bool found = false;
-    for (auto& section : sections) {
-        if (section.header == sectionName) {
-            section.items.clear();
-            found = true;
-            break;
-        }
-    }
-
-    if (!found) {
-        std::cerr << "Section '" << sectionName << "' not found." << std::endl;
-        exit(EXIT_FAILURE);
-    }
-}
-
-void HelpMessageManager::printHelp() const {
-    for (const auto& section : sections) {
-        std::cout << section.header << std::endl;
-        for (const auto& item : section.items) {
-            std::cout << item << std::endl;
-        }
-    }
-}
-
-// Get the complete help message string
-std::string HelpMessageManager::getHelpMessage() const {
-    std::ostringstream oss;
-    for (const auto& section : sections) {
-        oss << section.header << "\n";
-        for (const auto& item : section.items) {
-            oss << item << "\n";
-        }
-    }
-    return oss.str();
-}
 
 void ArgumentManager::setShortOption(const std::string& opt) {
     shortOpts = opt;
@@ -126,17 +14,6 @@ void ArgumentManager::addOption(const struct option& opt) {
     }
 }
 
-void ArgumentManager::removeOption(const std::string& name) {
-    auto it = std::remove_if(longOpts.begin(), longOpts.end() - 1, [&](const option& opt) {
-        return opt.name != nullptr && name == opt.name;
-    });
-    if (it != longOpts.end() - 1) {
-        longOpts.erase(it, longOpts.end() - 1);
-    }else{
-        std::cerr << "[ERROR](ArgumentManager) removeOption: Option " << name << " not found." << std::endl;
-        exit(EXIT_FAILURE);
-    }
-}
 
 // Validate if a required file exists
 bool ArgumentManager::validateRequiredFile(const std::string& filePath, const std::string& fileDescription) {
@@ -171,10 +48,6 @@ bool ArgumentManager::validateOptionalFile(const std::string& filePath, const st
 
 void ArgumentManager::parseOptions(int argc, char** argv)
 {
-    if(!helpManager){
-        std::cerr << "[ERROR] " << programName << ": help manager not set." << std::endl;
-        exit(EXIT_FAILURE);
-    }
 
     if(!optionDefiner){
         std::cerr << "[ERROR] " << programName << ": option definer not set." << std::endl;
@@ -196,7 +69,7 @@ void ArgumentManager::parseOptions(int argc, char** argv)
         }
         
         if(c == getHelpEnumNum()){
-            if(helpManager) helpManager->printHelp();
+            std::cout << HELP_MESSAGE << std::endl;
             exit(EXIT_SUCCESS);
         }else{
             die = true;
@@ -225,7 +98,7 @@ void ArgumentManager::parseOptions(int argc, char** argv)
     if (die)
     {
         std::cerr << "\n";
-        if(helpManager) helpManager->printHelp();
+        std::cout << HELP_MESSAGE << std::endl;
         exit(EXIT_FAILURE);
     } 
 }

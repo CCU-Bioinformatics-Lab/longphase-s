@@ -9,6 +9,23 @@
 #include "SomaticBenchmark.h"
 #include "HaplotagLogging.h"
 
+struct SomaticHaplotagParameters
+{
+    HaplotagParameters basic;
+    // Somatic haplotag parameters
+    std::string tumorSnpFile;   
+    std::string tumorBamFile;  
+    std::string benchmarkVcf;
+    std::string benchmarkBedFile;
+
+    std::string metricsSuffix;
+    
+    double tumorPurity;
+    bool predictTumorPurity;
+
+    bool enableFilter;
+};
+
 // Tumor specific header
 class SomaticTagLog : public GermlineTagLog {
     private:
@@ -67,16 +84,15 @@ class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor{
             GermlineTagLog *tagResult,
             int &pqValue,
             int &psValue,
-            const int tagGeneType,
+            const int tagSample,
             const std::string &ref_string,
-            const HaplotagParameters &params,
+            const ParsingBamConfig &params,
             std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
             std::map<int, MultiGenomeVar> &currentChrVariants,
             std::map<Genome, VCF_Info> &vcfSet
         ) override;
 
         virtual void addAuxiliaryTags(bam1_t *aln, int& haplotype, int& pqValue, int& psValue) override;
-        std::string convertHpResultToString(int hpResult);
 
         int inheritHaplotype(
             float &deriveByHpSimilarity,
@@ -109,8 +125,8 @@ class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
     protected:
         std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) override {
             return std::unique_ptr<ChromosomeProcessor>(new SomaticHaplotagChrProcessor(
-                writeOutputBam,
-                mappingQualityFilter,
+                control.writeOutputBam,
+                control.mappingQualityFilter,
                 readStats,
                 tagResult,
                 somaticBenchmark,
@@ -127,9 +143,8 @@ class SomaticHaplotagBamParser: public GermlineHaplotagBamParser{
 
     public:
         SomaticHaplotagBamParser(
-            ParsingBamMode mode,
-            bool writeOutputBam,
-            bool mappingQualityFilter,
+            const ParsingBamConfig &config,
+            const ParsingBamControl &control,
             ReadStatistics& readStats,
             SomaticReadBenchmark& highConSomaticData,
             ReadHpDistriLog& hpBeforeInheritance,
@@ -159,12 +174,11 @@ class SomaticHaplotagProcess: public HaplotagProcess{
         void postprocessForHaplotag() override;
 
         GermlineHaplotagBamParser* createHaplotagBamParser(
-            ParsingBamMode mode,
-            bool writeOutputBam,
-            bool mappingQualityFilter,
+            const ParsingBamConfig &config,
+            const ParsingBamControl &control,
             ReadStatistics& readStats
         ) override{
-            return new SomaticHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats, somaticBenchmark, *hpBeforeInheritance, *hpAfterInheritance, sParams);
+            return new SomaticHaplotagBamParser(config, control, readStats, somaticBenchmark, *hpBeforeInheritance, *hpAfterInheritance, sParams);
         }
 
         virtual std::string getNormalSnpParsingMessage() override{

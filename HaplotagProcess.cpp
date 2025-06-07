@@ -4,9 +4,9 @@ HaplotagProcess::HaplotagProcess(HaplotagParameters &params):
 params(params),chrVec(nullptr),chrLength(nullptr),readStats(),processBegin(time(NULL))
 {
     //initialize variable
-    vcfSet[Genome::NORMAL] = VCF_Info{.gene_type = Genome::NORMAL};
-    vcfSet[Genome::TUMOR] = VCF_Info{.gene_type = Genome::TUMOR};
-    vcfSet[Genome::HIGH_CON_SOMATIC] = VCF_Info{.gene_type = Genome::HIGH_CON_SOMATIC};
+    vcfSet[Genome::NORMAL] = VCF_Info{.sample = Genome::NORMAL};
+    vcfSet[Genome::TUMOR] = VCF_Info{.sample = Genome::TUMOR};
+    vcfSet[Genome::TRUTH_SOMATIC] = VCF_Info{.sample = Genome::TRUTH_SOMATIC};
 
     mergedChrVarinat = new std::map<std::string, std::map<int, MultiGenomeVar>>();
 
@@ -17,20 +17,22 @@ HaplotagProcess::~HaplotagProcess(){
 };
 
 void HaplotagProcess::printParamsMessage(){
+    std::cerr<< "LongPhase-S v" << params.config.version << " - Haplotag\n";
+    std::cerr<< "\n";
     std::cerr<< "phased SNP file:   " << params.snpFile             << "\n";
     std::cerr<< "phased SV file:    " << params.svFile              << "\n";
     std::cerr<< "phased MOD file:   " << params.modFile             << "\n";
     std::cerr<< "input bam file:    " << params.bamFile             << "\n";
     std::cerr<< "input ref file:    " << params.fastaFile           << "\n";
-    std::cerr<< "output bam file:   " << params.resultPrefix + "." + params.outputFormat << "\n";
-    std::cerr<< "number of threads: " << params.numThreads          << "\n";
-    std::cerr<< "write log file:    " << (params.writeReadLog ? "true" : "false") << "\n";
-    std::cerr<< "log file:          " << (params.writeReadLog ? (params.resultPrefix+".out") : "") << "\n";
+    std::cerr<< "output bam file:   " << params.config.resultPrefix + "." + params.config.outputFormat << "\n";
+    std::cerr<< "number of threads: " << params.config.numThreads          << "\n";
+    std::cerr<< "write log file:    " << (params.config.writeReadLog ? "true" : "false") << "\n";
+    std::cerr<< "log file:          " << (params.config.writeReadLog ? (params.config.resultPrefix+".out") : "") << "\n";
     std::cerr<< "-------------------------------------------\n";
-    std::cerr<< "tag region:                    " << (!params.region.empty() ? params.region : "all") << "\n";
-    std::cerr<< "filter mapping quality below:  " << params.qualityThreshold    << "\n";
-    std::cerr<< "percentage threshold:          " << params.percentageThreshold << "\n";
-    std::cerr<< "tag supplementary:             " << (params.tagSupplementary ? "true" : "false") << "\n";
+    std::cerr<< "tag region:                    " << (!params.config.region.empty() ? params.config.region : "all") << "\n";
+    std::cerr<< "filter mapping quality below:  " << params.config.qualityThreshold    << "\n";
+    std::cerr<< "percentage threshold:          " << params.config.percentageThreshold << "\n";
+    std::cerr<< "tag supplementary:             " << (params.config.tagSupplementary ? "true" : "false") << "\n";
     std::cerr<< "-------------------------------------------\n";
 }
 
@@ -38,17 +40,17 @@ void HaplotagProcess::taggingProcess()
 {
     printParamsMessage();
     // decide on the type of tagging for VCF and BAM files
-    Genome tagGeneType = NORMAL;
+    Genome tagSample = NORMAL;
 
-    VcfParser vcfParser(tagGeneType);
+    VcfParser vcfParser(tagSample);
     // load SNP, SV, MOD vcf file
     parseVariantFiles(vcfParser);
-    //decide which genome type chrVec and chrLength belong to
+    //decide which genome sample chrVec and chrLength belong to
     setChrVecAndChrLength();
     // update chromosome processing based on region
     setProcessingChromRegion();
     // tag read
-    tagRead(params,params.bamFile, tagGeneType);
+    tagRead(params,params.bamFile, tagSample);
     // postprocess after haplotag
     postprocessForHaplotag();
 
@@ -63,7 +65,7 @@ void HaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
     std::cerr<< getNormalSnpParsingMessage();
 
     vcfParser.setParseSnpFile(true);
-    vcfParser.variantParser(params.snpFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
+    vcfParser.parsingVCF(params.snpFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
     vcfParser.reset();
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 
@@ -72,7 +74,7 @@ void HaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
         begin = time(NULL);
         std::cerr<< "parsing SV VCF ... ";
         vcfParser.setParseSVFile(true);
-        vcfParser.variantParser(params.svFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
+        vcfParser.parsingVCF(params.svFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
         vcfParser.reset();
         std::cerr<< difftime(time(NULL), begin) << "s\n";    
     }
@@ -82,7 +84,7 @@ void HaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
         begin = time(NULL);
         std::cerr<< "parsing MOD VCF ... ";
         vcfParser.setParseMODFile(true);
-        vcfParser.variantParser(params.modFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
+        vcfParser.parsingVCF(params.modFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
         vcfParser.reset();
         std::cerr<< difftime(time(NULL), begin) << "s\n";    
     }
@@ -94,40 +96,51 @@ void HaplotagProcess::setChrVecAndChrLength(){
 }
 
 void HaplotagProcess::setProcessingChromRegion(){
-    if (!params.region.empty()) {
-        auto colonPos = params.region.find(":");
+    if (!params.config.region.empty()) {
+        auto colonPos = params.config.region.find(":");
         std::string regionChr;
         if (colonPos != std::string::npos) {
-            regionChr = params.region.substr(0, colonPos);
+            regionChr = params.config.region.substr(0, colonPos);
         }
         else {
-            regionChr = params.region;
+            regionChr = params.config.region;
         }
         auto chrVecIter = std::find((*chrVec).begin(), (*chrVec).end(), regionChr);
         if (chrVecIter != (*chrVec).end()) {
             (*chrVec) = std::vector<std::string>{regionChr};
         } else {
-            std::cerr << "ERROR: Incorrect chromosome for input region\n" << std::endl;
+            std::cerr << "[ERROR] Incorrect chromosome for input region: " << regionChr << std::endl;
             exit(1);
+        }
+    }
+
+    // remove variant on chromosome not in chrVec
+    std::map<std::string, std::map<int, MultiGenomeVar>>::iterator iter = mergedChrVarinat->begin();
+    while(iter != mergedChrVarinat->end()){
+        if(std::find((*chrVec).begin(), (*chrVec).end(), iter->first) == (*chrVec).end()){
+            mergedChrVarinat->erase(iter++);
+        }else{
+            iter++;
         }
     }
 }
 
 
-void HaplotagProcess::tagRead(HaplotagParameters &params, std::string& tagBamFile, const Genome& geneType){
-
-    ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;
-    bool writeOutputBam = false;
-    // ParsingBamMode mode = ParsingBamMode::SINGLE_THREAD;
-    // bool writeOutputBam = true;
-    bool mappingQualityFilter = true;
+void HaplotagProcess::tagRead(HaplotagParameters &params, std::string& tagBamFile, const Genome& geneSample){
 
     // tag read
     std::time_t begin = time(NULL);
     std::cerr<< getTagReadStartMessage();
 
-    HaplotagBamParserContext ctx(tagBamFile, params, *chrVec, *chrLength, *mergedChrVarinat, vcfSet, geneType);
-    GermlineHaplotagBamParser* haplotagBamParser = createHaplotagBamParser(mode, writeOutputBam, mappingQualityFilter, readStats);
+    ParsingBamConfig& config = params.config;
+
+    ParsingBamControl control;
+    control.mode = ParsingBamMode::SINGLE_THREAD;
+    control.writeOutputBam = true;
+    control.mappingQualityFilter = true;
+
+    BamParserContext ctx(tagBamFile, params.fastaFile, *chrVec, *chrLength, *mergedChrVarinat, vcfSet, geneSample);
+    GermlineHaplotagBamParser* haplotagBamParser = createHaplotagBamParser(config, control, readStats);
     haplotagBamParser->createTagLog();
     haplotagBamParser->parsingBam(ctx);
     delete haplotagBamParser;
@@ -162,7 +175,7 @@ void HaplotagProcess::printExecutionReport(){
 }
 
 GermlineTagLog::GermlineTagLog(const HaplotagParameters& params) 
-    : HaplotagReadLog<HaplotagParameters, TagReadLog>(params, params.resultPrefix+".out"){
+    : HaplotagReadLog<HaplotagParameters, TagReadLog>(params, params.config.resultPrefix+".out"){
 }
 
 GermlineTagLog::~GermlineTagLog(){}
@@ -171,12 +184,12 @@ void GermlineTagLog::addParamsMessage(){
     *tagReadLog << "##snpFile:" << params.snpFile << "\n"
                 << "##svFile:" << params.svFile << "\n"
                 << "##bamFile:" << params.bamFile << "\n"
-                << "##resultPrefix:" << params.resultPrefix << "\n"
-                << "##numThreads:" << params.numThreads << "\n"
-                << "##region:" << params.region << "\n"
-                << "##qualityThreshold:" << params.qualityThreshold << "\n"
-                << "##percentageThreshold:" << params.percentageThreshold << "\n"
-                << "##tagSupplementary:" << params.tagSupplementary << "\n";
+                << "##resultPrefix:" << params.config.resultPrefix << "\n"
+                << "##numThreads:" << params.config.numThreads << "\n"
+                << "##region:" << params.config.region << "\n"
+                << "##qualityThreshold:" << params.config.qualityThreshold << "\n"
+                << "##percentageThreshold:" << params.config.percentageThreshold << "\n"
+                << "##tagSupplementary:" << params.config.tagSupplementary << "\n";
 }
 
 void GermlineTagLog::writeBasicColumns(){
@@ -225,19 +238,18 @@ void GermlineTagLog::writeTagReadLog(TagReadLog& data){
 
 
 GermlineHaplotagBamParser::GermlineHaplotagBamParser(
-    ParsingBamMode mode,
-    bool writeOutputBam,
-    bool mappingQualityFilter,
+    const ParsingBamConfig &config,
+    const ParsingBamControl &control,
     ReadStatistics& readStats,
     const HaplotagParameters& params
-):HaplotagBamParser(mode, writeOutputBam, mappingQualityFilter),
+):HaplotagBamParser(config, control),
     params(params), readStats(readStats), tagResult(nullptr)
 {}
 
 void GermlineHaplotagBamParser::createTagLog(){
     // Read log can only be written in single thread mode, which is enforced when writeOutputBam is true.
     // This is because log writing requires sequential processing of reads.
-    if(params.writeReadLog && writeOutputBam){
+    if(params.config.writeReadLog && control.writeOutputBam){
         tagResult = createTagReadLog();
         tagResult->writeHeader();
     }
@@ -309,7 +321,7 @@ void GermlineHaplotagChrProcessor::processRead(
     const std::string &ref_string,
     std::map<int, MultiGenomeVar> &currentVariants,
     std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
-    ChrProcCommonContext& ctx
+    ChrProcContext& ctx
 ){
 
     if( (aln.core.flag & 0x800) != 0 ){
@@ -320,7 +332,7 @@ void GermlineHaplotagChrProcessor::processRead(
     int psValue = 0; 
     int haplotype = ReadHP::unTag;
 
-    haplotype = judgeHaplotype(bamHdr, aln, ctx.chrName, ctx.params.percentageThreshold, tagResult, pqValue, psValue, ctx.genmoeType, ref_string, ctx.params, firstVariantIter, currentVariants, ctx.vcfSet);
+    haplotype = judgeHaplotype(bamHdr, aln, ctx.chrName, ctx.params.percentageThreshold, tagResult, pqValue, psValue, ctx.genomeSample, ref_string, ctx.params, firstVariantIter, currentVariants, ctx.vcfSet);
 
     initFlag(&aln, "HP");
     initFlag(&aln, "PS");
@@ -356,9 +368,9 @@ int GermlineHaplotagChrProcessor::judgeHaplotype(
     GermlineTagLog *tagResult,
     int &pqValue,
     int &psValue,
-    const int tagGeneType,
+    const int tagSample,
     const std::string &ref_string,
-    const HaplotagParameters &params,
+    const ParsingBamConfig &params,
     std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
     std::map<int, MultiGenomeVar> &currentChrVariants,
     std::map<Genome, VCF_Info> &vcfSet
@@ -386,7 +398,7 @@ int GermlineHaplotagChrProcessor::judgeHaplotype(
     delete cigarParser;
 
     // get the number of SVs occurring on different haplotypes in a read
-    judger.judgeSVHap(aln, vcfSet, hpCount, tagGeneType);
+    judger.judgeSVHap(aln, vcfSet, hpCount, tagSample);
 
     double min,max;
     int hpResult = ReadHP::unTag;
@@ -479,7 +491,7 @@ void GermlineHaplotagCigarParser::processMatchOperation(int& length, uint32_t* c
 void GermlineHaplotagCigarParser::processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel){
     // only execute at the first phased normal snp
     if ((*currentVariantIter).second.isExists(NORMAL) && !alreadyJudgeDel){
-        if((*currentVariantIter).second.Variant[NORMAL].is_phased_hetero){
+        if((*currentVariantIter).second.Variant[NORMAL].GT == GenomeType::PHASED_HETERO){
             // longphase v1.73 only execute once
             alreadyJudgeDel = true;
             judger.judgeDeletionHap(ctx.chrName, ctx.ref_string, ref_pos, length, query_pos, currentVariantIter, &ctx.aln, *hpCount, *variantsHP, *norCountPS);

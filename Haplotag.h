@@ -3,6 +3,7 @@
 
 #include "Util.h"
 #include "HaplotagType.h"  // Include the header that defines HaplotagParameters
+#include "HaplotagProcess.h"
 #include "ArgumentManager.h"
 #include <getopt.h>
 #include <vector>
@@ -27,14 +28,20 @@ struct ParamsHandler<HaplotagParameters>{
     static int getHelpEnumNum();
 };
 
+template<>
+struct ParamsHandler<ParsingBamConfig>{
 
-class HaplotagHelpManager : public HelpMessageManager {
-public:
-    HaplotagHelpManager(const std::string& program) : HelpMessageManager(program) {}
+    static void initialize(ParsingBamConfig& params, const std::string& version);
 
-    virtual void buildMessage() override;
-    virtual ~HaplotagHelpManager() = default;
+    static bool loadArgument(ParsingBamConfig& params, char& opt, std::istringstream& arg);
+
+    static bool validateNumericParameter(ParsingBamConfig& params, const std::string& programName);
+
+    static void recordCommand(ParsingBamConfig& params, int argc, char** argv);
+
+    static int getHelpEnumNum();
 };
+
 
 class HaplotagOptionDefiner : public OptionDefiner {
     public:
@@ -46,17 +53,14 @@ class HaplotagOptionDefiner : public OptionDefiner {
 class HaplotagArgumentManager : public ArgumentTemManager<HaplotagParameters> {
     protected:
 
-        virtual HelpMessageManager* createHelpManager(const std::string& program) override {
-            return new HaplotagHelpManager(program);
-        }
-
         virtual OptionDefiner* createOptionDefiner() override {
             return new HaplotagOptionDefiner();
         }
 
     public:
-        HaplotagArgumentManager(const std::string& program, const std::string& version);
-        virtual ~HaplotagArgumentManager();
+        HaplotagArgumentManager(const std::string& program, const std::string& version, const char* HELP_MESSAGE)
+         : ArgumentTemManager<HaplotagParameters>(program, version, HELP_MESSAGE) {};
+        ~HaplotagArgumentManager() = default;
 };
 
 // functions
