@@ -24,12 +24,12 @@ void SomaticHaplotagProcess::printParamsMessage(){
     std::cerr<< "reference file               : " << sParams.basic.fastaFile << "\n";
     std::cerr<< "\n";
     std::cerr<< "[Benchmark Files]\n";
-    std::cerr<< "benchmark VCF file           : " << sParams.benchmarkVcf << "\n";
-    std::cerr<< "benchmark BED file           : " << sParams.benchmarkBedFile << "\n";
+    std::cerr<< "truth VCF file               : " << sParams.benchmarkVcf << "\n";
+    std::cerr<< "truth BED file               : " << sParams.benchmarkBedFile << "\n";
     std::cerr<< "\n";
     std::cerr<< "[Output Files]\n";
     std::cerr<< "tagged tumor BAM file        : " << sParams.basic.config.resultPrefix + "." + sParams.basic.config.outputFormat << "\n";
-    std::cerr<< "purity prediction file       : " << (sParams.predictTumorPurity ? sParams.basic.config.resultPrefix + "_purity.out" : "") << "\n";
+    std::cerr<< "purity prediction file       : " << (sParams.callerCfg.predictTumorPurity ? sParams.basic.config.resultPrefix + "_purity.out" : "") << "\n";
     std::cerr<< "benchmark metrics file       : " << (sParams.benchmarkVcf != "" ? sParams.basic.config.resultPrefix + sParams.metricsSuffix : "") << "\n";
     std::cerr<< "log file                     : " << (sParams.basic.config.writeReadLog ? (sParams.basic.config.resultPrefix+".out") : "") << "\n";
     std::cerr<< "-------------------------------------------\n";
@@ -43,8 +43,8 @@ void SomaticHaplotagProcess::printParamsMessage(){
     std::cerr<< "\n";
     std::cerr<< "[Somatic Calling Params] " << "\n";
     std::cerr<< "mapping quality              : " << sParams.basic.config.qualityThreshold << "\n";
-    std::cerr<< "variant filtering            : " << (sParams.enableFilter ? "enabled" : "disabled") << "\n";
-    std::cerr<< "tumor purity value           : " << (sParams.predictTumorPurity ? "auto-prediction" : std::to_string(sParams.tumorPurity)) << "\n";
+    std::cerr<< "variant filtering            : " << (sParams.callerCfg.enableFilter ? "enabled" : "disabled") << "\n";
+    std::cerr<< "tumor purity value           : " << (sParams.callerCfg.predictTumorPurity ? "auto-prediction" : std::to_string(sParams.callerCfg.tumorPurity)) << "\n";
     std::cerr<< "-------------------------------------------\n";
 }
 
@@ -68,9 +68,8 @@ void SomaticHaplotagProcess::taggingProcess()
     CallerContext ctx(sParams.basic.bamFile, sParams.tumorBamFile, 
                     sParams.basic.snpFile, sParams.tumorSnpFile, 
                     sParams.basic.fastaFile);
-    CallerConfig callerCfg(sParams.enableFilter, sParams.predictTumorPurity, sParams.tumorPurity);
 
-    SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(callerCfg, sParams.basic.config, *chrVec);
+    SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(sParams.callerCfg, sParams.basic.config, *chrVec);
     somaticVarCaller->variantCalling(ctx, *chrVec, *chrLength, (*mergedChrVarinat), vcfSet);
     somaticVarCaller->getSomaticFlag(*chrVec, *mergedChrVarinat);
     delete somaticVarCaller;

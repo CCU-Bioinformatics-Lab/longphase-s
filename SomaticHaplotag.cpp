@@ -25,8 +25,12 @@ constexpr const char *CORRECT_USAGE_MESSAGE =
 "                                                   chrom:start-end\n"
 "      --log                           an additional log file records the result of each read. default:false\n\n"
 "somatic variant calling arguments:\n"
-"      --tumor-purity=Num              tumor purity value (0.1~1.0) used to adjust somatic variant calling sensitivity and specificity.\n";
-
+"      --tumor-purity=Num              tumor purity (0.1~1.0) for adjusting somatic variant filtering.\n"
+"                                      lower values apply more conservative filters. default: auto-prediction.\n"
+"      --disableFilter                 disable somatic variant filtering and accept all tumor VCF variants. default: false.\n\n"
+"somatic haplotag benchmark arguments:\n"
+"      --truth-vcf=NAME                truth somatic variants VCF file for somatic haplotag evaluation.\n"
+"      --truth-bed=NAME                confident regions BED file for somatic haplotag evaluation.\n";
 
 void SomaticHaplotagOptionDefiner::defineOptions(ArgumentManager& manager) {
     // base haplotag options
@@ -35,19 +39,21 @@ void SomaticHaplotagOptionDefiner::defineOptions(ArgumentManager& manager) {
     // somatic haplotag-specific options
     manager.addOption({"tumor-snp-file", required_argument, NULL, TUM_SNP});
     manager.addOption({"tumor-bam-file", required_argument, NULL, TUM_BAM});
-    manager.addOption({"benchmark-snp", required_argument, NULL, BENCHMARK_VCF});
-    manager.addOption({"benchmark-bed", required_argument, NULL, BENCHMARK_BED});
+    
     manager.addOption({"disableFilter", no_argument, NULL, DISABLE_FILTER});
     manager.addOption({"tumor-purity", required_argument, NULL, TUMOR_PURITY});
+
+    manager.addOption({"truth-vcf", required_argument, NULL, BENCHMARK_VCF});
+    manager.addOption({"truth-bed", required_argument, NULL, BENCHMARK_BED});
 }
 
 void ParamsHandler<SomaticHaplotagParameters>::initialize(SomaticHaplotagParameters& params, const std::string& version) {
 
     ParamsHandler<HaplotagParameters>::initialize(params.basic, version);
 
-    params.tumorPurity = 0.2;
-    params.enableFilter = true;
-    params.predictTumorPurity = true;
+    params.callerCfg.tumorPurity = 0.2;
+    params.callerCfg.enableFilter = true;
+    params.callerCfg.predictTumorPurity = true;
     params.metricsSuffix = "_somatic_haplotag.metrics";
 }
 
@@ -65,10 +71,10 @@ bool ParamsHandler<SomaticHaplotagParameters>::loadArgument(SomaticHaplotagParam
             case SomaticHaplotagOption::TUM_BAM: arg >> params.tumorBamFile; break;
             case SomaticHaplotagOption::BENCHMARK_VCF: arg >> params.benchmarkVcf; break;
             case SomaticHaplotagOption::BENCHMARK_BED: arg >> params.benchmarkBedFile; break;
-            case SomaticHaplotagOption::DISABLE_FILTER: params.enableFilter = false; break;
+            case SomaticHaplotagOption::DISABLE_FILTER: params.callerCfg.enableFilter = false; break;
             case SomaticHaplotagOption::TUMOR_PURITY: 
-                arg >> params.tumorPurity; 
-                params.predictTumorPurity = false;
+                arg >> params.callerCfg.tumorPurity; 
+                params.callerCfg.predictTumorPurity = false;
                 break;
             default: isLoaded = false; 
             break;
@@ -91,9 +97,9 @@ bool ParamsHandler<SomaticHaplotagParameters>::validateFiles(SomaticHaplotagPara
 bool ParamsHandler<SomaticHaplotagParameters>::validateNumericParameter(SomaticHaplotagParameters& params, const std::string& programName) {
     bool isValid = ParamsHandler<HaplotagParameters>::validateNumericParameter(params.basic, programName);
 
-    if (params.tumorPurity < 0.1 || params.tumorPurity > 1.0) {
+    if (params.callerCfg.tumorPurity < 0.1 || params.callerCfg.tumorPurity > 1.0) {
         std::cerr << "[ERROR] " << programName << ": invalid tumor purity. value: " 
-                << params.tumorPurity 
+                << params.callerCfg.tumorPurity 
                 << "\nthis value need: 0.1~1.0, --tumor-purity=Number\n";
         isValid = false;
     }

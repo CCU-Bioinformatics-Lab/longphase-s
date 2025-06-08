@@ -12,19 +12,19 @@ enum ParsingBamMode{
     MULTI_THREAD = 1
 };
 
-// struct ParsingBamConfig{
-//     int numThreads;
-//     int qualityThreshold;
-//     double percentageThreshold;
-//     std::string resultPrefix;
-//     std::string region;
-//     std::string command;
-//     std::string version;
-//     std::string outputFormat;
+struct ParsingBamConfig{
+    int numThreads;
+    int qualityThreshold;
+    double percentageThreshold;
+    std::string resultPrefix;
+    std::string region;
+    std::string command;
+    std::string version;
+    std::string outputFormat;
 
-//     bool tagSupplementary;
-//     bool writeReadLog;
-// };
+    bool tagSupplementary;
+    bool writeReadLog;
+};
 
 struct ParsingBamControl{
     ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;

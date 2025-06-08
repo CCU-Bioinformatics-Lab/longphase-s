@@ -38,8 +38,6 @@ struct ParamsHandler<ParsingBamConfig>{
     static bool validateNumericParameter(ParsingBamConfig& params, const std::string& programName);
 
     static void recordCommand(ParsingBamConfig& params, int argc, char** argv);
-
-    static int getHelpEnumNum();
 };
 
 

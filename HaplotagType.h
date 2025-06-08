@@ -28,20 +28,6 @@ enum SomaticHaplotagOption{
     TUMOR_PURITY
 };
 
-struct ParsingBamConfig{
-    int numThreads;
-    int qualityThreshold;
-    double percentageThreshold;
-    std::string resultPrefix;
-    std::string region;
-    std::string command;
-    std::string version;
-    std::string outputFormat;
-
-    bool tagSupplementary;
-    bool writeReadLog;
-};
-
 enum Genome
 {
     NORMAL = 0,

@@ -13,17 +13,20 @@ void PurityPredictionProcess::printParamsMessage() {
     std::cerr<< "LongPhase-S v" << params.basic.config.version << " - Predict Tumor Purity\n";
     std::cerr<< "\n";
     std::cerr<< "[Input Files]\n";
-    std::cerr<< "phased normal SNP file : " << params.basic.snpFile << "\n";
-    std::cerr<< "tumor SNP file         : " << params.tumorSnpFile << "\n";
-    std::cerr<< "normal BAM file        : " << params.basic.bamFile << "\n";
-    std::cerr<< "tumor BAM file         : " << params.tumorBamFile << "\n";
-    std::cerr<< "reference file         : " << params.basic.fastaFile << "\n\n";
+    std::cerr<< "phased normal SNP file       : " << params.basic.snpFile << "\n";
+    std::cerr<< "tumor SNP file               : " << params.tumorSnpFile << "\n";
+    std::cerr<< "normal BAM file              : " << params.basic.bamFile << "\n";
+    std::cerr<< "tumor BAM file               : " << params.tumorBamFile << "\n";
+    std::cerr<< "reference file               : " << params.basic.fastaFile << "\n\n";
     std::cerr<< "[Output Files]\n";
-    std::cerr<< "purity prediction file :" << params.basic.config.resultPrefix + "_purity.out" << "\n";
+    std::cerr<< "purity prediction file       :" << params.basic.config.resultPrefix + "_purity.out" << "\n";
     std::cerr<< "-------------------------------------------\n";
     std::cerr<< "[Purity Prediction Params] " << "\n";
-    std::cerr<< "number of threads      : " << params.basic.config.numThreads << "\n";
-    std::cerr<< "prediction region      : " << (!params.basic.config.region.empty() ? params.basic.config.region : "all") << "\n";
+    std::cerr<< "number of threads            : " << params.basic.config.numThreads << "\n";
+    std::cerr<< "prediction region            : " << (!params.basic.config.region.empty() ? params.basic.config.region : "all") << "\n";
+    std::cerr<< "filter mapping quality below : " << params.basic.config.qualityThreshold << "\n";
+    std::cerr<< "percentage threshold         : " << params.basic.config.percentageThreshold << "\n";
+    std::cerr<< "tag supplementary            : " << (params.basic.config.tagSupplementary ? "enabled" : "disabled") << "\n";
     std::cerr<< "-------------------------------------------\n";
 
 }
@@ -50,7 +53,7 @@ void PurityPredictionProcess::predictPurity() {
     Genome geneSample = TUMOR;
 
     VcfParser vcfParser(geneSample);
-    // load SNP, SV, MOD vcf file
+    // load SNP vcf file
     parseVariantFiles(vcfParser);
     //decide which genome sample chrVec and chrLength belong to
     setChrVecAndChrLength();

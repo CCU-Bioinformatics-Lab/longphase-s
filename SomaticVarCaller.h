@@ -4,7 +4,6 @@
 #include "Util.h" 
 #include "HaplotagType.h"
 #include "HaplotagParsingBam.h"
-#include "SomaticHaplotagProcess.h"
 #include "TumorPurityPredictor.h"
 #include "HaplotagLogging.h"
 

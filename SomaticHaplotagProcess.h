@@ -15,15 +15,14 @@ struct SomaticHaplotagParameters
     // Somatic haplotag parameters
     std::string tumorSnpFile;   
     std::string tumorBamFile;  
+
+    // somatic benchmark parameters
     std::string benchmarkVcf;
     std::string benchmarkBedFile;
-
     std::string metricsSuffix;
-    
-    double tumorPurity;
-    bool predictTumorPurity;
 
-    bool enableFilter;
+    // somatic calling config
+    CallerConfig callerCfg;
 };
 
 // Tumor specific header

@@ -116,10 +116,6 @@ void ParamsHandler<ParsingBamConfig>::recordCommand(ParsingBamConfig& params, in
     }
 }
 
-int ParamsHandler<ParsingBamConfig>::getHelpEnumNum() {
-    return HaplotagOption::OPT_HELP;
-}
-
 void ParamsHandler<HaplotagParameters>::initialize(HaplotagParameters& params, const std::string& version) {
     // Initialize default values
     ParamsHandler<ParsingBamConfig>::initialize(params.config, version);
