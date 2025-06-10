@@ -30,6 +30,7 @@ void SomaticHaplotagProcess::printParamsMessage(){
     std::cerr<< "[Output Files]\n";
     std::cerr<< "tagged tumor BAM file        : " << sParams.basic.config.resultPrefix + "." + sParams.basic.config.outputFormat << "\n";
     std::cerr<< "purity prediction file       : " << (sParams.callerCfg.predictTumorPurity ? sParams.basic.config.resultPrefix + "_purity.out" : "") << "\n";
+    std::cerr<< "somatic calling VCF file     : " << (sParams.writeSomaticCallingVcf ? sParams.basic.config.resultPrefix + "_sc.vcf" : "") << "\n";
     std::cerr<< "benchmark metrics file       : " << (sParams.benchmarkVcf != "" ? sParams.basic.config.resultPrefix + sParams.metricsSuffix : "") << "\n";
     std::cerr<< "log file                     : " << (sParams.basic.config.writeReadLog ? (sParams.basic.config.resultPrefix+".out") : "") << "\n";
     std::cerr<< "-------------------------------------------\n";
@@ -43,8 +44,10 @@ void SomaticHaplotagProcess::printParamsMessage(){
     std::cerr<< "\n";
     std::cerr<< "[Somatic Calling Params] " << "\n";
     std::cerr<< "mapping quality              : " << sParams.basic.config.qualityThreshold << "\n";
-    std::cerr<< "variant filtering            : " << (sParams.callerCfg.enableFilter ? "enabled" : "disabled") << "\n";
     std::cerr<< "tumor purity value           : " << (sParams.callerCfg.predictTumorPurity ? "auto-prediction" : std::to_string(sParams.callerCfg.tumorPurity)) << "\n";
+    std::cerr<< "variant filtering            : " << (sParams.callerCfg.enableFilter ? "enabled" : "disabled") << "\n";
+    std::cerr<< "write calling VCF            : " << (sParams.writeSomaticCallingVcf ? "enabled" : "disabled") << "\n";
+    std::cerr<< "write calling log            : " << (sParams.callerCfg.writeCallingLog ? "enabled" : "disabled") << "\n";
     std::cerr<< "-------------------------------------------\n";
 }
 
@@ -73,14 +76,16 @@ void SomaticHaplotagProcess::taggingProcess()
     somaticVarCaller->variantCalling(ctx, *chrVec, *chrLength, (*mergedChrVarinat), vcfSet);
     somaticVarCaller->getSomaticFlag(*chrVec, *mergedChrVarinat);
     delete somaticVarCaller;
-    // return;
 
-    std::cerr<< "writing somatic variants to vcf file ... ";
-    std::time_t begin = time(NULL);
-    vcfParser.setCommandLine(sParams.basic.config.command);
-    vcfParser.setVersion(sParams.basic.config.version);
-    vcfParser.writingResultVCF(sParams.tumorSnpFile, vcfSet[Genome::TUMOR], *mergedChrVarinat, sParams.basic.config.resultPrefix);
-    std::cerr<< difftime(time(NULL), begin) << "s\n";
+    // write somatic calling vcf
+    if(sParams.writeSomaticCallingVcf){
+        std::cerr<< "writing somatic variants to vcf file ... ";
+        std::time_t begin = time(NULL);
+        vcfParser.setCommandLine(sParams.basic.config.command);
+        vcfParser.setVersion(sParams.basic.config.version);
+        vcfParser.writingResultVCF(sParams.tumorSnpFile, vcfSet[Genome::TUMOR], *mergedChrVarinat, sParams.basic.config.resultPrefix);
+        std::cerr<< difftime(time(NULL), begin) << "s\n";
+    }
 
     // remove tumor & benchmark variants out bed regions
     if(somaticBenchmark.isLoadBedFile() && somaticBenchmark.isEnabled()){
@@ -215,13 +220,17 @@ void SomaticHaplotagProcess::calculateSnpCounts(){
 void SomaticHaplotagProcess::postprocessForHaplotag(){
     somaticBenchmark.writeTaggedSomaticReadReport(*chrVec, sParams.basic.config.resultPrefix + sParams.metricsSuffix);
 
-    if(sParams.basic.config.writeReadLog){
+    // other log files
+    if(sParams.callerCfg.writeCallingLog){
         hpBeforeInheritance->writeReadHpDistriLog(sParams.basic.config.resultPrefix + "_read_distri_before_inheritance.out", *chrVec);
         hpAfterInheritance->writeReadHpDistriLog(sParams.basic.config.resultPrefix + "_read_distri_after_inheritance.out", *chrVec);
         //write snp cover region
         hpAfterInheritance->writePosCoverRegionLog(sParams.basic.config.resultPrefix + "_snp_cover_region.out", *chrVec);
         //write read cover region in whole genome
         hpAfterInheritance->writeTagReadCoverRegionLog(sParams.basic.config.resultPrefix + "_read_cover_region.bed", *chrVec, *chrLength);
+    }
+
+    if(sParams.writeBenchmarkLog){
         //write somatic read log
         somaticBenchmark.writeTotalTruthSomaticReadReport(*chrVec, sParams.basic.config.resultPrefix + "_total_truth_somatic_read.out");
         somaticBenchmark.writeTaggedReadReport(*chrVec, sParams.basic.config.resultPrefix + "_total_tagged_read.out");

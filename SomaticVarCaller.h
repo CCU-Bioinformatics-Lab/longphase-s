@@ -23,18 +23,14 @@ struct CallerConfig
     bool enableFilter = true;
     bool predictTumorPurity = true;
     double tumorPurity = 0.0;
+    bool writeCallingLog = false;
     CallerConfig() = default;
-    CallerConfig(bool filter, bool predict, double purity)
-        : enableFilter(filter), predictTumorPurity(predict), tumorPurity(purity) {}
+    CallerConfig(bool filter, bool predict, double purity, bool writeLog)
+        : enableFilter(filter), predictTumorPurity(predict), tumorPurity(purity), writeCallingLog(writeLog) {}
 };
 
-struct SomaticVarCallerParaemter
-{
-    // Determine whether to apply the filter
-    bool applyFilter;
-    // Determine whether to write log file
-    bool writeVarLog;  
-    
+struct SomaticVarFilterParams
+{  
     // Tumor purity
     float tumorPurity;
 
@@ -291,7 +287,7 @@ class SomaticVarCaller{
         const std::vector<std::string>& chrVec;
 
         // somatic calling filter params
-        SomaticVarCallerParaemter somaticParams;
+        SomaticVarFilterParams somaticParams;
 
         ExtractSomaticDataStragtegy somaticJudger;
         // chr, tumor SNP pos, somatic info
@@ -310,16 +306,16 @@ class SomaticVarCaller{
         // chr, position, read ID, baseHP 
         std::map<std::string, std::map<int, std::map<std::string, int>>> *chrTumorPosReadCorrBaseHP;
 
-        void initialSomaticFilterParams(bool enableFilter, bool writeVarLog);
+        void initialSomaticFilterParams();
 
-        void SetFilterParamsWithPurity(SomaticVarCallerParaemter &somaticParams, double &tumorPurity);
+        void SetFilterParamsWithPurity(SomaticVarFilterParams &somaticParams, double &tumorPurity);
 
         double calculateStandardDeviation(const std::map<int, double>& data, double mean);
         void calculateZScores(const std::map<int, double>& data, double mean, double stdDev, std::map<int, double> &zScores);
         void calculateIntervalData(bool &isStartPos, int &startPos, int &pos, DenseSnpInterval &denseSnp, std::map<int, std::pair<int, DenseSnpInterval>> &localDenseTumorSnpInterval);
         void getDenseTumorSnpInterval(std::map<int, SomaticData> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, std::map<int, std::pair<int, DenseSnpInterval>> &closeSomaticSnpInterval);
 
-        void somaticFeatureFilter(const SomaticVarCallerParaemter &somaticParams, std::map<int, MultiGenomeVar> &currentChrVariants,const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, double& tumorPurity);
+        void somaticFeatureFilter(const SomaticVarFilterParams &somaticParams, std::map<int, MultiGenomeVar> &currentChrVariants,const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, double& tumorPurity);
         
         void calibrateReadHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount);
         void calculateReadSetHP(const std::string &chr, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, const double& percentageThreshold);
@@ -332,7 +328,7 @@ class SomaticVarCaller{
             chrReadHpResult &localReadHpDistri
         );
         
-        void writeSomaticVarCallingLog(const CallerContext &ctx, const SomaticVarCallerParaemter &somaticParams, const std::vector<std::string> &chrVec
+        void writeSomaticVarCallingLog(const CallerContext &ctx, const SomaticVarFilterParams &somaticParams, const std::vector<std::string> &chrVec
                                      , std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         void writeOtherSomaticHpLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
         void writeDenseTumorSnpIntervalLog(const std::string logFileName, const std::vector<std::string> &chrVec);

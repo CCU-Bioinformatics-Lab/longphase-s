@@ -595,8 +595,8 @@ void SomaticReadBenchmark::writeReadLog(
     (*somaticReadLog) << "############################\n";
     (*somaticReadLog) << "# Somatic Haplotag Metrics #\n";
     (*somaticReadLog) << "############################\n";
-    (*somaticReadLog) << "##Benchmark VCF File: "  << benchmarkVcf << "\n";
-    (*somaticReadLog) << "##Benchmark Bed File: "  << benchmarkBed << "\n";
+    (*somaticReadLog) << "##Truth VCF File: "  << benchmarkVcf << "\n";
+    (*somaticReadLog) << "##Truth BED File: "  << benchmarkBed << "\n";
     (*somaticReadLog) << "##MappingQualityThreshold: "  << mappingQualityThreshold << "\n";
     (*somaticReadLog) << "##Tatal reads: "  << totalReads << "\n";
     (*somaticReadLog) << "##Tatal truth somatic reads: "  << totalTruthSomaticReads << "\n";
@@ -650,13 +650,13 @@ void SomaticReadBenchmark::writeReadLog(
     (*somaticReadLog) << "##\n";
 
     (*somaticReadLog) << "#CHROM\t"
-                      << "ReadID\t"
-                      << "germlineVarSimilarity\t"
-                      << "deriveByHpSimilarity\t"
-                      << "germlineSnpCount\t"
-                      << "tumorSnpCount\t"
-                      << "Haplotype\t"
-                      << "somaticVariant,HP\n";
+                      << "READID\t"
+                      << "GERMLINE_VAR_SIMILARITY\t"
+                      << "DERIVE_BY_HP_SIMILARITY\t"
+                      << "GERMLINE_SNP_COUNT\t"
+                      << "TUMOR_SNP_COUNT\t"
+                      << "HAPLOTYPE\t"
+                      << "TRUTH_VARIANT_POS,HP\n";
 
     for(auto chr: chrVec){
         for(auto somaticRead: *somaticReadVecMap[chr]){

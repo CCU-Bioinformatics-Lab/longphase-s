@@ -592,7 +592,7 @@ void SomaticVarCaller::variantCalling(
 ){
     
     // setting somatic calling filter params
-    initialSomaticFilterParams(callerCfg.enableFilter, bamCfg.writeReadLog);  
+    initialSomaticFilterParams();  
 
     // extract somatic data from normal and tumor BAM
     extractSomaticData(ctx.normalBamFile, ctx.tumorBamFile, ctx.fastaFile, bamCfg, chrVec, chrLength, mergedChrVarinat, vcfSet);
@@ -601,7 +601,7 @@ void SomaticVarCaller::variantCalling(
 
     //predict tumor purity or use the value from parameters
     if(callerCfg.predictTumorPurity){
-        tumorPurity = runTumorPurityPredictor(bamCfg.writeReadLog, bamCfg.resultPrefix);
+        tumorPurity = runTumorPurityPredictor(callerCfg.writeCallingLog, bamCfg.resultPrefix);
     }else{
         tumorPurity = callerCfg.tumorPurity;
     }
@@ -679,7 +679,7 @@ void SomaticVarCaller::variantCalling(
     }
     std::cerr << "calling somatic SNPs: " << tumorOnlySNP << std::endl;
     
-    if(somaticParams.writeVarLog){
+    if(callerCfg.writeCallingLog){
         //write the log file for variants with positions tagged as HP3
         writeSomaticVarCallingLog(ctx ,somaticParams, chrVec, mergedChrVarinat);
 
@@ -699,14 +699,9 @@ void SomaticVarCaller::variantCalling(
     return;
 }
 
-void SomaticVarCaller::initialSomaticFilterParams(bool enableFilter, bool writeVarLog){
+void SomaticVarCaller::initialSomaticFilterParams(){
     
-    // Determine whether to apply the filter
-    somaticParams.applyFilter = enableFilter;
-    somaticParams.writeVarLog = writeVarLog;
-
-    somaticParams.tumorPurity = 1.0;
-
+    somaticParams.tumorPurity = callerCfg.tumorPurity;
     // Below the mapping quality read ratio threshold
     somaticParams.LowMpqRatioThreshold = 0.0;
 
@@ -764,7 +759,7 @@ double SomaticVarCaller::runTumorPurityPredictor(bool writeReadLog, const std::s
 }
 
 
-void SomaticVarCaller::SetFilterParamsWithPurity(SomaticVarCallerParaemter &somaticParams, double &tumorPurity){
+void SomaticVarCaller::SetFilterParamsWithPurity(SomaticVarFilterParams &somaticParams, double &tumorPurity){
 
     somaticParams.tumorPurity = tumorPurity;
 
@@ -880,7 +875,7 @@ void SomaticVarCaller::SetFilterParamsWithPurity(SomaticVarCallerParaemter &soma
     }
 }
 
-void SomaticVarCaller::somaticFeatureFilter(const SomaticVarCallerParaemter &somaticParams, std::map<int, MultiGenomeVar> &currentChrVariants,const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, double& tumorPurity){
+void SomaticVarCaller::somaticFeatureFilter(const SomaticVarFilterParams &somaticParams, std::map<int, MultiGenomeVar> &currentChrVariants,const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, double& tumorPurity){
     //calculate the information of the somatic positon 
     std::map<int, SomaticData>::iterator somaticVarIter = somaticPosInfo.begin();
 
@@ -973,7 +968,7 @@ void SomaticVarCaller::somaticFeatureFilter(const SomaticVarCallerParaemter &som
             }
 
             // If a filter needs to be applied, skip the filtered variant
-            if (somaticParams.applyFilter && (*somaticVarIter).second.isFilterOut) {
+            if (callerCfg.enableFilter && (*somaticVarIter).second.isFilterOut) {
                 somaticVarIter++;
                 continue;
             }
@@ -1506,7 +1501,7 @@ void SomaticVarCaller::statisticSomaticPosReadHP(
 }
 
 
-void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const SomaticVarCallerParaemter &somaticParams, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const SomaticVarFilterParams &somaticParams, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     std::ofstream *tagHP3Log = new std::ofstream(bamCfg.resultPrefix+"_somatic_var.out");
 
     if(!tagHP3Log->is_open()){
@@ -1546,7 +1541,7 @@ void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const
 
     //write filter parameter
     (*tagHP3Log) << "##======== Filter Parameters =========\n"
-                 << "##Enable filter : " << somaticParams.applyFilter << "\n"
+                 << "##Enable filter : " << callerCfg.enableFilter << "\n"
                  << "##Calling mapping quality :" << bamCfg.qualityThreshold << "\n"
                  << "##Tumor purity : " << somaticParams.tumorPurity << "\n"
                  << "##Normal VAF maximum threshold : " << somaticParams.norVAF_maxThr << "\n"

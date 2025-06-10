@@ -30,7 +30,7 @@ OBJ = Haplotag.o \
 	  PurityPredictionProcess.o \
 	  main.o 
 
-PROGRAMS = longphase
+PROGRAMS = longphase-s
 
 all: subprojects
 

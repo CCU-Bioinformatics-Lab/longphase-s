@@ -20,9 +20,11 @@ struct SomaticHaplotagParameters
     std::string benchmarkVcf;
     std::string benchmarkBedFile;
     std::string metricsSuffix;
+    bool writeBenchmarkLog;
 
     // somatic calling config
     CallerConfig callerCfg;
+    bool writeSomaticCallingVcf;
 };
 
 // Tumor specific header

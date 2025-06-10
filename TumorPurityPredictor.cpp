@@ -371,8 +371,7 @@ void TumorPurityPredictor::writePurityResult(double &purity, BoxPlotValue &plotV
         purityResult << "#==========Whisker filter out data count==========" << std::endl;
         purityResult << "#iteration times: " << iteration_times << std::endl;
         purityResult << "#remove outliers: " << filterCounts.outliers << std::endl;
-        purityResult << "#==========Prediction result===========" << std::endl;
-        purityResult << "Tumor purity: " << purity << std::endl;
+        purityResult << "#==========Statistical analysis===========" << std::endl;
         purityResult << "Data size: " << plotValue.data_size << std::endl;
         purityResult << "Median: " << plotValue.median << std::endl;
         purityResult << "Q1: " << plotValue.q1 << std::endl;
@@ -380,6 +379,8 @@ void TumorPurityPredictor::writePurityResult(double &purity, BoxPlotValue &plotV
         purityResult << "IQR: " << plotValue.iqr << std::endl;
         purityResult << "Whiskers: " << plotValue.lowerWhisker << " to " << plotValue.upperWhisker << std::endl;
         purityResult << "Outliers: " << plotValue.outliers << std::endl;
+        purityResult << "#==========Prediction result===========" << std::endl;
+        purityResult << "Tumor purity: " << purity << std::endl;
 
         purityResult.close();
     }catch(const std::exception& e){

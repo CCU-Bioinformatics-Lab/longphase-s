@@ -26,7 +26,7 @@ void PurityPredictionProcess::printParamsMessage() {
     std::cerr<< "prediction region            : " << (!params.basic.config.region.empty() ? params.basic.config.region : "all") << "\n";
     std::cerr<< "filter mapping quality below : " << params.basic.config.qualityThreshold << "\n";
     std::cerr<< "percentage threshold         : " << params.basic.config.percentageThreshold << "\n";
-    std::cerr<< "tag supplementary            : " << (params.basic.config.tagSupplementary ? "enabled" : "disabled") << "\n";
+    std::cerr<< "include supplementary reads  : " << (params.basic.config.tagSupplementary ? "enabled" : "disabled") << "\n";
     std::cerr<< "-------------------------------------------\n";
 
 }

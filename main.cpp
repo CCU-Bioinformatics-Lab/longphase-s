@@ -16,11 +16,13 @@ static std::string version = VERSION;
 static const char *STRIDE_USAGE_MESSAGE =
 "Version: " VERSION " \n"
 "Usage: " PROGRAM_BIN " <command> [options]\n"  
-"               phase                  run phasing algorithm.\n"
-"               haplotag               tag reads by haplotype.\n"
-"               modcall                convert bam file to modification vcf file.\n"
-"               somatic_haplotag       tag reads by somatic haplotype algorithm.\n"
-"               predict_tumor_purity   predict tumor purity.\n"
+"[Germline Mode]\n"
+"    phase                  run phasing algorithm.\n"
+"    haplotag               tag reads by haplotype.\n"
+"    modcall                convert bam file to modification vcf file.\n\n"
+"[Somatic Mode]\n"
+"    somatic_haplotag       tag reads by somatic haplotype algorithm.\n"
+"    predict_purity         predict tumor purity.\n"
 "\n";
 
 int main(int argc, char** argv)
@@ -45,7 +47,7 @@ int main(int argc, char** argv)
     {
         SomaticHaplotagMain(argc - 1, argv + 1, version);
     }
-    else if(command=="predict_tumor_purity")
+    else if(command=="predict_purity")
     {
         PurityPredictionMain(argc - 1, argv + 1, version);
     }

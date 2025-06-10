@@ -47,9 +47,9 @@ void VcfParser::writingResultVCF(
 ){
     mode = VCF_PARSER_WRITE_NODE;
 
-    resultVcf = new std::ofstream(outputPrefix + "_SC.vcf");
+    resultVcf = new std::ofstream(outputPrefix + "_sc.vcf");
     if(!resultVcf->is_open()){
-        std::cerr<<"Fail to open output file: " << outputPrefix << "_SC.vcf\n";
+        std::cerr<<"Fail to open output file: " << outputPrefix << "_sc.vcf\n";
         exit(EXIT_FAILURE);
     }
     

@@ -22,10 +22,13 @@ enum HaplotagOption {
 enum SomaticHaplotagOption{
     TUM_SNP = 50,
     TUM_BAM,
+    DISABLE_FILTER,
+    TUMOR_PURITY,
+    OUTPUT_SOMATIC_VCF,
+    SOMATIC_CALLING_LOG,
     BENCHMARK_VCF,
     BENCHMARK_BED,
-    DISABLE_FILTER,
-    TUMOR_PURITY
+    BENCHMARK_LOG
 };
 
 enum Genome

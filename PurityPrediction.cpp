@@ -1,6 +1,6 @@
 #include "PurityPrediction.h"
 
-#define SUBPROGRAM "purity prediction"
+#define SUBPROGRAM "predict_purity"
 
 constexpr const char *CORRECT_USAGE_MESSAGE =
 "Usage: "  " " SUBPROGRAM " [OPTION] ... READSFILE\n"

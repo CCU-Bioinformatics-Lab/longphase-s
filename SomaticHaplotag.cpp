@@ -27,10 +27,15 @@ constexpr const char *CORRECT_USAGE_MESSAGE =
 "somatic variant calling arguments:\n"
 "      --tumor-purity=Num              tumor purity (0.1~1.0) for adjusting somatic variant filtering.\n"
 "                                      lower values apply more conservative filters. default: auto-prediction.\n"
-"      --disableFilter                 disable somatic variant filtering and accept all tumor VCF variants. default: false.\n\n"
-"somatic haplotag benchmark arguments:\n"
-"      --truth-vcf=NAME                truth somatic variants VCF file for somatic haplotag evaluation.\n"
-"      --truth-bed=NAME                confident regions BED file for somatic haplotag evaluation.\n";
+"      --disableFilter                 disable somatic variant filtering and accept all tumor VCF variants. default: false.\n"
+"      --output-somatic-vcf            output filtered somatic variants VCF file based on tumor VCF. default: false.\n"
+"                                      variants passing filters will be marked as PASS, others as LowQual.\n"
+"      --somatic-calling-log           output somatic calling log file. default: false.\n\n"
+"somatic haplotagging benchmark arguments:\n"
+"      --truth-vcf=NAME                truth somatic variants VCF file for evaluating somatic haplotag performance.\n"
+"                                      comparing reads containing true somatic variants against reads tagged as somatic reads.\n"
+"      --truth-bed=NAME                confident regions BED file for evaluating somatic haplotag performance.\n"
+"                                      only using variants within these regions for tagging and evaluation.\n";
 
 void SomaticHaplotagOptionDefiner::defineOptions(ArgumentManager& manager) {
     // base haplotag options
@@ -42,9 +47,12 @@ void SomaticHaplotagOptionDefiner::defineOptions(ArgumentManager& manager) {
     
     manager.addOption({"disableFilter", no_argument, NULL, DISABLE_FILTER});
     manager.addOption({"tumor-purity", required_argument, NULL, TUMOR_PURITY});
+    manager.addOption({"output-somatic-vcf", no_argument, NULL, OUTPUT_SOMATIC_VCF});
+    manager.addOption({"somatic-calling-log", no_argument, NULL, SOMATIC_CALLING_LOG});
 
     manager.addOption({"truth-vcf", required_argument, NULL, BENCHMARK_VCF});
     manager.addOption({"truth-bed", required_argument, NULL, BENCHMARK_BED});
+    manager.addOption({"benchmark-log", no_argument, NULL, BENCHMARK_LOG});
 }
 
 void ParamsHandler<SomaticHaplotagParameters>::initialize(SomaticHaplotagParameters& params, const std::string& version) {
@@ -54,6 +62,9 @@ void ParamsHandler<SomaticHaplotagParameters>::initialize(SomaticHaplotagParamet
     params.callerCfg.tumorPurity = 0.2;
     params.callerCfg.enableFilter = true;
     params.callerCfg.predictTumorPurity = true;
+    params.writeSomaticCallingVcf = false;
+    params.callerCfg.writeCallingLog = false;
+    params.writeBenchmarkLog = false;
     params.metricsSuffix = "_somatic_haplotag.metrics";
 }
 
@@ -71,7 +82,10 @@ bool ParamsHandler<SomaticHaplotagParameters>::loadArgument(SomaticHaplotagParam
             case SomaticHaplotagOption::TUM_BAM: arg >> params.tumorBamFile; break;
             case SomaticHaplotagOption::BENCHMARK_VCF: arg >> params.benchmarkVcf; break;
             case SomaticHaplotagOption::BENCHMARK_BED: arg >> params.benchmarkBedFile; break;
+            case SomaticHaplotagOption::BENCHMARK_LOG: params.writeBenchmarkLog = true; break;
             case SomaticHaplotagOption::DISABLE_FILTER: params.callerCfg.enableFilter = false; break;
+            case SomaticHaplotagOption::SOMATIC_CALLING_LOG: params.callerCfg.writeCallingLog = true; break;
+            case SomaticHaplotagOption::OUTPUT_SOMATIC_VCF: params.writeSomaticCallingVcf = true; break;
             case SomaticHaplotagOption::TUMOR_PURITY: 
                 arg >> params.callerCfg.tumorPurity; 
                 params.callerCfg.predictTumorPurity = false;
