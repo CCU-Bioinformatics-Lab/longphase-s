@@ -1,7 +1,8 @@
 ## Input Preparation
 - [Generate reference index](#generate-reference-index)
 - [Generate alignment and index files](#generate-alignment-and-index-files)
-- [Generate single nucleotide polymorphism (SNP) file](#generate-single-nucleotide-polymorphism-snp-file)
+- [Generate germline SNP file](#generate-germline-snp-vcf-file)
+- [Generate somatic SNP file](#generate-somatic-snp-vcf-file)
 - [Generate Structural variation (SV)](#generate-structural-variation-sv-file)
 - [Carry methylation tags to BAMs](#carry-methylation-tags-to-bams)
 
@@ -23,7 +24,7 @@ samtools sort -@ 10 alignment.sam -o alignment.bam
 # index alignment file
 samtools index -@ 10 alignment.bam
 ```
-### Generate single nucleotide polymorphism (SNP) file
+### Generate germline SNP VCF file
 e.g. [PEPPER-Margin-DeepVariant](https://github.com/kishwarshafin/pepper) or [Clair3](https://github.com/HKU-BAL/Clair3) pipeline.
 ```
 INPUT_DIR={input data path}
@@ -47,6 +48,66 @@ run_pepper_margin_deepvariant call_variant \
 # for ONT R10.4 Q20 reads: --ont_r10_q20
 # for PacBio-HiFi reads: --hifi
 ```
+### Generate somatic SNP VCF file
+e.g. [DeepSomatic](https://github.com/google/deepsomatic) or [ClairS](https://github.com/HKU-BAL/ClairS) pipeline.
+#### ClairS
+```
+INPUT_BAM_DIR="/path/to/bam"
+INPUT_REF_DIR="/path/to/reference"
+OUTPUT_DIR="/path/to/output"
+NORMAL_BAM="normal.bam"
+TUMOR_BAM="tumor.bam"
+REF="reference.fasta"
+THREADS=64
+MODEL="ont_r10_dorado_sup_5khz_ssrs"
+# ont_r10_dorado_sup_5khz_ssrs is preset for ONT R10 Dorado 5 "Sup" basecaller
+# ssrs is a model trained initially with synthetic samples and then real samples augmented
+# if you do not want to use real data, use the ss model.
+# for PacBio-HiFi reads: hifi_revio_ssrs
+
+sudo docker run \
+-v ${INPUT_BAM_DIR}:${INPUT_BAM_DIR} \
+-v ${INPUT_REF_DIR}:${INPUT_REF_DIR} \
+-v ${OUTPUT_DIR}:${OUTPUT_DIR} \
+-u $(id -u):$(id -g) \
+hkubal/clairs:v0.4.1 \
+/opt/bin/run_clairs \
+--normal_bam_fn ${INPUT_BAM_DIR}/${NORMAL_BAM} \
+--tumor_bam_fn ${INPUT_BAM_DIR}/${TUMOR_BAM} \
+--ref_fn ${INPUT_REF_DIR}/${REF} \
+--threads ${THREADS} \
+--platform ${MODEL} \
+--output_dir ${OUTPUT_DIR}
+```
+#### DeepSomatic
+```
+INPUT_BAM_DIR="/path/to/bam"
+INPUT_REF_DIR="/path/to/reference"
+OUTPUT_DIR="/path/to/output"
+NORMAL_BAM="normal.bam"
+TUMOR_BAM="tumor.bam"
+REF="reference.fasta"
+THREADS=64
+MODEL="ONT"
+
+sudo docker run \
+-v ${INPUT_BAM_DIR}:${INPUT_BAM_DIR} \
+-v ${INPUT_REF_DIR}:${INPUT_REF_DIR} \
+-u $(id -u):$(id -g) \
+google/deepsomatic:1.8.0 \
+run_deepsomatic \
+--model_type ${MODEL} \
+--ref ${INPUT_REF_DIR}/${REF} \
+--reads_tumor  ${INPUT_BAM_DIR}/${TUMOR_BAM} \
+--reads_normal  ${INPUT_BAM_DIR}/${NORMAL_BAM} \
+--output_vcf  ${OUTPUT_DIR}/output.vcf.gz \
+--sample_name_tumor "tumor" \
+--sample_name_normal "normal" \
+--num_shards ${THREADS} \
+--intermediate_results_dir ${OUTPUT_DIR}/intermediate_results_dir \
+--logging_dir ${OUTPUT_DIR}/logs \
+```
+
 ### Generate Structural variation (SV) file
 e.g. [sniffles](https://github.com/fritzsedlazeck/Sniffles) or [CuteSV](https://github.com/tjiangHIT/cuteSV).
 ```

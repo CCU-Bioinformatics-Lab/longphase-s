@@ -2,13 +2,13 @@
 This command predicts tumor purity using tumor-normal pair BAM and VCF files, along with haplotype information, and outputs the prediction file.
 ```
 longphase-s predict_purity \
-    -s phased_normal_vcf \
-    -b normal_bam \
-    --tumor-snp-file tumor_vcf \
-    --tumor-bam-file tumor_bam \
-    -r reference_fasta \
-    -t thread_numbers \
-    -o output_prefix
+-s phased_normal_snp.vcf \
+-b normal.bam \
+--tumor-snp-file tumor_snp.vcf \
+--tumor-bam-file tumor.bam \
+-r reference.fasta \
+-t 8 \
+-o output_prefix
 ```
 
 ### Complete list of purity prediction parameters

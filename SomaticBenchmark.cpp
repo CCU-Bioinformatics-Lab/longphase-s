@@ -600,9 +600,9 @@ void SomaticReadBenchmark::writeReadLog(
     (*somaticReadLog) << "##MappingQualityThreshold: "  << mappingQualityThreshold << "\n";
     (*somaticReadLog) << "##Tatal reads: "  << totalReads << "\n";
     (*somaticReadLog) << "##Tatal truth somatic reads: "  << totalTruthSomaticReads << "\n";
-    (*somaticReadLog) << "##Tatal truth H1-1: "  << truthSomaticReadsMap[ReadHP::H1_1] << "\n";
-    (*somaticReadLog) << "##Tatal truth H2-1: "  << truthSomaticReadsMap[ReadHP::H2_1] << "\n";
-    (*somaticReadLog) << "##Tatal truth H3: "  << truthSomaticReadsMap[ReadHP::H3] << "\n";
+    (*somaticReadLog) << "##Tatal truth HP1-1: "  << truthSomaticReadsMap[ReadHP::H1_1] << "\n";
+    (*somaticReadLog) << "##Tatal truth HP2-1: "  << truthSomaticReadsMap[ReadHP::H2_1] << "\n";
+    (*somaticReadLog) << "##Tatal truth HP3: "  << truthSomaticReadsMap[ReadHP::H3] << "\n";
     
     int separatorLength = 95;
     int columnWidth = 15;
@@ -628,7 +628,7 @@ void SomaticReadBenchmark::writeReadLog(
 
         std::string hpStr = ReadHapUtil::readHapIntToString(hp);
 
-        (*somaticReadLog) << std::left << std::setw(columnWidth) << ("## H" + hpStr)
+        (*somaticReadLog) << std::left << std::setw(columnWidth) << ("## HP" + hpStr)
                         << std::setw(columnWidth) << std::fixed << std::setprecision(4) << precision
                         << std::setw(columnWidth) << std::fixed << std::setprecision(4) << recall
                         << std::setw(columnWidth) << std::fixed << std::setprecision(4) << f1 
