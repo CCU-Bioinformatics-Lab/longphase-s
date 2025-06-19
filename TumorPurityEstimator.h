@@ -4,7 +4,9 @@
 #include "Util.h" 
 #include "HaplotagType.h"
 
-
+/**
+ * @brief Peak trend enumeration for histogram analysis
+ */
 enum PeakTrend{
     NONE_PT = 0,
     UP = 1,
@@ -12,6 +14,9 @@ enum PeakTrend{
     FLAG = 3
 };
 
+/**
+ * @brief Box plot statistical values
+ */
 struct BoxPlotValue {
     size_t data_size;
     double median;
@@ -24,36 +29,52 @@ struct BoxPlotValue {
     BoxPlotValue(): data_size(0), median(0.0), q1(0.0), q3(0.0), iqr(0.0), lowerWhisker(0.0), upperWhisker(0.0), outliers(0){}
 };
 
+/**
+ * @brief Tumor purity estimation data structure
+ */
 struct PurityData{
     std:: string chr;
     int pos;
     double germlineReadHpImbalanceRatio;
     int germlineReadHpCountInNorBam;
 
+    /**
+     * @brief Comparison function for sorting by germline read haplotype consistency ratio
+     */
     static bool compareByGermlineReadHpConsisRatio(const PurityData& a, const PurityData& b){
         return a.germlineReadHpImbalanceRatio < b.germlineReadHpImbalanceRatio;
     }
 };
 
+/**
+ * @brief Histogram data structure
+ */
 struct HistogramData {
     double count;     
     double percentage; 
     HistogramData(double c = 0, double p = 0.0) : count(c), percentage(p) {}
 };
 
+/**
+ * @brief Peak structure for histogram analysis
+ */
 struct Peak{
-    size_t histo_index;
-    double height;
-    PeakTrend left_trend;
-    PeakTrend right_trend;
+    size_t histo_index;     // Histogram index
+    double height;          // Peak height
+    PeakTrend left_trend;   // Left trend
+    PeakTrend right_trend;  // Right trend
+    bool is_main_peak;      // Whether this is a main peak
 
-    bool is_main_peak;
-
-    //sort by index in ascending order
+    /**
+     * @brief Sort peaks by index in ascending order
+     */
     static bool compareByIndex(const Peak& a, const Peak& b){
         return a.histo_index < b.histo_index;
     }
-    //sort by height in descending order
+    
+    /**
+     * @brief Sort peaks by height in descending order
+     */
     static bool compareByHight(const Peak& a, const Peak& b){
         return a.height > b.height;
     }
@@ -65,88 +86,165 @@ struct Peak{
           is_main_peak(false){} 
 };
 
+/**
+ * @brief Histogram class for data visualization and analysis
+ */
 class Histogram {
     private:
-        const size_t MAX_HISTOGRAM_SIZE = 1000000;
+        const size_t MAX_HISTOGRAM_SIZE = 1000000;  ///< Maximum histogram size
 
-        std::vector<HistogramData> histogram;
+        std::vector<HistogramData> histogram;       ///< Histogram data
 
         size_t total_snp_count;
         double max_height;
         std::pair<size_t, size_t> data_range;
 
         // Gaussian filter parameters
-        static constexpr double DEFAULT_SIGMA = 1.0;
-        static constexpr int KERNEL_SIZE_MULTIPLIER = 6;
+        static constexpr double DEFAULT_SIGMA = 1.0;           // Default sigma
+        static constexpr int KERNEL_SIZE_MULTIPLIER = 6;       // Kernel size multiplier
     
     public:
         Histogram();
         ~Histogram();
+        
+        /**
+         * @brief Build histogram from purity data
+         */
         void buildHistogram(const std::vector<PurityData>& purity_data);
+    
         void calculateStatistics();    
+        
         const std::vector<HistogramData>& getHistogram() const { return histogram; }
         size_t getTotalSnpCount() const { return total_snp_count; }
         double getMaxHeight() const { return max_height; }
         const std::pair<size_t, size_t>& getDataRange() const { return data_range; }
 
-        // New Gaussian filter functions
+        // Gaussian filter functions
+        /**
+         * @brief Apply Gaussian filter to histogram
+         */
         void applyGaussianFilter(double sigma = DEFAULT_SIGMA);
+        
+        /**
+         * @brief Create Gaussian kernel
+         */
         std::vector<double> createGaussianKernel(double sigma);
+        
+        /**
+         * @brief Get smoothed histogram
+         */
         Histogram getSmoothedHistogram(double sigma);
 };
 
-
+/**
+ * @brief Peak processor for histogram peak analysis
+ */
 class PeakProcessor {
     private:
+        /**
+         * @brief Valley structure for peak analysis
+         */
         struct Valley {
             size_t index;
             double height;
             double percentage;
         };
 
+        /**
+         * @brief Main peak information
+         */
         struct MainPeakInfo {
-            bool found;
-            size_t index;
-            Peak peak;
+            bool found;        ///< Whether main peak is found
+            size_t index;      ///< Main peak index
+            Peak peak;         ///< Main peak data
             MainPeakInfo() : found(false), index(-1) ,peak() {}
         };
 
+        /**
+         * @brief Saddle point information
+         */
         struct SaddlePointInfo {
-            bool found;
-            size_t index;
-            Peak peak;
-            Peak next_peak;
-            Peak pre_peak;
+            bool found;        ///< Whether saddle point is found
+            size_t index;      ///< Saddle point index
+            Peak peak;         ///< Saddle point peak
+            Peak next_peak;    ///< Next peak
+            Peak pre_peak;     ///< Previous peak
             SaddlePointInfo() : found(false), index(-1) ,peak() ,next_peak() ,pre_peak() {}
         };
 
         static constexpr double THRESHOLD_PERCENTAGE_LIMIT = 0.3;
 
-        std::vector<Peak> peaksVec;
-        int mainPeakCount;
+        std::vector<Peak> peaksVec;    ///< Vector of peaks
+        int mainPeakCount;             ///< Number of main peaks
 
-        MainPeakInfo mainPeak;
-        SaddlePointInfo saddlePoint;
+        MainPeakInfo mainPeak;         ///< Main peak information
+        SaddlePointInfo saddlePoint;   ///< Saddle point information
 
-        Valley lowestValley;
-        int threshold;
-        double thresholdPercentage;
+        Valley lowestValley;           ///< Lowest valley
+        int threshold;                 ///< Threshold value
+        double thresholdPercentage;    ///< Threshold percentage
 
     public:
-        std::vector<std::string> exec_log;
+        std::vector<std::string> exec_log;  ///< Execution log
 
+        /**
+         * @brief Find peaks in histogram
+         */
         void findPeaks(const std::vector<HistogramData>& histogram, const double min_peak_count);
+        
+        /**
+         * @brief Remove close peaks
+         */
         void removeClosePeaks(const size_t minDistance);
+        
+        /**
+         * @brief Determine peak trends
+         */
         void determineTrends();  
+        
+        /**
+         * @brief Find main peak candidates
+         */
         void findMainPeakCandidates();
+        
+        /**
+         * @brief Find first priority main peak
+         */
         bool findFirstPriorityMainPeak();
+        
+        /**
+         * @brief Find saddle point
+         */
         bool findSaddlePoint();
+        
+        /**
+         * @brief Find lowest valley between two peaks
+         */
         bool findLowestValley(const std::vector<HistogramData>& histogram, size_t start_index, size_t end_index, Valley& result);
+        
+        /**
+         * @brief Set threshold by valley analysis
+         */
         void SetThresholdByValley(const std::vector<HistogramData>& histogram, const double &max_height);
+        
+        /**
+         * @brief Get peak with offset
+         */
         Peak getPeak(size_t histo_index, int offset);
+        
+        /**
+         * @brief Transform trend to string
+         */
         std::string transformTrend(const PeakTrend &trend);
+        
+        /**
+         * @brief Get threshold value
+         */
         int getThreshold();
 
+        /**
+         * @brief Write peak valley analysis log
+         */
         void writePeakValleyLog(const std::string& resultPrefix,
                                 const std::vector<HistogramData>& histogram,
                                 const std::vector<HistogramData>& smoothed_histogram,
@@ -161,8 +259,14 @@ class PeakProcessor {
         ~PeakProcessor();
 };
 
+/**
+ * @brief Tumor purity estimator class
+ */
 class TumorPurityEstimator{
     private:
+        /**
+         * @brief Filter counts for different filtering stages
+         */
         struct FilterCounts {
             int imbalanceRatioInNorBam = 0;
             int imbalanceRatioInNorBamMaxThr = 0;
@@ -190,6 +294,37 @@ class TumorPurityEstimator{
         size_t initial_data_size;
         FilterCounts filterCounts;
 
+
+        /**
+         * @brief Build purity feature value vector
+         */
+        void buildPurityFeatureValueVec(std::vector<PurityData> &purityFeatureValueVec);
+
+        /**
+         * @brief Find peak valley threshold
+         */
+        int findPeakValleythreshold(const std::vector<PurityData> &purityFeatureValueVec);
+        
+        /**
+         * @brief Apply peak valley filter
+         */
+        void peakValleyFilter(std::vector<PurityData> &purityFeatureValueVec, int &germlineReadHpCountThreshold);
+
+        /**
+         * @brief Calculate box plot statistics for purity data
+         */
+        BoxPlotValue statisticPurityData(std::vector<PurityData> &purityFeatureValueVec);
+        
+        /**
+         * @brief Remove outliers from purity data
+         */
+        void removeOutliers(std::vector<PurityData> &purityFeatureValueVec, BoxPlotValue &plotValue);
+
+        /**
+         * @brief Write purity estimation results
+         */
+        void writePurityResult(double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold);
+
     public:
         TumorPurityEstimator(
             const std::vector<std::string>& chrVec,
@@ -198,19 +333,17 @@ class TumorPurityEstimator{
             const bool writeLog,
             const std::string& resultPrefix
         ); 
-
         ~TumorPurityEstimator();
+        
+        /**
+         * @brief Estimate tumor purity
+         */
         double estimateTumorPurity();
-        void buildPurityFeatureValueVec(std::vector<PurityData> &purityFeatureValueVec);
 
-        int findPeakValleythreshold(const std::vector<PurityData> &purityFeatureValueVec);
-        void peakValleyFilter(std::vector<PurityData> &purityFeatureValueVec, int &germlineReadHpCountThreshold);
-
-        BoxPlotValue statisticPurityData(std::vector<PurityData> &purityFeatureValueVec);
-        void removeOutliers(std::vector<PurityData> &purityFeatureValueVec, BoxPlotValue &plotValue);
+        /**
+         * @brief Mark statistical flag at somatic positions
+         */
         void markStatisticFlag(std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo);
-
-        void writePurityResult(double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold);
 };
 
 #endif

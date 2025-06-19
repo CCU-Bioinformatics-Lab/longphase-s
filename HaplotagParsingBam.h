@@ -7,31 +7,55 @@ class HaplotagBamParser;
 class ChromosomeProcessor;
 class CigarParser;
 
+/**
+ * @brief Enumeration for BAM parsing modes
+ * 
+ * Defines whether to use single-threaded or multi-threaded processing
+ * for BAM file parsing and haplotagging operations
+ */
 enum ParsingBamMode{
     SINGLE_THREAD = 0,
     MULTI_THREAD = 1
 };
 
+/**
+ * @brief Configuration structure for BAM parsing parameters
+ * 
+ * Contains all the parameters needed for BAM file processing and haplotagging
+ * including thread count, quality thresholds, output settings, and processing options
+ */
 struct ParsingBamConfig{
-    int numThreads;
-    int qualityThreshold;
-    double percentageThreshold;
-    std::string resultPrefix;
-    std::string region;
-    std::string command;
-    std::string version;
-    std::string outputFormat;
+    int numThreads;              /** Number of threads for parallel processing */
+    int qualityThreshold;        /** Mapping quality threshold for read filtering */
+    double percentageThreshold;  /** Percentage threshold for variant calling */
+    std::string resultPrefix;    /** Output file prefix */
+    std::string region;          /** Genomic region to process (optional) */
+    std::string command;         /** Command line string for BAM header */
+    std::string version;         /** Program version string */
+    std::string outputFormat;    /** Output format (bam/cram) */
 
-    bool tagSupplementary;
-    bool writeReadLog;
+    bool tagSupplementary;       /** Whether to tag supplementary alignments */
+    bool writeReadLog;           /** Whether to write detailed read logs */
 };
 
+/**
+ * @brief Control structure for BAM parsing behavior
+ * 
+ * Controls the processing mode and output behavior for BAM file operations
+ * including thread mode selection and output file generation
+ */
 struct ParsingBamControl{
-    ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;
-    bool writeOutputBam = false;
-    bool mappingQualityFilter = false;
+    ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;  /** Processing mode (single/multi-thread) */
+    bool writeOutputBam = false;                         /** Whether to write output BAM file */
+    bool mappingQualityFilter = false;                   /** Whether to apply mapping quality filtering */
 };
 
+/**
+ * @brief Context structure for BAM parser operations
+ * 
+ * Contains all the data structures and files needed for BAM processing
+ * including input files, chromosome information, variant data, and genome type
+ */
 struct BamParserContext{
     const std::string &BamFile;
     const std::string &fastaFile;
@@ -60,6 +84,11 @@ struct BamParserContext{
     {}
 };
 
+/**
+ * @brief Context structure for chromosome processing
+ * 
+ * Contains data specific to processing a single chromosome
+ */
 struct ChrProcContext{
     const std::string &chrName; 
     const int& chrLength;
@@ -82,6 +111,11 @@ struct ChrProcContext{
     {}
 };
 
+/**
+ * @brief Context structure for CIGAR parsing operations
+ * 
+ * Contains all the data needed for parsing CIGAR strings and processing alignments
+ */
 struct CigarParserContext{
     const bam1_t& aln;
     const bam_hdr_t& bamHdr;
@@ -110,151 +144,34 @@ struct CigarParserContext{
     {}
 };
 
-class GermlineHaplotagStrategy{
-    private:
-    protected:
-    public:
-        void judgeSnpHap(
-            const std::string& chrName,
-            VarData& norVar, const std::string& base,
-            int& ref_pos,
-            int& length,
-            int& i,
-            int& aln_core_n_cigar,
-            uint32_t* cigar,
-            std::map<int, MultiGenomeVar>::iterator& currentVariantIter,
-            std::map<int, int>& hpCount,
-            std::map<int, int>& variantsHP,
-            std::map<int, int>& countPS
-        );
-
-        void judgeDeletionHap(
-            const std::string& chrName,
-            const std::string& ref_string,
-            int& ref_pos,
-            int& length,
-            int& query_pos,
-            std::map<int, MultiGenomeVar>::iterator &currentVariantIter,
-            const bam1_t* aln, std::map<int, int>& hpCount,
-            std::map<int, int>& variantsHP,
-            std::map<int, int>& countPS
-        );
-
-        void judgeSVHap(
-            const bam1_t &aln,
-            std::map<Genome, VCF_Info> &vcfSet,
-            std::map<int, int>& hpCount,
-            const int& tagSample
-        );
-
-        int judgeReadHap(
-            std::map<int, int>& hpCount,
-            double& min,
-            double& max,
-            double& percentageThreshold,
-            int& pqValue,
-            int& psValue,
-            std::map<int, int>& countPS,
-            int* totalHighSimilarity,
-            int* totalWithOutVaraint
-        );
-};
-
-class SomaticJudgeHapStrategy{
-    private :
-
-    protected:
-        void judgeNormalSnpHap(
-            const std::string& chrName, 
-            int& curPos,
-            MultiGenomeVar& curVar,
-            std::string& base,
-            std::map<int, int>& hpCount, 
-            std::map<int, int>& norCountPS,
-            std::map<int, int> *variantsHP
-        );
-
-        virtual void judgeTumorOnlySnpHap(
-            const std::string &chrName,
-            int &curPos, MultiGenomeVar &curVar,
-            std::string base,
-            std::map<int, int> &hpCount,
-            std::map<int, int> *tumCountPS,
-            std::map<int, int> *variantsHP,
-            std::vector<int> *tumorAllelePosVec
-        ) = 0;
-
-    public:
-        void judgeSomaticSnpHap(
-            std::map<int, MultiGenomeVar>::iterator &currentVariantIter,
-            std::string chrName,
-            std::string base,
-            std::map<int, int> &hpCount,
-            std::map<int, int> &norCountPS,
-            std::map<int, int> &tumCountPS,
-            std::map<int, int> *variantsHP,
-            std::vector<int> *tumorAllelePosVec
-        );
-
-
-        int judgeSomaticReadHap(
-            std::map<int, int> &hpCount,
-            int &pqValue,
-            std::map<int, int> &norCountPS,
-            double &norHPsimilarity,
-            double &tumHPsimilarity,
-            double percentageThreshold,
-            int *totalHighSimilarity,
-            int *totalCrossTwoBlock,
-            int *totalWithOutVaraint
-        );
-
-};
-
-class ExtractSomaticDataStragtegy: public SomaticJudgeHapStrategy{
-    private:
-    protected:
-        virtual void judgeTumorOnlySnpHap(
-            const std::string &chrName,
-            int &curPos, MultiGenomeVar &curVar,
-            std::string base,
-            std::map<int, int> &hpCount,
-            std::map<int, int> *tumCountPS,
-            std::map<int, int> *variantsHP,
-            std::vector<int> *tumorAllelePosVec
-        ) override;
-    public:
-};
-
-class SomaticHaplotagStrategy: public SomaticJudgeHapStrategy{
-    private:
-    protected:
-        virtual void judgeTumorOnlySnpHap(
-            const std::string &chrName,
-            int &curPos, MultiGenomeVar &curVar,
-            std::string base,
-            std::map<int, int> &hpCount,
-            std::map<int, int> *tumCountPS,
-            std::map<int, int> *variantsHP,
-            std::vector<int> *tumorAllelePosVec
-        ) override;
-    public:
-};
-
+/**
+ * @brief RAII wrapper for BAM file operations
+ * 
+ * Manages BAM file resources and provides safe file handling with automatic cleanup.
+ * Handles input/output BAM files, headers, indexes, and alignment records.
+ * Ensures proper resource management and error handling.
+ */
 class BamFileRAII {
     private:
-        bool writeOutputBam;
-        bool isReleased;
+        bool writeOutputBam;     /** Whether to write output BAM file */
+        bool isReleased;         /** Whether resources have been released */
 
+        /**
+         * @brief Template function to check for null pointers
+         * @param ptr Pointer to check
+         * @param errorMessage Error message to display if pointer is null
+         * 
+         * Throws runtime_error if the pointer is null
+         */
         template<typename T>
         void checkNullPointer(const T* ptr, const std::string& errorMessage) const;
         
     public:
-        samFile* in;
-        samFile* out;
-        bam_hdr_t* bamHdr;
-        hts_idx_t* idx;
-        bam1_t* aln;
+        samFile* in;             /** Input BAM file handle */
+        samFile* out;            /** Output BAM file handle */
+        bam_hdr_t* bamHdr;       /** BAM header information */
+        hts_idx_t* idx;          /** BAM index for random access */
+        bam1_t* aln;             /** BAM alignment record */
 
         BamFileRAII(
             const std::string& BamFile,
@@ -266,22 +183,74 @@ class BamFileRAII {
             const std::string& outputFormat,
             const bool writeOutputBam = false
         );
+        
+        /**
+         * @brief Destructor for BamFileRAII
+         * 
+         * Ensures proper cleanup of BAM file resources
+         */
         ~BamFileRAII();
 
+        /**
+         * @brief Validates the state of BAM file resources
+         * @return true if all resources are valid, exits program if not
+         * 
+         * Checks that all BAM file pointers are valid and not null
+         */
         bool validateState();
+        
+        /**
+         * @brief Writes the current alignment to the output BAM file
+         * 
+         * Writes the alignment record to the output file and handles errors
+         */
         void samWriteBam();
 
+        /**
+         * @brief Destroys all BAM file resources
+         * 
+         * Frees memory and closes file handles
+         */
         void destroy();
 };
 
+/**
+ * @brief Base class for BAM file parsing and haplotagging
+ * 
+ * Provides the framework for parsing BAM files and performing haplotagging operations.
+ * Supports both single-threaded and multi-threaded processing modes.
+ * Uses factory pattern to create chromosome-specific processors.
+ * 
+ * Key functionalities:
+ * - Parse BAM files with configurable parameters
+ * - Support parallel processing across chromosomes
+ * - Handle different processing modes (single/multi-thread)
+ * - Manage BAM file resources and error handling
+ */
 class HaplotagBamParser{
     private:
+        /**
+         * @brief Processes BAM file using parallel processing
+         * @param ctx BAM parser context
+         * @param fastaParser Reference sequence parser
+         * @param threadPool Thread pool for parallel execution
+         * 
+         * Uses OpenMP to process chromosomes in parallel
+         */
         void processBamParallel(
             BamParserContext& ctx,
             const FastaParser &fastaParser,
             htsThreadPool &threadPool
         );
 
+        /**
+         * @brief Processes BAM file using single-threaded processing with output
+         * @param ctx BAM parser context
+         * @param fastaParser Reference sequence parser
+         * @param threadPool Thread pool for parallel execution
+         * 
+         * Processes chromosomes sequentially and writes output BAM file
+         */
         void processBamWithOutput(
             BamParserContext& ctx,
             const FastaParser &fastaParser,
@@ -291,9 +260,24 @@ class HaplotagBamParser{
         const ParsingBamConfig& config;
         const ParsingBamControl& control;
 
-        // Factory method to create a chromosome processor
+        /**
+         * @brief Factory method to create a chromosome processor
+         * @param chr Chromosome name
+         * @return Unique pointer to chromosome processor
+         * 
+         * Pure virtual function that derived classes must implement
+         */
         virtual std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) = 0;
 
+        /**
+         * @brief Gets the last variant position for each chromosome
+         * @param last_pos Vector to store last variant positions
+         * @param chrVec Vector of chromosome names
+         * @param mergedChrVarinat Map of variants by chromosome
+         * @param geneSample Genome type (NORMAL/TUMOR)
+         * 
+         * Determines the last variant position for efficient processing
+         */
         void getLastVarPos(
             std::vector<int>& last_pos,
             const std::vector<std::string>& chrVec,
@@ -302,20 +286,48 @@ class HaplotagBamParser{
         );
 
     public:
+        /**
+         * @brief Constructor for HaplotagBamParser
+         * @param config Configuration parameters for BAM parsing
+         * @param control Control parameters for processing behavior
+         */
         HaplotagBamParser(
             const ParsingBamConfig &config, 
             const ParsingBamControl &control
         );
+        
+        /**
+         * @brief Virtual destructor for HaplotagBamParser
+         */
         virtual ~HaplotagBamParser();
 
+        /**
+         * @brief Main function for parsing BAM files and performing haplotagging
+         * @param ctx Context containing all necessary data structures and files
+         * 
+         * Orchestrates the entire BAM parsing and haplotagging process
+         */
         void parsingBam(BamParserContext& ctx);
-
 };
 
+/**
+ * @brief Base class for processing individual chromosomes
+ * 
+ * Handles the processing of reads within a single chromosome.
+ * Provides virtual methods for different types of read processing.
+ * Supports both output BAM generation and mapping quality filtering.
+ * 
+ * Key functionalities:
+ * - Process reads from a single chromosome
+ * - Handle different read types (mapped, unmapped, secondary, supplementary)
+ * - Apply mapping quality filtering
+ * - Generate output BAM files
+ * - Support post-processing operations
+ */
 class ChromosomeProcessor{
     private:
-        bool writeOutputBam;
-        bool mappingQualityFilter;
+        bool writeOutputBam;         /** Whether to write output BAM file */
+        bool mappingQualityFilter;   /** Whether to filter by mapping quality */
     protected:
 
         virtual void processLowMappingQuality(){};
@@ -325,6 +337,17 @@ class ChromosomeProcessor{
         virtual void processEmptyVariants(){};
         virtual void processOtherCase(){};
 
+        /**
+         * @brief Process a single read
+         * @param aln BAM alignment record
+         * @param bamHdr BAM header information
+         * @param ref_string Reference sequence string
+         * @param currentVariants Current chromosome variants
+         * @param firstVariantIter Iterator to first variant
+         * @param ctx Chromosome processing context
+         * 
+         * Pure virtual method that derived classes must implement
+         */
         virtual void processRead(
             bam1_t &aln, 
             const bam_hdr_t &bamHdr,
@@ -334,33 +357,62 @@ class ChromosomeProcessor{
             ChrProcContext& ctx
         ) = 0;
 
+        /**
+         * @brief Post-processing operations
+         * @param chr Chromosome name
+         * @param currentVariants Current chromosome variants
+         * 
+         * Virtual method for post-processing operations after chromosome completion
+         */
         virtual void postProcess(
             const std::string &chr,
             std::map<int, MultiGenomeVar> &currentVariants
         ){};
         
-        void calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase);
-
-        float calculateVAF(int altCount, int depth);
-        float calculateLowMpqReadRatio(int depth, int filteredMpqDepth);
-        float calculateDelRatio(int delCount, int depth);
-
-        double calculateHaplotypeImbalanceRatio(int& H1readCount, int& H2readCount, int& totalReadCount);
-        double calculatePercentageOfGermlineHp(int& totalReadCount, int& depth);
-
     public:
+        /**
+         * @brief Constructor for ChromosomeProcessor
+         * @param writeOutputBam Whether to write output BAM file
+         * @param mappingQualityFilter Whether to filter by mapping quality
+         */
         ChromosomeProcessor( bool writeOutputBam=false, bool mappingQualityFilter=false);
+        
+        /**
+         * @brief Virtual destructor for ChromosomeProcessor
+         */
         virtual ~ChromosomeProcessor();
 
-        void processSingleChromosome(
+        /**
+         * @brief Processes a single chromosome
+         * @param ctx Chromosome processing context
+         * @param bamRAII BAM file RAII wrapper
+         * @param fastaParser Reference sequence parser
+         * @param mergedChrVarinat Map of variants by chromosome
+         * 
+         * Main function for processing all reads in a chromosome
+         */
+        void processSingleChrom(
             ChrProcContext& ctx,
             BamFileRAII& bamRAII,
             const FastaParser& fastaParser,
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat        
         );
-
 };
 
+/**
+ * @brief Base class for parsing CIGAR strings
+ * 
+ * Provides the framework for parsing CIGAR operations and processing alignments.
+ * Handles different CIGAR operations (match, insertion, deletion, etc.) and
+ * determines haplotype assignments based on variant positions.
+ * 
+ * Key functionalities:
+ * - Parse CIGAR strings from BAM alignments
+ * - Handle different CIGAR operations (M, I, D, S, H, N, P, =, X)
+ * - Track reference and query positions
+ * - Count haplotype assignments and phase sets
+ * - Support base nucleotide counting with quality filtering
+ */
 class CigarParser{
     private:
     protected:
@@ -378,25 +430,102 @@ class CigarParser{
 
         std::map<int, MultiGenomeVar>::iterator currentVariantIter;
 
-        // Virtual methods that derived classes must implement
+        /**
+         * @brief Process match operation (M, =, X)
+         * @param length Length of the match operation
+         * @param cigar CIGAR array
+         * @param i Current CIGAR index
+         * @param aln_core_n_cigar Total number of CIGAR operations
+         * @param base Base nucleotide at current position
+         * 
+         * Virtual method for handling match operations
+         */
         virtual void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base){};
+        
+        /**
+         * @brief Process insertion operation (I)
+         * @param length Length of the insertion
+         * 
+         * Virtual method for handling insertion operations
+         */
         virtual void processInsertionOperation(int& length){};
+        
+        /**
+         * @brief Process deletion operation (D)
+         * @param length Length of the deletion
+         * @param cigar CIGAR array
+         * @param i Current CIGAR index
+         * @param aln_core_n_cigar Total number of CIGAR operations
+         * @param alreadyJudgeDel Whether deletion has already been judged
+         * 
+         * Virtual method for handling deletion operations
+         */
         virtual void processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel){};
+        
+        /**
+         * @brief Process skipped operation (N)
+         * @param length Length of the skipped region
+         * 
+         * Virtual method for handling skipped operations
+         */
         virtual void processSkippedOperation(int& length){};
+        
+        /**
+         * @brief Process soft clipping operation (S)
+         * @param length Length of the soft clipping
+         * 
+         * Virtual method for handling soft clipping operations
+         */
         virtual void processSoftClippingOperation(int& length){};
+        
+        /**
+         * @brief Process hard clipping operation (H)
+         * 
+         * Virtual method for handling hard clipping operations
+         */
         virtual void processHardClippingOperation(){};
         
-        //count base nucleotide
+        /**
+         * @brief Count base nucleotides and apply mapping quality filtering
+         * @param posBase Position base information structure
+         * @param base Base nucleotide
+         * @param aln BAM alignment record
+         * @param mpqThreshold Mapping quality threshold
+         * 
+         * Updates base counts and filtered depth based on mapping quality
+         */
         void countBaseNucleotide(PosBase& posBase, std::string& base, const bam1_t& aln, const float& mpqThreshold);
+        
+        /**
+         * @brief Count deletion bases
+         * @param posBase Position base information structure
+         * 
+         * Updates deletion count and total depth
+         */
         void countDeletionBase(PosBase& posBase);
 
     public:
-
-        // CigarParser(int& ref_pos, int& query_pos);
+        /**
+         * @brief Constructor for CigarParser
+         * @param ctx CIGAR parsing context
+         * @param ref_pos Reference position (will be modified)
+         * @param query_pos Query position (will be modified)
+         */
         CigarParser(CigarParserContext& ctx, int& ref_pos, int& query_pos);
 
+        /**
+         * @brief Virtual destructor for CigarParser
+         */
         virtual ~CigarParser();
 
+        /**
+         * @brief Parses CIGAR string and processes alignment operations
+         * @param hpCount Map to count haplotype assignments
+         * @param variantsHP Map to record variant haplotype assignments
+         * @param norCountPS Map to count phase set assignments
+         * 
+         * Main function for parsing CIGAR operations and determining haplotype assignments
+         */
         void parsingCigar(
             std::map<int, int>& hpCount,
             std::map<int, int>& variantsHP,

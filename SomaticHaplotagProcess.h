@@ -170,7 +170,7 @@ class SomaticHaplotagProcess: public HaplotagProcess{
         void setChrVecAndChrLength() override;
         
         // calculate SNP counts
-        void calculateSnpCounts();
+        void displaySnpCounts();
 
         void postprocessForHaplotag() override;
 
@@ -194,7 +194,7 @@ class SomaticHaplotagProcess: public HaplotagProcess{
         SomaticHaplotagProcess(SomaticHaplotagParameters &params);
         ~SomaticHaplotagProcess() override;
 
-        virtual void taggingProcess() override;
+        virtual void pipelineProcess() override;
 };
 
 #endif

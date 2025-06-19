@@ -13,6 +13,14 @@
 class ArgumentManager;
 class OptionDefiner;
 
+/**
+ * @brief Template struct for handling parameter-specific operations
+ * @tparam Params The parameter type to handle
+ * 
+ * This template struct provides a framework for parameter initialization,
+ * argument loading, validation, and command recording. Derived classes
+ * should specialize this template for their specific parameter types.
+ */
 template<typename Params>
 struct ParamsHandler{
     // Initialize the parameters
@@ -34,6 +42,11 @@ struct ParamsHandler{
     static int getHelpEnumNum() {return 0;}
 };
 
+/**
+ * @brief Namespace containing file validation utilities
+ * 
+ * Provides functions to validate required and optional files
+ */
 namespace FileValidator{
     // Validate if a required file exists
     bool validateRequiredFile(const std::string& filePath, const std::string& fileDescription, const std::string& programName);
@@ -43,6 +56,12 @@ namespace FileValidator{
 }
 
 
+/**
+ * @brief Abstract base class for defining command line options
+ * 
+ * Derived classes must implement defineOptions() to specify their
+ * command line argument structure
+ */
 class OptionDefiner {
     public:
         virtual ~OptionDefiner() = default;
@@ -58,7 +77,12 @@ class OptionDefiner {
         virtual void defineOptions(ArgumentManager& manager) = 0;
 };
 
-// Class to manage command line option definitions
+/**
+ * @brief Base class for managing command line argument parsing
+ * 
+ * Provides functionality for parsing command line arguments, validating
+ * files and parameters, and managing option definitions through OptionDefiner
+ */
 class ArgumentManager {
 
     protected:
@@ -133,6 +157,13 @@ class ArgumentManager {
 };
 
 
+/**
+ * @brief Template class for managing typed parameters with argument parsing
+ * @tparam Params The parameter type to manage
+ * 
+ * This template class extends ArgumentManager to provide type-safe parameter
+ * management. It uses ParamsHandler<Params> to handle parameter-specific operations.
+ */
 template<typename Params>
 class ArgumentTemManager : public ArgumentManager{
     private:

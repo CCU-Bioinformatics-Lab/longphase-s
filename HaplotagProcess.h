@@ -3,6 +3,7 @@
 
 #include "HaplotagType.h"
 #include "HaplotagParsingBam.h"
+#include "HaplotagStragtegy.h"
 #include "HaplotagVcfParser.h"
 #include "HaplotagLogging.h"
 
@@ -241,7 +242,7 @@ class HaplotagProcess
 
     public:
         HaplotagProcess(HaplotagParameters &params);
-        virtual void taggingProcess();
+        virtual void pipelineProcess();
         virtual ~HaplotagProcess();
 
 };

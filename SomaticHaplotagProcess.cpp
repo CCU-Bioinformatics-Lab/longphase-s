@@ -34,7 +34,7 @@ void SomaticHaplotagProcess::printParamsMessage(){
     std::cerr<< "benchmark metrics file       : " << (sParams.benchmarkVcf != "" ? sParams.basic.bamCfg.resultPrefix + sParams.metricsSuffix : "") << "\n";
     std::cerr<< "log file                     : " << (sParams.basic.bamCfg.writeReadLog ? (sParams.basic.bamCfg.resultPrefix+".out") : "") << "\n";
     std::cerr<< "-------------------------------------------\n";
-    std::cerr<< "[Somatic Haplotag Params] " << "\n";
+    std::cerr<< "[Somatic Haplotagging Params] " << "\n";
     std::cerr<< "number of threads            : " << sParams.basic.bamCfg.numThreads << "\n";
     std::cerr<< "tag region                   : " << (!sParams.basic.bamCfg.region.empty() ? sParams.basic.bamCfg.region : "all") << "\n";
     std::cerr<< "filter mapping quality below : " << sParams.basic.bamCfg.qualityThreshold << "\n";
@@ -42,7 +42,7 @@ void SomaticHaplotagProcess::printParamsMessage(){
     std::cerr<< "write log file               : " << (sParams.basic.bamCfg.writeReadLog ? "enabled" : "disabled") << "\n";
     std::cerr<< "tag supplementary            : " << (sParams.basic.bamCfg.tagSupplementary ? "enabled" : "disabled") << "\n";
     std::cerr<< "\n";
-    std::cerr<< "[Somatic Calling Params] " << "\n";
+    std::cerr<< "[Somatic Variant Calling Params] " << "\n";
     std::cerr<< "mapping quality              : " << sParams.basic.bamCfg.qualityThreshold << "\n";
     std::cerr<< "tumor purity value           : " << (sParams.callerCfg.estimateTumorPurity ? "automatic estimation" : std::to_string(sParams.callerCfg.tumorPurity)) << "\n";
     std::cerr<< "variant filtering            : " << (sParams.callerCfg.enableFilter ? "enabled" : "disabled") << "\n";
@@ -51,7 +51,7 @@ void SomaticHaplotagProcess::printParamsMessage(){
     std::cerr<< "-------------------------------------------\n";
 }
 
-void SomaticHaplotagProcess::taggingProcess()
+void SomaticHaplotagProcess::pipelineProcess()
 {
     printParamsMessage();
     // decide on the type of tagging for VCF and BAM files
@@ -62,8 +62,8 @@ void SomaticHaplotagProcess::taggingProcess()
     parseVariantFiles(vcfParser);
     //decide which genome sample chrVec and chrLength belong to
     setChrVecAndChrLength();
-    // calculate SNP counts
-    calculateSnpCounts();
+    // [debug] calculate SNP counts
+    // displaySnpCounts();
     // update chromosome processing based on region
     setProcessingChromRegion();
 
@@ -87,13 +87,14 @@ void SomaticHaplotagProcess::taggingProcess()
         std::cerr<< difftime(time(NULL), begin) << "s\n";
     }
 
-    // remove tumor & benchmark variants out bed regions
+    // remove tumor & benchmark variants outside bed regions
     if(somaticBenchmark.isLoadBedFile() && somaticBenchmark.isEnabled()){
-        std::cerr<< "removing tumor & benchmark variants out bed regions ... ";
+        std::cerr << "[Benchmark] removing tumor & truth somatic variants outside bed regions ... ";
         std::time_t begin = time(NULL);
         somaticBenchmark.removeVariantsOutBedRegion(*mergedChrVarinat);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
-        somaticBenchmark.displayBedRegionCount(*chrVec);
+        // [debug] display variants in bed region count
+        // somaticBenchmark.displayBedRegionCount(*chrVec);
     }
 
     // tag read
@@ -124,25 +125,24 @@ void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
     //parse benchmark vcf for benchmarking
     if(sParams.benchmarkVcf != ""){
         std::time_t begin = time(NULL);
-        std::cerr<< "parsing benchmark VCF ... ";
+        std::cerr<< "[Benchmark] parsing truth VCF ... ";
         somaticBenchmark.setEnabled(true);
-        somaticBenchmark.loadHighConSomatic(sParams.benchmarkVcf, vcfSet[Genome::TRUTH_SOMATIC], *mergedChrVarinat);
+        somaticBenchmark.loadTruthSomaticVCF(sParams.benchmarkVcf, vcfSet[Genome::TRUTH_SOMATIC], *mergedChrVarinat);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
 
-        somaticBenchmark.displaySomaticVarCount(vcfSet[Genome::TRUTH_SOMATIC].chrVec, *mergedChrVarinat);
+        // [debug] display somatic variant count
+        // somaticBenchmark.displaySomaticVarCount(vcfSet[Genome::TRUTH_SOMATIC].chrVec, *mergedChrVarinat);
     }
 
     // parse benchmark bed file
     if(sParams.benchmarkBedFile != "" && somaticBenchmark.isEnabled()){
         std::time_t begin = time(NULL);
-        std::cerr<< "parsing benchmark bed file ... ";
+        std::cerr<< "[Benchmark] parsing truth BED file ... ";
         somaticBenchmark.parseBedFile(sParams.benchmarkBedFile);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
 
-        begin = time(NULL);
-        std::cerr<< "marking variants in bed regions ... ";
+        // mark variants in bed regions
         somaticBenchmark.markVariantsInBedRegions(vcfSet[TUMOR].chrVec, *mergedChrVarinat);
-        std::cerr<< difftime(time(NULL), begin) << "s\n";
     }
 }
 
@@ -161,7 +161,7 @@ void SomaticHaplotagProcess::setChrVecAndChrLength(){
 
         // if tumor VCFs chromosome count are empty, use normal VCFs chromosome count
         if(vcfSet[Genome::TUMOR].chrVec.empty()){
-            std::cerr<< "[Warning] tumor VCF chromosome count is empty" << std::endl;
+            std::cerr<< "[WARNING] tumor VCF chromosome count is empty" << std::endl;
             if(vcfSet[Genome::NORMAL].chrVec.empty()){
                 throw std::runtime_error("tumor & normal VCFs chromosome count are empty");
             }else{
@@ -176,7 +176,7 @@ void SomaticHaplotagProcess::setChrVecAndChrLength(){
 
         // if tumor VCFs chromosome length are empty, use normal VCFs chromosome length
         if(vcfSet[Genome::TUMOR].chrLength.empty()){
-            std::cerr<< "[Warning] tumor VCF chromosome length is empty" << std::endl;
+            std::cerr<< "[WARNING] tumor VCF chromosome length is empty" << std::endl;
             if(vcfSet[Genome::NORMAL].chrLength.empty()){
                 throw std::runtime_error("tumor & normal VCFs chromosome length are empty");
             }else{
@@ -188,12 +188,12 @@ void SomaticHaplotagProcess::setChrVecAndChrLength(){
         }
 
     }catch(const std::exception& e){
-        std::cerr << "[Error] (setChrVecAndChrLength) :" << e.what() << std::endl;
+        std::cerr << "[ERROR] (setChrVecAndChrLength) :" << e.what() << std::endl;
         return;
     }
 }
 
-void SomaticHaplotagProcess::calculateSnpCounts(){
+void SomaticHaplotagProcess::displaySnpCounts(){
     int tumor_snp_count = 0;
     int normal_snp_count = 0;
     int overlap_snp_count = 0;
@@ -289,10 +289,10 @@ SomaticHaplotagChrProcessor::SomaticHaplotagChrProcessor(
 
 SomaticHaplotagChrProcessor::~SomaticHaplotagChrProcessor(){
     delete somaticReadCounter;
-    #pragma omp critical
-    {
-        std::cerr << chr << " : " << difftime(time(NULL), begin) << "s\n";
-    }
+    // #pragma omp critical
+    // {
+    //     std::cerr << chr << " : " << difftime(time(NULL), begin) << "s\n";
+    // }
 }
 
 int SomaticHaplotagChrProcessor::judgeHaplotype(
@@ -429,7 +429,7 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
     
     // //record somatic read
     somaticReadCounter->recordTaggedRead(chrName, readID, hpResult, variantsHP, hpCount, norHPsimilarity, deriveByHpSimilarity, currentChrVariants);
-    somaticReadCounter->recordCrossingHighConSnpRead(chrName, readID, hpResult, variantsHP, hpCount, norHPsimilarity, deriveByHpSimilarity, currentChrVariants);
+    somaticReadCounter->recordCrossingTruthSomaticSnpRead(chrName, readID, hpResult, variantsHP, hpCount, norHPsimilarity, deriveByHpSimilarity, currentChrVariants);
 
     //write tag log file
     if(tagResult!=NULL){
@@ -609,7 +609,7 @@ void SomaticTagLog::writeBasicColumns(){
 void SomaticTagLog::writeTagReadLog(TagReadLog& data) {
 
     if (data.tumCountPS == nullptr){
-        std::cerr << "ERROR (writeTagReadLog) => Tumor PS count is nullptr" << std::endl;
+        std::cerr << "[ERROR](writeTagReadLog) => Tumor PS count is nullptr" << std::endl;
         exit(1);
     }
 

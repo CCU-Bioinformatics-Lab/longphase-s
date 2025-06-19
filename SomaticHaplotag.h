@@ -28,7 +28,7 @@ class SomaticHaplotagOptionDefiner : public HaplotagOptionDefiner {
         virtual ~SomaticHaplotagOptionDefiner() = default;
 };
 
-class SomaticHaplotagArgumentManager : public ArgumentTemManager<SomaticHaplotagParameters> {
+class SomaticHaplotagArgManager : public ArgumentTemManager<SomaticHaplotagParameters> {
     protected:
 
         virtual OptionDefiner* createOptionDefiner() override {
@@ -36,9 +36,9 @@ class SomaticHaplotagArgumentManager : public ArgumentTemManager<SomaticHaplotag
         }
 
     public:
-        SomaticHaplotagArgumentManager(const std::string& program, const std::string& version, const char* HELP_MESSAGE)
+        SomaticHaplotagArgManager(const std::string& program, const std::string& version, const char* HELP_MESSAGE)
          : ArgumentTemManager<SomaticHaplotagParameters>(program, version, HELP_MESSAGE) {}
-        virtual ~SomaticHaplotagArgumentManager() = default;
+        virtual ~SomaticHaplotagArgManager() = default;
 };
 
 

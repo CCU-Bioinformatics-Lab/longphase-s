@@ -1,5 +1,13 @@
 #include "TumorPurityEstimator.h"
 
+/**
+ * @brief Constructor for TumorPurityEstimator
+ * @param chrVec Chromosome vector
+ * @param chrPosNorBase Chromosome position normal base data
+ * @param chrPosSomaticInfo Chromosome position somatic information
+ * @param writeLog Whether to write log
+ * @param resultPrefix Result prefix
+ */
 TumorPurityEstimator::TumorPurityEstimator(
     const std::vector<std::string>& chrVec,
     std::map<std::string, std::map<int, PosBase>>& chrPosNorBase,
@@ -14,8 +22,14 @@ TumorPurityEstimator::~TumorPurityEstimator(){
 
 }
 
+/**
+ * @brief Main function to estimate tumor purity
+ * @return Estimated tumor purity value
+ * 
+ * Performs multi-stage filtering and statistical analysis to estimate tumor purity
+ */
 double TumorPurityEstimator::estimateTumorPurity(){
-   std::cerr << "estimating tumor purity... ";
+   std::cerr << "estimating tumor purity ... ";
     std::time_t begin = time(NULL);
 
     // median, iqr
@@ -94,6 +108,12 @@ double TumorPurityEstimator::estimateTumorPurity(){
     return purity;
 }
 
+/**
+ * @brief Build purity feature value vector with initial filtering
+ * @param purityFeatureValueVec Output vector of purity data
+ * 
+ * Applies first stage filtering criteria to build the initial dataset for purity estimation
+ */
 void TumorPurityEstimator::buildPurityFeatureValueVec(std::vector<PurityData> &purityFeatureValueVec){
     for(auto chr : chrVec){
         std::map<int, SomaticData>::iterator somaticPosIter = chrPosSomaticInfo[chr].begin();
@@ -154,10 +174,14 @@ void TumorPurityEstimator::buildPurityFeatureValueVec(std::vector<PurityData> &p
     }
 }
 
-
+/**
+ * @brief Find peak valley threshold for filtering
+ * @param purityFeatureValueVec Input purity data vector
+ * @return Dynamic threshold value for peak valley filtering
+ * 
+ * Uses histogram analysis and peak detection to determine optimal filtering threshold
+ */
 int TumorPurityEstimator::findPeakValleythreshold(const std::vector<PurityData> &purityFeatureValueVec){
-    
-    // std::cerr << "[INFO] peak valley filter ..." << std::endl;
     int threshold = 0;
 
     try{
@@ -168,7 +192,6 @@ int TumorPurityEstimator::findPeakValleythreshold(const std::vector<PurityData> 
         histogram.calculateStatistics();
 
         double sigma = 0.5;
-        // std::cerr << "[INFO] apply gaussian filter with sigma: " << sigma << std::endl;
         // apply gaussian filter
         Histogram smoothedHistogram = histogram.getSmoothedHistogram(sigma);
 
@@ -199,7 +222,7 @@ int TumorPurityEstimator::findPeakValleythreshold(const std::vector<PurityData> 
 
         threshold = peakSet.getThreshold();
 
-        // print the exec_log
+        // [debug] print the exec_log
         // for(const auto& log : peakSet.exec_log){
         //     std::cout << log << std::endl;
         // }
@@ -228,6 +251,13 @@ int TumorPurityEstimator::findPeakValleythreshold(const std::vector<PurityData> 
     return threshold;
 }
 
+/**
+ * @brief Apply peak valley filter to purity data
+ * @param purityFeatureValueVec Purity data vector to filter
+ * @param germlineReadHpCountThreshold Threshold for filtering
+ * 
+ * Removes data points below the dynamic threshold determined by peak analysis
+ */
 void TumorPurityEstimator::peakValleyFilter(std::vector<PurityData> &purityFeatureValueVec, int &germlineReadHpCountThreshold){
     std::vector<PurityData>::iterator vecFeatureIter = purityFeatureValueVec.begin();
     while(vecFeatureIter != purityFeatureValueVec.end()){
@@ -242,6 +272,13 @@ void TumorPurityEstimator::peakValleyFilter(std::vector<PurityData> &purityFeatu
     }
 }
 
+/**
+ * @brief Remove outliers from purity data using box plot method
+ * @param purityFeatureValueVec Purity data vector
+ * @param plotValue Box plot statistics
+ * 
+ 
+ */
 void TumorPurityEstimator::removeOutliers(std::vector<PurityData> &purityFeatureValueVec, BoxPlotValue &plotValue){
      std::vector<PurityData>::iterator vecIter = purityFeatureValueVec.begin();
 
@@ -259,6 +296,14 @@ void TumorPurityEstimator::removeOutliers(std::vector<PurityData> &purityFeature
         }
     }
 }
+
+/**
+ * @brief Calculate box plot statistics for purity data
+ * @param purityFeatureValueVec Input purity data vector
+ * @return Box plot statistical values
+ * 
+ * Calculates median, quartiles, IQR, whiskers, and outlier count using linear interpolation
+ */
 BoxPlotValue TumorPurityEstimator::statisticPurityData(std::vector<PurityData> &purityFeatureValueVec){
     BoxPlotValue plotValue;
     plotValue.data_size = purityFeatureValueVec.size();
@@ -324,6 +369,12 @@ BoxPlotValue TumorPurityEstimator::statisticPurityData(std::vector<PurityData> &
     return plotValue;
 }
 
+/**
+ * @brief Mark statistical flag at somatic positions
+ * @param chrPosSomaticInfo Somatic information map to update
+ * 
+ * Updates the statisticPurity flag at somatic positions based on filtering results
+ */
 void TumorPurityEstimator::markStatisticFlag(std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo){
     for(const auto& chr : chrVec) {
         auto& chrInfo = chrPosSomaticInfo[chr];
@@ -338,6 +389,15 @@ void TumorPurityEstimator::markStatisticFlag(std::map<std::string, std::map<int,
     }
 }
 
+/**
+ * @brief Write purity estimation results to file
+ * @param purity Estimated purity value
+ * @param plotValue Box plot statistics
+ * @param iteration_times Number of outlier removal iterations
+ * @param germlineReadHpCountThreshold Dynamic threshold used
+ * 
+ * Writes comprehensive purity estimation report including filtering statistics and results
+ */
 void TumorPurityEstimator::writePurityResult(double &purity, BoxPlotValue &plotValue, size_t &iteration_times, int &germlineReadHpCountThreshold){
     try{
         std::ofstream purityResult = std::ofstream(resultPrefix+"_purity.out");
@@ -400,6 +460,12 @@ Histogram::~Histogram(){
 
 }
 
+/**
+ * @brief Build histogram from purity data
+ * @param purityFeatureValueVec Input purity data vector
+ * 
+ * Creates histogram bins based on germline read haplotype counts
+ */
 void Histogram::buildHistogram(const std::vector<PurityData>& purityFeatureValueVec){
     try{
         if(purityFeatureValueVec.empty()){
@@ -430,6 +496,11 @@ void Histogram::buildHistogram(const std::vector<PurityData>& purityFeatureValue
     }
 }
 
+/**
+ * @brief Calculate histogram statistics and percentages
+ * 
+ * Computes cumulative percentages and updates data range information
+ */
 void Histogram::calculateStatistics(){
     // calculate the percentage of data
     try{
@@ -470,6 +541,12 @@ void Histogram::calculateStatistics(){
     }
 }
 
+/**
+ * @brief Apply Gaussian filter to smooth histogram data
+ * @param sigma Standard deviation for Gaussian kernel
+ * 
+ * Uses convolution with Gaussian kernel to smooth histogram for peak detection
+ */
 void Histogram::applyGaussianFilter(double sigma) {
     try{
         if (histogram.empty()) {
@@ -517,6 +594,13 @@ void Histogram::applyGaussianFilter(double sigma) {
     }
 } 
 
+/**
+ * @brief Create Gaussian kernel for smoothing
+ * @param sigma Standard deviation parameter
+ * @return Gaussian kernel vector
+ * 
+ * Creates normalized Gaussian kernel for convolution-based smoothing
+ */
 std::vector<double> Histogram::createGaussianKernel(double sigma) {
     const double MIN_SIGMA = 0.1;
     const double MAX_SIGMA = 2.0;
@@ -550,6 +634,13 @@ std::vector<double> Histogram::createGaussianKernel(double sigma) {
     return kernel;
 }
 
+/**
+ * @brief Get smoothed histogram copy
+ * @param sigma Standard deviation for Gaussian filter
+ * @return Smoothed histogram object
+ * 
+ * Returns a new histogram object with applied Gaussian smoothing
+ */
 Histogram Histogram::getSmoothedHistogram(double sigma) {
     // create a copy of the current object
     Histogram temp = *this; 
@@ -574,6 +665,13 @@ PeakProcessor::~PeakProcessor(){
 
 }
 
+/**
+ * @brief Find peaks in histogram data
+ * @param histogram Input histogram data
+ * @param min_peak_height Minimum height threshold for peak detection
+ * 
+ * Identifies local maxima in histogram that exceed the minimum height threshold
+ */
 void PeakProcessor::findPeaks(const std::vector<HistogramData>& histogram, const double min_peak_height){
     try{
         if(histogram.empty()){
@@ -617,6 +715,12 @@ void PeakProcessor::findPeaks(const std::vector<HistogramData>& histogram, const
     }
 }
 
+/**
+ * @brief Remove peaks that are too close to each other
+ * @param minDistance Minimum distance between peaks
+ * 
+ * Removes the lower peak when two peaks are closer than the minimum distance
+ */
 void PeakProcessor::removeClosePeaks(const size_t minDistance) {
     try{
         if (peaksVec.empty()) {
@@ -642,6 +746,11 @@ void PeakProcessor::removeClosePeaks(const size_t minDistance) {
     }
 }
 
+/**
+ * @brief Determine trends between adjacent peaks
+ * 
+ * Analyzes the relationship between consecutive peaks to determine upward/downward trends
+ */
 void PeakProcessor::determineTrends() {
     try{
         if(peaksVec.empty()){
@@ -667,6 +776,11 @@ void PeakProcessor::determineTrends() {
     }
 }
 
+/**
+ * @brief Identify main peak candidates based on trend analysis
+ * 
+ * Marks peaks as main peaks if they have appropriate trend patterns (up-down or edge patterns)
+ */
 void PeakProcessor::findMainPeakCandidates() {
     try{
         //find the main peak
@@ -704,6 +818,12 @@ void PeakProcessor::findMainPeakCandidates() {
     }
 }
 
+/**
+ * @brief Find the first priority main peak
+ * @return True if main peak is found, false otherwise
+ * 
+ * Selects the highest index peak among the two highest peaks as the first priority main peak
+ */
 bool PeakProcessor::findFirstPriorityMainPeak() {
 
     bool found_first_main_peak = false;
@@ -743,6 +863,12 @@ bool PeakProcessor::findFirstPriorityMainPeak() {
     return found_first_main_peak;
 }
 
+/**
+ * @brief Find saddle point for threshold determination
+ * @return True if saddle point is found, false otherwise
+ * 
+ * Locates the saddle point (valley) before the first main peak for threshold calculation
+ */
 bool PeakProcessor::findSaddlePoint() {
     //find the saddle point
     bool found_saddle_point = false;
@@ -794,6 +920,16 @@ bool PeakProcessor::findSaddlePoint() {
     return found_saddle_point;
 }
 
+/**
+ * @brief Find the lowest valley between two peaks
+ * @param histogram Input histogram data
+ * @param start_index Start index for search
+ * @param end_index End index for search
+ * @param result Output valley information
+ * @return True if valley is found, false otherwise
+ * 
+ * Searches for the lowest point (valley) between two specified indices
+ */
 bool PeakProcessor::findLowestValley(const std::vector<HistogramData>& histogram, size_t start_index, size_t end_index, Valley& result) {
     // check the index
     if (start_index >= end_index || end_index > histogram.size()) {
@@ -820,6 +956,13 @@ bool PeakProcessor::findLowestValley(const std::vector<HistogramData>& histogram
     return found;
 }
 
+/**
+ * @brief Set threshold based on valley analysis
+ * @param histogram Input histogram data
+ * @param max_height Maximum height in histogram
+ * 
+ * Determines optimal threshold by analyzing valleys between peaks
+ */
 void PeakProcessor::SetThresholdByValley(const std::vector<HistogramData>& histogram, const double &max_height){
     bool found_first_main_peak = false;
     mainPeak.peak = Peak();
@@ -909,6 +1052,14 @@ void PeakProcessor::SetThresholdByValley(const std::vector<HistogramData>& histo
 
 }
 
+/**
+ * @brief Get peak with specified offset
+ * @param histo_index Target histogram index
+ * @param offset Offset from target peak
+ * @return Peak at the specified offset
+ * 
+ * Returns peak data at the specified offset from the given histogram index
+ */
 Peak PeakProcessor::getPeak(size_t histo_index, int offset){
     try{
         for(size_t i = 0; i < peaksVec.size(); i++){
@@ -926,10 +1077,19 @@ Peak PeakProcessor::getPeak(size_t histo_index, int offset){
     }
 }
 
+/**
+ * @brief Get the calculated threshold value
+ * @return Threshold value
+ */
 int PeakProcessor::getThreshold(){
     return threshold;
 }
 
+/**
+ * @brief Convert peak trend enum to string
+ * @param trend Peak trend enum value
+ * @return String representation of trend
+ */
 std::string PeakProcessor::transformTrend(const PeakTrend &trend) {
     switch(trend) {
         case PeakTrend::NONE_PT: return "NONE";
@@ -940,6 +1100,20 @@ std::string PeakProcessor::transformTrend(const PeakTrend &trend) {
     }
 }
 
+/**
+ * @brief Write comprehensive peak valley analysis log
+ * @param resultPrefix Output file prefix
+ * @param histogram Original histogram data
+ * @param smoothed_histogram Smoothed histogram data
+ * @param total_snp_count Total SNP count
+ * @param data_range Data range information
+ * @param max_height Maximum height
+ * @param MIN_PEAK_RATIO Minimum peak ratio
+ * @param peak_threshold Peak threshold
+ * @param sigma Gaussian filter sigma
+ * 
+ * Writes detailed analysis results including peaks, valleys, trends, and threshold information
+ */
 void PeakProcessor::writePeakValleyLog(
     const std::string& resultPrefix,
     const std::vector<HistogramData>& histogram,

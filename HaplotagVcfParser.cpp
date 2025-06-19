@@ -1,5 +1,9 @@
 #include "HaplotagVcfParser.h"
 
+/**
+ * @brief Constructor - Initialize VCF parser with sample type
+ * @param tagSample Sample type (NORMAL or TUMOR) to process
+ */
 VcfParser::VcfParser(Genome tagSample): tagSample(tagSample){
     this->tagSample = tagSample;
     this->mode = VCF_PARSER_LOAD_NODE;
@@ -13,6 +17,11 @@ VcfParser::~VcfParser(){
 
 }
 
+/**
+ * @brief Reset parser state and clear internal data structures
+ * 
+ * Called between parsing different file types to ensure clean state
+ */
 void VcfParser::reset(){
     parseSnpFile = false;
     parseSVFile = false;
@@ -22,6 +31,15 @@ void VcfParser::reset(){
     writeCommandline = false;
 }
 
+/**
+ * @brief Main entry point for parsing VCF files
+ * 
+ * Automatically detects file format (.vcf or .vcf.gz) and delegates to appropriate parser
+ * 
+ * @param variantFile Input VCF file path
+ * @param Info VCF metadata and sample information
+ * @param mergedChrVarinat Output container for parsed variants
+ */
 void VcfParser::parsingVCF(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     mode = VCF_PARSER_LOAD_NODE;
     if( variantFile.find("gz") != std::string::npos ){
@@ -39,6 +57,17 @@ void VcfParser::parsingVCF(std::string &variantFile, VCF_Info &Info, std::map<st
     return;
 }
 
+/**
+ * @brief Write processed variant data to output VCF file
+ * 
+ * Creates output file with suffix "_sc.vcf" and writes processed variants
+ * with somatic variant annotations
+ * 
+ * @param variantFile Input VCF file path (for header information)
+ * @param Info VCF metadata and sample information
+ * @param mergedChrVarinat Input container with processed variants
+ * @param outputPrefix Output file prefix
+ */
 void VcfParser::writingResultVCF(
     std::string &variantFile,
     VCF_Info &Info,
@@ -72,6 +101,16 @@ void VcfParser::writingResultVCF(
     resultVcf = nullptr;
 }
 
+/**
+ * @brief Parse compressed VCF file (.vcf.gz) using zlib
+ * 
+ * Uses gzFile interface to read compressed VCF files with dynamic buffer allocation
+ * for efficient memory usage with large files
+ * 
+ * @param variantFile Input compressed VCF file path
+ * @param Info VCF metadata and sample information
+ * @param mergedChrVarinat Output container for parsed variants
+ */
 void VcfParser::compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     gzFile file = gzopen(variantFile.c_str(), "rb");
     if(variantFile=="")
@@ -126,6 +165,15 @@ void VcfParser::compressParser(std::string &variantFile, VCF_Info &Info, std::ma
     }    
 }
 
+/**
+ * @brief Parse uncompressed VCF file (.vcf)
+ * 
+ * Reads uncompressed VCF files line by line using standard file I/O
+ * 
+ * @param variantFile Input uncompressed VCF file path
+ * @param Info VCF metadata and sample information
+ * @param mergedChrVarinat Output container for parsed variants
+ */
 void VcfParser::unCompressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     std::ifstream originVcf(variantFile);
     if(variantFile=="")
@@ -143,6 +191,15 @@ void VcfParser::unCompressParser(std::string &variantFile, VCF_Info &Info, std::
     }
 }
 
+/**
+ * @brief Route VCF line processing based on current operation mode
+ * 
+ * Delegates line processing to either parserProcess (for loading) or writeProcess (for writing)
+ * 
+ * @param input VCF line content
+ * @param Info VCF metadata and sample information
+ * @param mergedChrVarinat Variant data container
+ */
 void VcfParser::processLine(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     switch(mode){
         case VCF_PARSER_LOAD_NODE:
@@ -157,9 +214,29 @@ void VcfParser::processLine(std::string &input, VCF_Info &Info, std::map<std::st
     }
 }
 
+/**
+ * @brief Parse and load variant data from VCF line
+ * 
+ * Handles different types of VCF lines:
+ * - Header lines (##): Extract contig information and PS field type
+ * - Comment lines (#): Skip
+ * - Variant lines: Parse phased SNPs, SVs, and MODs based on enabled flags
+ * 
+ * For phased SNPs, extracts:
+ * - Haplotype information (HP1, HP2)
+ * - Phase set (PS) information
+ * - Genotype and variant type
+ * 
+ * For SVs and MODs, tracks read-haplotype associations
+ * 
+ * @param input VCF line content
+ * @param Info VCF metadata and sample information
+ * @param mergedChrVarinat Output container for parsed variants
+ */
 void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     if( input.substr(0, 2) == "##" && parseSnpFile){
         if( input.find("contig=")!= std::string::npos ){
+            // Extract chromosome information from contig header
             int id_start  = input.find("ID=")+3;
             int id_end    = input.find(",length=");
             int len_start = id_end+8;
@@ -172,6 +249,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
             Info.chrLength[chr]=chrLen;                
         }
         if( input.substr(0, 16) == "##FORMAT=<ID=PS," ){
+            // Determine PS field type (Integer or String)
             if( input.find("Type=Integer")!= std::string::npos ){
                 integerPS = true;
             }
@@ -180,22 +258,27 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                 std::cerr<< "PS type is String. Auto index to integer ... ";
             }
             else{
-                std::cerr<< "ERROR: not found PS type (Type=Integer or Type=String).\n"; 
+                std::cerr<< "[ERROR](VcfParser::processLine) => not found PS type (Type=Integer or Type=String).\n"; 
                 exit(EXIT_SUCCESS);
             }
         }
     }
     else if ( input.substr(0, 1) == "#" ){
-        
+        // Skip comment lines
     }
     else{
+        // Parse variant data line
         std::istringstream iss(input);
         std::vector<std::string> fields((std::istream_iterator<std::string>(iss)),std::istream_iterator<std::string>());
 
         if( fields.size() == 0 )
             return;
+        else if(fields.size() < 10){
+            std::cerr << "[ERROR](VcfParser::parserProcess) => VCF file format not supported: " << input << std::endl;
+            exit(EXIT_FAILURE);
+        }
 
-        // trans to 0-base
+        // Convert to 0-based position
         int pos = std::stoi( fields[1] ) - 1;
         std::string chr = fields[0];
                 
@@ -257,10 +340,12 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                 varData.GT = GenomeType::PHASED_HETERO;
                 varData.setVariantType();
                 
+                // Handle PS value (integer or string)
                 if(integerPS){
                     varData.PhasedSet = std::stoi(psValue);
                 }
                 else{
+                    // Map string PS values to integer indices
                     std::map<std::string, int>::iterator psIter = psIndex.find(psValue);
                     
                     if( psIter == psIndex.end() ){
@@ -279,6 +364,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                     varData.HP2 = fields[3];
                 }
 
+                // Store variant data for appropriate sample
                 if(Info.sample == NORMAL){
                     mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;
                 }else if(Info.sample == TUMOR){
@@ -305,6 +391,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                     svHaplotype = 0;
                 }
                 
+                // Track read-haplotype associations for SVs
                 std::string read;
                 while(std::getline(totalReadStream, read, ','))
                 {
@@ -329,7 +416,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                 std::stringstream totalReadStream(totalRead);
                 
                 int modHaplotype;
-                // In which haplotype does SV occur
+                // Determine which haplotype the modification occurs in
                 if( fields[9][modifu_start] == '0' && fields[9][modifu_start+2] == '1' ){
                     modHaplotype = 1;
                 }
@@ -337,6 +424,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                     modHaplotype = 0;
                 }
                 
+                // Track read-haplotype associations for modifications
                 std::string read;
                 while(std::getline(totalReadStream, read, ','))
                 {
@@ -389,6 +477,20 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
     }
 }
 
+/**
+ * @brief Write processed variant data to output VCF file
+ * 
+ * Handles different types of VCF lines during writing:
+ * - Header lines (##): Copy as-is
+ * - Column header (#CHROM): Add version and command line headers
+ * - Variant lines: Apply somatic variant filtering and quality updates
+ * 
+ * For somatic variants, updates FILTER field based on somatic status
+ * 
+ * @param input VCF line content
+ * @param Info VCF metadata and sample information
+ * @param mergedChrVarinat Input container with processed variants
+ */
 void VcfParser::writeProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     if(resultVcf == nullptr){
         std::cerr<< "[ERROR](VcfParser::writeProcess): resultVcf is nullptr\n";
@@ -396,9 +498,10 @@ void VcfParser::writeProcess(std::string &input, VCF_Info &Info, std::map<std::s
     }
 
     if(input.length() >= 2 && input.substr(0, 2) == "##"){
+        // Copy header lines as-is
         *resultVcf << input << std::endl;
     }else if (input.length() >= 6 && (input.substr(0, 6) == "#CHROM" || input.substr(0, 6) == "#chrom")){
-        // format line 
+        // Add version and command line headers before column header
         if( writeCommandline == false ){
             *resultVcf << "##longphase_s_version=" << version << std::endl;
             *resultVcf << "##commandline=" << commandline << std::endl;
@@ -406,6 +509,7 @@ void VcfParser::writeProcess(std::string &input, VCF_Info &Info, std::map<std::s
         }    
         *resultVcf << input << std::endl;
     }else{
+        // Process variant data lines
         std::istringstream iss(input);
         std::vector<std::string> fields((std::istream_iterator<std::string>(iss)),std::istream_iterator<std::string>());
 
@@ -413,10 +517,11 @@ void VcfParser::writeProcess(std::string &input, VCF_Info &Info, std::map<std::s
             return;
 
         if (fields.size() >= 7){
-            // trans to 0-base
+            // Convert to 0-based position
             int pos = std::stoi( fields[1] ) - 1;
             std::string chr = fields[0];
 
+            // Check if variant exists in processed data
             auto chrIt = mergedChrVarinat.find(chr);
             if (chrIt != mergedChrVarinat.end()) {
 
@@ -425,53 +530,87 @@ void VcfParser::writeProcess(std::string &input, VCF_Info &Info, std::map<std::s
                     
                     auto varIt = posIt->second.Variant.find(TUMOR);
                     if (varIt != posIt->second.Variant.end()) {
-                    
-                        if (posIt->second.isSomaticVariant) {
-                            if (fields[6] != "PASS") {
-                                fields[6] = "PASS";
+                        // Only process SNPs for somatic variant calling
+                        if(varIt->second.variantType == VariantType::SNP){
+                            // Update FILTER field based on somatic status
+                            if (posIt->second.isSomaticVariant) {
+                                if (fields[6] != "PASS") {
+                                    fields[6] = "PASS";
+                                }
+                            } else {
+                                if (fields[6] == "PASS") {
+                                    fields[6] = "LowQual";
+                                }
                             }
-                        } else {
-                            if (fields[6] == "PASS") {
-                                fields[6] = "LowQual";
+                            // Write updated variant line
+                            std::string output = fields[0];
+                            for (size_t i = 1; i < fields.size(); ++i) {
+                                output += "\t" + fields[i];
                             }
+                            *resultVcf << output << std::endl;
                         }
-
-                        std::string output = fields[0];
-                        for (size_t i = 1; i < fields.size(); ++i) {
-                            output += "\t" + fields[i];
-                        }
-                        *resultVcf << output << std::endl;
                     }
                 }
             }
+        }else{
+            std::cerr << "[ERROR](VcfParser::writeProcess) => VCF file format error: " << input << std::endl;
+            exit(EXIT_FAILURE);
         }
     }
 }
 
+/**
+ * @brief Set parser operation mode
+ * @param mode VCF_PARSER_LOAD_NODE or VCF_PARSER_WRITE_NODE
+ */
 void VcfParser::setMode(VcfParserMode mode){
     this->mode = mode;
 }
 
+/**
+ * @brief Enable/disable SNP variant parsing
+ * @param parseSnpFile True to enable SNP parsing
+ */
 void VcfParser::setParseSnpFile(bool parseSnpFile){
     this->parseSnpFile = parseSnpFile;
 }
 
+/**
+ * @brief Enable/disable structural variant parsing
+ * @param parseSVFile True to enable SV parsing
+ */
 void VcfParser::setParseSVFile(bool parseSVFile){
     this->parseSVFile = parseSVFile;
 } 
 
+/**
+ * @brief Enable/disable modification variant parsing
+ * @param parseMODFile True to enable MOD parsing
+ */
 void VcfParser::setParseMODFile(bool parseMODFile){
     this->parseMODFile = parseMODFile;
 }
 
+/**
+ * @brief Get current SNP parsing status
+ * @return True if SNP parsing is enabled
+ */
 bool VcfParser::getParseSnpFile(){
     return this->parseSnpFile;
 }
 
+/**
+ * @brief Set command line string for VCF header
+ * @param commandline Command line string to include in output VCF
+ */
 void VcfParser::setCommandLine(std::string &commandline){
     this->commandline = commandline;
 }
 
+/**
+ * @brief Set version string for VCF header
+ * @param version Version string to include in output VCF
+ */
 void VcfParser::setVersion(std::string &version){
     this->version = version;
 }

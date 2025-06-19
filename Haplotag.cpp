@@ -183,7 +183,7 @@ int HaplotagMain(int argc, char** argv, std::string in_version)
     HaplotagParameters ecParams = optionManager.getParams();
     
     HaplotagProcess processor(ecParams);
-    processor.taggingProcess();
+    processor.pipelineProcess();
 
     return 0;
 }

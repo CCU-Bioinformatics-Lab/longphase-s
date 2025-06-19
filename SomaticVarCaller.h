@@ -4,9 +4,16 @@
 #include "Util.h" 
 #include "HaplotagType.h"
 #include "HaplotagParsingBam.h"
+#include "HaplotagStragtegy.h"
 #include "TumorPurityEstimator.h"
 #include "HaplotagLogging.h"
 
+/**
+ * @brief Context information for somatic variant calling
+ * 
+ * Contains all input file paths and configuration needed for somatic variant calling
+ * including normal/tumor BAM files, SNP files, and reference FASTA
+ */
 struct CallerContext
 {
     std::string normalBamFile;
@@ -18,17 +25,37 @@ struct CallerContext
     :normalBamFile(normalBamFile), tumorBamFile(tumorBamFile), normalSnpFile(normalSnpFile), tumorSnpFile(tumorSnpFile), fastaFile(fastaFile){}
 };
 
+/**
+ * @brief Configuration parameters for somatic variant calling
+ * 
+ * Controls filtering behavior, tumor purity estimation, and logging options
+ */
 struct CallerConfig
 {
-    bool enableFilter = true;
-    bool estimateTumorPurity = true;
-    double tumorPurity = 0.0;
-    bool writeCallingLog = false;
+    bool enableFilter = true;           /** Whether to enable somatic variant filtering */
+    bool estimateTumorPurity = true;    /** Whether to estimate tumor purity automatically */
+    double tumorPurity = 0.0;          /** Manual tumor purity value (0.0-1.0) */
+    bool writeCallingLog = false;       /** Whether to write detailed calling logs */
+    
     CallerConfig() = default;
+    
+    /**
+     * @brief Constructor for CallerConfig
+     * @param filter Enable filtering
+     * @param isEstimate Enable tumor purity estimation
+     * @param purity Manual tumor purity value
+     * @param writeLog Enable detailed logging
+     */
     CallerConfig(bool filter, bool isEstimate, double purity, bool writeLog)
         : enableFilter(filter), estimateTumorPurity(isEstimate), tumorPurity(purity), writeCallingLog(writeLog) {}
 };
 
+/**
+ * @brief Filter parameters for somatic variant calling
+ * 
+ * Contains all threshold values used for filtering somatic variants
+ * based on tumor purity, read quality, and haplotype consistency
+ */
 struct SomaticVarFilterParams
 {  
     // Tumor purity
@@ -57,6 +84,12 @@ struct SomaticVarFilterParams
     float LowMpqRatioThreshold; 
 };
 
+/**
+ * @brief Haplotype count information for a single read
+ * 
+ * Tracks the number of variants of each haplotype type found on a read
+ * and stores read metadata for analysis
+ */
 struct ReadVarHpCount{
     int HP1;
     int HP2;
@@ -74,14 +107,29 @@ struct ReadVarHpCount{
     ReadVarHpCount(): HP1(0), HP2(0), HP3(0), HP4(0), readIDcount(0), hpResult(0), startPos(0), endPos(0), readLength(0){}
 };
 
+/**
+ * @brief Data structure for dense SNP interval analysis
+ * 
+ * Stores statistical information about SNPs in dense intervals
+ * including mean values, z-scores, and distances
+ */
 struct DenseSnpData{
+    // Mean alternative allele count
     double snpAltMean;
+    // Z-score for statistical analysis
     double snpZscore;
+    // Minimum distance to neighboring SNP
     int minDistance;
+    
     DenseSnpData(): snpAltMean(0.0), snpZscore(0.0), minDistance(0){}
 };
 
-
+/**
+ * @brief Container for dense SNP interval analysis
+ * 
+ * Manages collections of SNPs within dense intervals and their statistical properties
+ * including mean calculations, z-scores, and interval metadata
+ */
 struct DenseSnpInterval{
     std::map<int, double> snpAltMean;
     std::map<int, double> snpZscore;
@@ -91,6 +139,11 @@ struct DenseSnpInterval{
     double StdDev;
     DenseSnpInterval(): snpCount(0), totalAltMean(0.0), StdDev(0.0){}
 
+    /**
+     * @brief Clears all data in the interval
+     * 
+     * Resets all maps and counters to initial state
+     */
     void clear(){
         snpAltMean.clear();
         snpZscore.clear();
@@ -101,7 +154,28 @@ struct DenseSnpInterval{
     }
 };
 
+/**
+ * @brief Namespace for tumor-normal analysis utilities
+ * 
+ * Contains common functions used for analyzing both tumor and normal samples
+ */
+namespace tumor_normal_analysis{
+    /**
+     * @brief Calculate common base information for tumor SNPs
+     * 
+     * Computes VAF, depth ratios, and haplotype imbalance metrics
+     * @param baseInfo Base information structure to update
+     * @param tumorAltBase Alternative base in tumor sample
+     */
+    void calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase);
+};
 
+/**
+ * @brief Chromosome processor for extracting normal sample data
+ * 
+ * Processes reads from normal BAM file to extract base counts, depths,
+ * and haplotype information for somatic variant calling
+ */
 class ExtractNorDataChrProcessor : public ChromosomeProcessor{
     private:
         // store base information
@@ -129,6 +203,12 @@ class ExtractNorDataChrProcessor : public ChromosomeProcessor{
         virtual ~ExtractNorDataChrProcessor() override;
 };
 
+/**
+ * @brief CIGAR parser for normal sample data extraction
+ * 
+ * Specialized CIGAR parser that handles normal sample variant processing
+ * and haplotype determination for germline variants
+ */
 class ExtractNorDataCigarParser : public CigarParser{
     private:
         //specific data members
@@ -153,6 +233,12 @@ class ExtractNorDataCigarParser : public CigarParser{
         ~ExtractNorDataCigarParser() override;
 };
 
+/**
+ * @brief BAM parser for normal sample data extraction
+ * 
+ * Manages parsing of normal BAM file to extract base information
+ * and haplotype data for somatic variant calling
+ */
 class ExtractNorDataBamParser : public HaplotagBamParser{
     private:
         // chr, variant position (0-base), base count & depth
@@ -162,7 +248,11 @@ class ExtractNorDataBamParser : public HaplotagBamParser{
         std::ofstream *tagResult;
 
     protected:
-        // Factory method to create a new chromosome processor
+        /**
+         * @brief Factory method to create chromosome processor
+         * @param chr Chromosome name
+         * @return Unique pointer to chromosome processor
+         */
         std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) override{
             return std::unique_ptr<ChromosomeProcessor>(new ExtractNorDataChrProcessor(chrPosNorBase, chr));
         };
@@ -177,7 +267,12 @@ class ExtractNorDataBamParser : public HaplotagBamParser{
         void displayPosInfo(std::string chr, int pos);
 };
 
-
+/**
+ * @brief Chromosome processor for extracting tumor sample data
+ * 
+ * Processes reads from tumor BAM file to extract somatic variant information,
+ * haplotype data, and read classification for somatic calling
+ */
 class ExtractTumDataChrProcessor : public ChromosomeProcessor{
     private:
         ExtractSomaticDataStragtegy somaticJudger;
@@ -206,6 +301,7 @@ class ExtractTumDataChrProcessor : public ChromosomeProcessor{
         void classifyReadsByCase(std::vector<int> &readPosHP3, std::map<int, int> &norCountPS, std::map<int, int> &hpCount, std::map<int, SomaticData> &somaticPosInfo);
 
         void postProcess(const std::string &chr, std::map<int, MultiGenomeVar> &currentVariants) override;
+        
     public:
         ExtractTumDataChrProcessor(
             std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo,
@@ -251,19 +347,29 @@ class ExtractTumDataCigarParser : public CigarParser{
             const int& mappingQualityThr
         );
         ~ExtractTumDataCigarParser() override;
-
 };
 
+/**
+ * @brief BAM parser for tumor sample data extraction
+ * 
+ * Manages parsing of tumor BAM file to extract somatic variant information
+ * and haplotype data for somatic calling
+ */
 class ExtractTumDataBamParser : public HaplotagBamParser{
     private:
         std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo;
         std::map<std::string, std::map<std::string, ReadVarHpCount>>& chrReadHpResultSet;
         std::map<std::string, std::map<int, std::map<std::string, int>>>& chrTumorPosReadCorrBaseHP;
     protected:
-
+        /**
+         * @brief Factory method to create chromosome processor
+         * @param chr Chromosome name
+         * @return Unique pointer to chromosome processor
+         */
         std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) override{
             return std::unique_ptr<ChromosomeProcessor>(new ExtractTumDataChrProcessor(chrPosSomaticInfo, chrReadHpResultSet, chrTumorPosReadCorrBaseHP, chr));
         };
+        
     public:
         ExtractTumDataBamParser(
             const ParsingBamConfig& config,
@@ -275,15 +381,22 @@ class ExtractTumDataBamParser : public HaplotagBamParser{
         ~ExtractTumDataBamParser();
 };
 
-
+/**
+ * @brief Main class for somatic variant calling
+ * 
+ * Orchestrates the entire somatic variant calling pipeline including:
+ * - Data extraction from normal and tumor BAM files
+ * - Tumor purity estimation
+ * - Somatic variant filtering and calling
+ * - Statistical analysis and reporting
+ */
 class SomaticVarCaller{
     private:
-        
+        // Maximum distance for dense SNP intervals
         static constexpr int INTERVAL_SNP_MAX_DISTANCE = 5000;
 
         const CallerConfig &callerCfg;
         const ParsingBamConfig &bamCfg;
-
         const std::vector<std::string>& chrVec;
 
         // somatic calling filter params
@@ -308,18 +421,71 @@ class SomaticVarCaller{
 
         void initialSomaticFilterParams();
 
+        /**
+         * @brief Set filter parameters based on tumor purity
+         * 
+         * Adjusts filter thresholds based on estimated tumor purity
+         * @param somaticParams Filter parameters to update
+         * @param tumorPurity Estimated tumor purity value
+         */
         void SetFilterParamsWithPurity(SomaticVarFilterParams &somaticParams, double &tumorPurity);
 
-        double calculateStandardDeviation(const std::map<int, double>& data, double mean);
-        void calculateZScores(const std::map<int, double>& data, double mean, double stdDev, std::map<int, double> &zScores);
+        
+        /**
+         * @brief Calculate interval data statistics
+         * @param isStartPos Flag indicating start position
+         * @param startPos Start position of interval
+         * @param pos Current position
+         * @param denseSnp Dense SNP interval data
+         * @param localDenseTumorSnpInterval Local dense tumor SNP intervals
+         */
         void calculateIntervalData(bool &isStartPos, int &startPos, int &pos, DenseSnpInterval &denseSnp, std::map<int, std::pair<int, DenseSnpInterval>> &localDenseTumorSnpInterval);
+        
+        /**
+         * @brief Get dense tumor SNP intervals
+         * @param somaticPosInfo Somatic position information
+         * @param readHpResultSet Read haplotype results
+         * @param somaticPosReadHPCount Somatic position read haplotype counts
+         * @param closeSomaticSnpInterval Close somatic SNP intervals
+         */
         void getDenseTumorSnpInterval(std::map<int, SomaticData> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, std::map<int, std::pair<int, DenseSnpInterval>> &closeSomaticSnpInterval);
 
+        /**
+         * @brief Apply somatic feature filtering
+         * @param somaticParams Filter parameters
+         * @param currentChrVariants Current chromosome variants
+         * @param chr Chromosome name
+         * @param somaticPosInfo Somatic position information
+         * @param tumorPurity Tumor purity value
+         */
         void somaticFeatureFilter(const SomaticVarFilterParams &somaticParams, std::map<int, MultiGenomeVar> &currentChrVariants,const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, double& tumorPurity);
         
+        /**
+         * @brief Calibrate read haplotype assignments
+         * @param chr Chromosome name
+         * @param somaticPosInfo Somatic position information
+         * @param readHpResultSet Read haplotype results
+         * @param somaticPosReadHPCount Somatic position read haplotype counts
+         */
         void calibrateReadHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount);
+        
+        /**
+         * @brief Calculate read set haplotype results
+         * @param chr Chromosome name
+         * @param readHpResultSet Read haplotype results
+         * @param somaticPosReadHPCount Somatic position read haplotype counts
+         * @param percentageThreshold Percentage threshold for haplotype determination
+         */
         void calculateReadSetHP(const std::string &chr, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &somaticPosReadHPCount, const double& percentageThreshold);
         
+        /**
+         * @brief Statistic somatic position read haplotype
+         * @param chr Chromosome name
+         * @param somaticPosInfo Somatic position information
+         * @param somaticPosReadHPCount Somatic position read haplotype counts
+         * @param readHpResultSet Read haplotype results
+         * @param localReadHpDistri Local read haplotype distribution
+         */
         void statisticSomaticPosReadHP(
             const std::string &chr,
             std::map<int, SomaticData> &somaticPosInfo,
@@ -328,11 +494,33 @@ class SomaticVarCaller{
             chrReadHpResult &localReadHpDistri
         );
         
+        /**
+         * @brief Write somatic variant calling log
+         * @param ctx Caller context
+         * @param somaticParams Somatic filter parameters
+         * @param chrVec Vector of chromosome names
+         * @param mergedChrVarinat Merged chromosome variants
+         */
         void writeSomaticVarCallingLog(const CallerContext &ctx, const SomaticVarFilterParams &somaticParams, const std::vector<std::string> &chrVec
                                      , std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        
+        /**
+         * @brief Write other somatic haplotype log
+         * @param logFileName Log file name
+         * @param chrVec Vector of chromosome names
+         * @param mergedChrVarinat Merged chromosome variants
+         */
         void writeOtherSomaticHpLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        
+        /**
+         * @brief Write dense tumor SNP interval log
+         * @param logFileName Log file name
+         * @param chrVec Vector of chromosome names
+         */
         void writeDenseTumorSnpIntervalLog(const std::string logFileName, const std::vector<std::string> &chrVec);
         
+        double calculateStandardDeviation(const std::map<int, double>& data, double mean);
+        void calculateZScores(const std::map<int, double>& data, double mean, double stdDev, std::map<int, double> &zScores);
         // temporary function
         void shannonEntropyFilter(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants, std::string &ref_string);
         double entropyComponent(int count, int total);
@@ -343,14 +531,35 @@ class SomaticVarCaller{
         int convertStrNucToInt(std::string &base);
         std::string convertIntNucToStr(int base);
         
+        /**
+         * @brief Release allocated memory
+         * 
+         * Deletes all dynamically allocated data structures
+         */
         void releaseMemory();
 
     protected:
 
     public:
+        /**
+         * @brief Constructor for SomaticVarCaller
+         * @param callerCfg Caller configuration
+         * @param bamCfg BAM parsing configuration
+         * @param chrVec Vector of chromosome names
+         */
         SomaticVarCaller(const CallerConfig &callerCfg, const ParsingBamConfig &bamCfg, const std::vector<std::string> &chrVec);
         virtual ~SomaticVarCaller();
 
+        /**
+         * @brief Main variant calling function
+         * 
+         * Orchestrates the entire somatic variant calling pipeline
+         * @param ctx Caller context with input files
+         * @param chrVec Vector of chromosome names
+         * @param chrLength Map of chromosome names to lengths
+         * @param mergedChrVarinat Merged chromosome variants
+         * @param vcfSet VCF information by genome type
+         */
         void variantCalling(
             const CallerContext &ctx,
             const std::vector<std::string> &chrVec,
@@ -359,6 +568,19 @@ class SomaticVarCaller{
             std::map<Genome, VCF_Info> &vcfSet
         );
 
+        /**
+         * @brief Extract somatic data from BAM files
+         * 
+         * Processes normal and tumor BAM files to extract variant information
+         * @param normalBamFile Path to normal BAM file
+         * @param tumorBamFile Path to tumor BAM file
+         * @param fastaFile Path to reference FASTA file
+         * @param config Parsing configuration
+         * @param chrVec Vector of chromosome names
+         * @param chrLength Map of chromosome names to lengths
+         * @param mergedChrVarinat Merged chromosome variants
+         * @param vcfSet VCF information by genome type
+         */
         void extractSomaticData(
             const std::string &normalBamFile,
             const std::string &tumorBamFile,
@@ -369,9 +591,30 @@ class SomaticVarCaller{
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
             std::map<Genome, VCF_Info> &vcfSet           
         );
+        
+        /**
+         * @brief Run tumor purity estimation
+         * @param writeReadLog Whether to write read logs
+         * @param resultPrefix Result file prefix
+         * @return Estimated tumor purity value
+         */
         double runTumorPurityEstimator(bool writeReadLog, const std::string resultPrefix);
+        
+        /**
+         * @brief Get somatic variant flags
+         * 
+         * Marks variants as somatic based on calling results
+         * @param chrVec Vector of chromosome names
+         * @param mergedChrVarinat Merged chromosome variants
+         */
         void getSomaticFlag(const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
 
+        /**
+         * @brief Display calling SNP count
+         * 
+         * Prints the number of somatic SNPs called for debugging
+         */
+        void displayCallingSnpCount();
 };
 
 #endif

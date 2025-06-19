@@ -131,16 +131,13 @@ int ParamsHandler<SomaticHaplotagParameters>::getHelpEnumNum() {
 
 int SomaticHaplotagMain(int argc, char** argv, std::string in_version){
     
-    SomaticHaplotagArgumentManager optionManager(SUBPROGRAM, in_version, CORRECT_USAGE_MESSAGE);
-
+    SomaticHaplotagArgManager optionManager(SUBPROGRAM, in_version, CORRECT_USAGE_MESSAGE);
     optionManager.setOptions();
-
     optionManager.parseOptions(argc, argv);
-
     SomaticHaplotagParameters ecParams = optionManager.getParams();
     
     SomaticHaplotagProcess processor(ecParams);
-    processor.taggingProcess();
+    processor.pipelineProcess();
 
     return 0;
 }

@@ -1,14 +1,31 @@
 #include "SomaticBenchmark.h"
 
+/**
+ * @brief Constructor - Initialize SomaticReadVerifier with testing flag and metrics
+ * @param openTestingFunc Flag to enable testing functionality
+ * @param metrics Pointer to metrics for data collection
+ */
 SomaticReadVerifier::SomaticReadVerifier(bool openTestingFunc, SomaticReadMetrics *metrics): 
 openTestingFunc(openTestingFunc),
 metrics(metrics)
 {}
 
+/**
+ * @brief Destructor - Clean up resources
+ */
 SomaticReadVerifier::~SomaticReadVerifier(){
 
 }
 
+/**
+ * @brief Record deletion read count for a variant position
+ * 
+ * Records deletion count for truth somatic variants and adds position
+ * to truth somatic position vector for tracking reads crossing truth somatic SNPs
+ * 
+ * @param chr Chromosome name
+ * @param currentVariantIter Iterator to current variant
+ */
 void SomaticReadVerifier::recordDelReadCount(const std::string &chr, std::map<int, MultiGenomeVar>::iterator &currentVariantIter){
     if(!openTestingFunc) return;
     
@@ -16,11 +33,21 @@ void SomaticReadVerifier::recordDelReadCount(const std::string &chr, std::map<in
         int pos = (*currentVariantIter).first;
         metrics->posAltRefDelCount[pos].delCount++;
 
-        //record somatic position for record crossing high con snp read
+        //record somatic position for record crossing truth somatic snp read
         metrics->truthSomaticPosVec.push_back(std::make_pair(pos, SnpHP::NONE_SNP));
     }
 }
 
+/**
+ * @brief Record reference/alternate allele count for a variant position
+ * 
+ * Records reference and alternate allele counts for truth somatic variants.
+ * Determines base haplotype based on whether the base matches reference or alternate allele.
+ * 
+ * @param chr Chromosome name
+ * @param base Base at the position
+ * @param currentVariantIter Iterator to current variant
+ */
 void SomaticReadVerifier::recordRefAltAlleleCount(const std::string &chr, std::string &base, std::map<int, MultiGenomeVar>::iterator &currentVariantIter){
     if(!openTestingFunc) return;
 
@@ -37,11 +64,25 @@ void SomaticReadVerifier::recordRefAltAlleleCount(const std::string &chr, std::s
             metrics->posAltRefDelCount[pos].altCount++;
             baseHP = SnpHP::SOMATIC_H3;
         }
-        //record somatic position for record crossing high con snp read
+        // record somatic position for tracking reads crossing truth somatic SNPs
         metrics->truthSomaticPosVec.push_back(std::make_pair(pos, baseHP));
     }
 }
 
+/**
+ * @brief Create basic somatic read log entry
+ * 
+ * Creates a basic SomaticReadLog object with chromosome, read ID, haplotype result,
+ * similarity scores, and SNP counts for germline and tumor variants.
+ * 
+ * @param chr Chromosome name
+ * @param readID Read identifier
+ * @param hpResult Haplotype result
+ * @param norHPsimilarity Normal haplotype similarity
+ * @param deriveByHpSimilarity Derived haplotype similarity
+ * @param hpCount Haplotype count map
+ * @return SomaticReadLog object
+ */
 SomaticReadLog SomaticReadVerifier::createBasicSomaticReadLog(const std::string &chr, std::string &readID, int &hpResult, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, int> &hpCount){
     SomaticReadLog tmp;
     tmp.chr = chr;
@@ -55,8 +96,29 @@ SomaticReadLog SomaticReadVerifier::createBasicSomaticReadLog(const std::string 
     return tmp;
 }
 
-void SomaticReadVerifier::recordCrossingHighConSnpRead(const std::string &chr, std::string &readID, int &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, MultiGenomeVar> &currentChrVariants){
-    // if not open testing function, return
+/**
+ * @brief Record reads crossing truth somatic somatic SNPs
+ * 
+ * Records reads that cross truth somatic somatic variants and corrects
+ * haplotype assignments based on the presence of somatic variants.
+ * 
+ * For reads with somatic H3 variants:
+ * - H1 -> H1_1, H2 -> H2_1, unTag -> H3
+ * 
+ * For reads without somatic H3 variants:
+ * - H2_1 -> H2, H1_1 -> H1, H3 -> unTag
+ * 
+ * @param chr Chromosome name
+ * @param readID Read identifier
+ * @param hpResult Haplotype result
+ * @param variantsHP Map of variant positions to haplotypes
+ * @param hpCount Haplotype count map
+ * @param norHPsimilarity Normal haplotype similarity
+ * @param deriveByHpSimilarity Derived haplotype similarity
+ * @param currentChrVariants Current chromosome variants
+ */
+void SomaticReadVerifier::recordCrossingTruthSomaticSnpRead(const std::string &chr, std::string &readID, int &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, MultiGenomeVar> &currentChrVariants){
+    // If testing function is not enabled, return
     if(!openTestingFunc) return;
 
     SomaticReadLog tmp = createBasicSomaticReadLog(chr, readID, hpResult, norHPsimilarity, deriveByHpSimilarity, hpCount);
@@ -64,24 +126,24 @@ void SomaticReadVerifier::recordCrossingHighConSnpRead(const std::string &chr, s
     bool isCrossHighConSomatic = false;
     bool existHighConVaraints = false;
 
+    // Process truth somatic positions
     for(auto varIter : metrics->truthSomaticPosVec){
         int pos = varIter.first;
         int baseHP = varIter.second;
 
-        //transfer hpResult to H3
+        // check if this is a somatic H3 variant
         if(baseHP == SnpHP::SOMATIC_H3){
             existHighConVaraints = true;
         }
 
         tmp.somaticSnpHp[pos] = baseHP;
-
         isCrossHighConSomatic = true;
     }
 
     if(isCrossHighConSomatic){
-        //exist high con variants alt allele
+        // correct haplotype result based on presence of truth somatic variants
         if(existHighConVaraints){
-            //correction hpResult that exist high con variants
+            // correct haplotype result for reads with truth somatic variants
             if(hpResult == ReadHP::H1){
                 tmp.hpResult = ReadHP::H1_1;
             }else if(hpResult == ReadHP::H2){
@@ -90,7 +152,7 @@ void SomaticReadVerifier::recordCrossingHighConSnpRead(const std::string &chr, s
                 tmp.hpResult = ReadHP::H3;
             }
         }else{
-            //correction hpResult that not exist high con variants
+            // correct haplotype result for reads without truth somatic variants
             if(hpResult == ReadHP::H2_1){
                 tmp.hpResult = ReadHP::H2;
             }else if(hpResult == ReadHP::H1_1){
@@ -105,20 +167,36 @@ void SomaticReadVerifier::recordCrossingHighConSnpRead(const std::string &chr, s
         metrics->coverTruthSomaticPosReadVec.push_back(tmp);
     }
     
-    //clear high con somatic position in current read for next read
+    // clear truth somatic somatic positions for next read
     if(!metrics->truthSomaticPosVec.empty()){
         metrics->truthSomaticPosVec.clear();
     }
 }
 
+/**
+ * @brief Record tagged reads for performance evaluation
+ * 
+ * Records tagged reads and checks if they contain somatic variants.
+ * Only records reads that are tagged (not unTag) and contain somatic variants.
+ * 
+ * @param chr Chromosome name
+ * @param readID Read identifier
+ * @param hpResult Haplotype result
+ * @param variantsHP Map of variant positions to haplotypes
+ * @param hpCount Haplotype count map
+ * @param norHPsimilarity Normal haplotype similarity
+ * @param deriveByHpSimilarity Derived haplotype similarity
+ * @param currentChrVariants Current chromosome variants
+ */
 void SomaticReadVerifier::recordTaggedRead(const std::string &chr, std::string &readID, int &hpResult, std::map<int, int> &variantsHP, std::map<int, int> &hpCount, double &norHPsimilarity, float &deriveByHpSimilarity, std::map<int, MultiGenomeVar> &currentChrVariants){
-    // if not open testing function, return
+    // If testing function is not enabled or read is untagged, return
     if(!openTestingFunc || hpResult == ReadHP::unTag) return;
 
     SomaticReadLog tmp = createBasicSomaticReadLog(chr, readID, hpResult, norHPsimilarity, deriveByHpSimilarity, hpCount);
 
     bool readExistHighConSomatic = false;
 
+    // check if read contains somatic variants
     auto varIter = variantsHP.begin();
     while(varIter != variantsHP.end()){
         int pos = varIter->first;
@@ -139,6 +217,12 @@ void SomaticReadVerifier::recordTaggedRead(const std::string &chr, std::string &
     metrics->totalReadVec.push_back(tmp);
 }
 
+/**
+ * @brief Constructor - Initialize SomaticReadBenchmark with benchmark files and threshold
+ * @param benchmarkVcf Path to benchmark VCF file
+ * @param benchmarkBed Path to benchmark BED file
+ * @param mappingQualityThreshold Mapping quality threshold
+ */
 SomaticReadBenchmark::SomaticReadBenchmark(std::string benchmarkVcf, std::string benchmarkBed, int mappingQualityThreshold){
     setParseSnpFile(true);
     openTestingFunc = false;
@@ -147,36 +231,73 @@ SomaticReadBenchmark::SomaticReadBenchmark(std::string benchmarkVcf, std::string
     this->benchmarkBed = benchmarkBed;
     this->mappingQualityThreshold = mappingQualityThreshold;
 }
+
+/**
+ * @brief Destructor - Clean up resources
+ */
 SomaticReadBenchmark::~SomaticReadBenchmark(){
 
 }
 
+/**
+ * @brief Enable or disable testing functionality
+ * @param openTestingFunc True to enable testing
+ */
 void SomaticReadBenchmark::setEnabled(bool openTestingFunc){
     this->openTestingFunc = openTestingFunc;
 }
 
+/**
+ * @brief Check if testing functionality is enabled
+ * @return True if testing is enabled
+ */
 bool SomaticReadBenchmark::isEnabled(){
     return openTestingFunc;
 }
 
+/**
+ * @brief Check if BED file is loaded
+ * @return True if BED file is loaded
+ */
 bool SomaticReadBenchmark::isLoadBedFile(){
     return loadedBedFile;
 }
 
+/**
+ * @brief Initialize chromosome key for multi-threaded access
+ * @param chr Chromosome name
+ */
 void SomaticReadBenchmark::loadChrKey(const std::string &chr){
     chrMetrics[chr] = SomaticReadMetrics();
 }
 
-void SomaticReadBenchmark::loadHighConSomatic(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+/**
+ * @brief Load truth somatic VCF file
+ * @param input Input VCF file path
+ * @param Info VCF metadata and sample information
+ * @param mergedChrVarinat Output container for parsed variants
+ */
+void SomaticReadBenchmark::loadTruthSomaticVCF(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     if(!openTestingFunc) return;
     parsingVCF(input, Info, mergedChrVarinat);
 }
 
+/**
+ * @brief Override parserProcess to handle truth somatic VCF parsing
+ * 
+ * Parses truth somatic VCF files and extracts variant information.
+ * Only processes SNP variants and stores them as TRUTH_SOMATIC variants.
+ * 
+ * @param input VCF line content
+ * @param Info VCF metadata and sample information
+ * @param mergedChrVarinat Output container for parsed variants
+ */
 void SomaticReadBenchmark::parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     if(!openTestingFunc) return;
     
     if( input.substr(0, 2) == "##" && getParseSnpFile()){
         if( input.find("contig=")!= std::string::npos ){
+            // Extract chromosome information from contig header
             int id_start  = input.find("ID=")+3;
             int id_end    = input.find(",length=");
             int len_start = id_end+8;
@@ -190,60 +311,115 @@ void SomaticReadBenchmark::parserProcess(std::string &input, VCF_Info &Info, std
         }
     }
     else if ( input.substr(0, 1) == "#" ){
-        
+        // Skip comment lines
     }
     else{
+        // Parse variant data line
         std::istringstream iss(input);
         std::vector<std::string> fields((std::istream_iterator<std::string>(iss)),std::istream_iterator<std::string>());
         if( fields.size() == 0 ){
             return;
+        }else if(fields.size() < 5){
+            std::cerr << "[ERROR] (SomaticReadBenchmark::parserProcess) => VCF file format not supported: " << input << std::endl;
+            exit(EXIT_FAILURE);
         }
             
-        // trans to 0-base
+        // Convert to 0-based position
         int pos = std::stoi( fields[1] ) - 1;
         std::string chr = fields[0];
 
+        // Create variant data and store as TRUTH_SOMATIC
         VarData varData;
         varData.allele.Ref = fields[3];
         varData.allele.Alt = fields[4];
         mergedChrVarinat[chr][pos].Variant[Genome::TRUTH_SOMATIC] = varData;
-
     }
 }
 
+/**
+ * @brief Parse benchmark BED file
+ * 
+ * Parses BED files containing regions of interest for benchmarking.
+ * Currently only supports uncompressed BED files (.bed).
+ * 
+ * @param bedFile Path to BED file
+ */
 void SomaticReadBenchmark::parseBedFile(const std::string& bedFile) {
     if(!openTestingFunc) return;
 
     if( bedFile.find("bed.gz") != std::string::npos){
-        std::cerr << "[Warning] BED .gz files are not supported. Please use an uncompressed .bed file: " << bedFile << std::endl;
+        std::cerr << "[WARNING] BED .gz files are not supported. Please use an uncompressed .bed file: " << bedFile << std::endl;
         return;
     }else if( bedFile.find("bed") != std::string::npos){
         std::ifstream file(bedFile);
         if (!file.is_open()) {
-            std::cerr << "[Error] Failed to open BED file: " << bedFile << std::endl;
+            std::cerr << "[ERROR] Failed to open BED file: " << bedFile << std::endl;
             return;
         }
         
         std::string line;
+        bool valid = true;
         while (std::getline(file, line)) {
             if (line.empty() || line[0] == '#') continue;
-            processBedLine(line);
+
+            valid = processBedLine(line);
+            
+            if(!valid) break;
         }
-        loadedBedFile = true;
+
+        if(valid) {
+            loadedBedFile = true;
+        }else {
+            std::cerr << "[WARNING] Failed to load BED file due to invalid format" << std::endl;
+        }
     }
 }
 
-void SomaticReadBenchmark::processBedLine(const std::string& line) {
+/**
+ * @brief Process a single BED file line
+ * 
+ * Validates and processes a single BED file line, extracting chromosome,
+ * start position, and end position. Validates coordinate ranges.
+ * 
+ * @param line BED file line content
+ * @return True if line is valid, false otherwise
+ */
+bool SomaticReadBenchmark::processBedLine(const std::string& line) {
     std::istringstream iss(line);
     std::string chr;
     int start, end;
-    iss >> chr >> start >> end;
+
+    // Check if the line has valid format (chr start end)
+    if (!(iss >> chr >> start >> end)) {
+        std::cerr << "[WARNING] Invalid BED line format: " << line << std::endl;
+        return false;
+    }
     
+    // Check if the coordinates are valid (start >= 0, end > start)
+    if (start < 0 || end <= start) {
+        std::cerr << "[WARNING] Invalid BED coordinates (start=" << start << ", end=" << end << "): " << line << std::endl;
+        return false;
+    }
+    
+    // Store BED region (convert to 0-based end position)
     bedRegions[chr].push_back(BedRegion{start, end - 1});
+    return true;
 }
 
+/**
+ * @brief Mark variants in BED regions
+ * 
+ * Marks variants as being inside or outside BED regions for each chromosome.
+ * Uses efficient algorithm to traverse bed regions and variants simultaneously.
+ * 
+ * @param chrVec Vector of chromosome names
+ * @param mergedChrVarinat Variant data container
+ */
 void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat) {
     if(!openTestingFunc || !loadedBedFile) return;
+    time_t begin = time(NULL);
+    std::cerr<< "[Benchmark] marking variants in bed regions ... ";
+    
     for (auto& chr : chrVec) {
         auto& chrPosVariants = mergedChrVarinat[chr];
         
@@ -268,7 +444,7 @@ void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &ch
 
         const auto& regions = bedIt->second;
         if (regions.empty()) {
-            // If there are no bed regions, mark all points as false
+            // If there are no bed regions, mark all variants as outside
             for (auto& curVar : chrPosVariants) {
                 curVar.second.isInBedRegion = false;
                 if(curVar.second.isExists(Genome::TUMOR)) {
@@ -287,11 +463,11 @@ void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &ch
         auto regionIter = regions.begin();
         auto varPosIter = chrPosVariants.begin();
         
-        // traverse bed regions and variants at the same time
+        // traverse bed regions and variants simultaneously for efficiency
         while (varPosIter != chrPosVariants.end()) {
             int variantPos = varPosIter->first;
             
-            // if variant position is out of current bed region range
+            // skip bed regions that end before current variant position
             while (regionIter != regions.end() && variantPos > regionIter->end) {
                 ++regionIter;
             }
@@ -326,13 +502,22 @@ void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &ch
             ++varPosIter;
         }
     }
-
+    std::cerr<< difftime(time(NULL), begin) << "s\n";
 }
 
+/**
+ * @brief Remove variants outside BED regions
+ * 
+ * Removes variants that are outside BED regions from the analysis.
+ * If a position has no NORMAL data, the entire position is removed.
+ * Otherwise, only TUMOR and TRUTH_SOMATIC data are removed.
+ * 
+ * @param mergedChrVarinat Variant data container
+ */
 void SomaticReadBenchmark::removeVariantsOutBedRegion(std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     if(!openTestingFunc || !loadedBedFile) return;
 
-    //remove variants out bed region
+    // remove variants outside bed regions
     for (auto& chrPair : mergedChrVarinat) {
         auto& chrPosVariants = chrPair.second;
         
@@ -343,12 +528,12 @@ void SomaticReadBenchmark::removeVariantsOutBedRegion(std::map<std::string, std:
                 bool hasHighCon = varPosIter->second.isExists(Genome::TRUTH_SOMATIC);
                 
                 if (hasTumor || hasHighCon) {
-                    // if no exist NORMAL data, remove the whole position
+                    // If no NORMAL data exists, remove the entire position
                     if (!varPosIter->second.isExists(Genome::NORMAL)) {
                         varPosIter = chrPosVariants.erase(varPosIter);
                         continue;
                     } else {
-                        // if there is NORMAL data, only remove the data to be cleared
+                        // If NORMAL data exists, only remove TUMOR and TRUTH_SOMATIC data
                         if (hasTumor) {
                             varPosIter->second.Variant.erase(Genome::TUMOR);
                         }
@@ -367,6 +552,16 @@ void SomaticReadBenchmark::removeVariantsOutBedRegion(std::map<std::string, std:
     }
 }
 
+/**
+ * @brief Write BED region log
+ * 
+ * Generates separate log files for variants inside and outside BED regions.
+ * Creates two output files: _var_in_bed.out and _var_out_bed.out
+ * 
+ * @param chrVec Vector of chromosome names
+ * @param mergedChrVarinat Variant data container
+ * @param outPrefix Output file prefix
+ */
 void SomaticReadBenchmark::writeBedRegionLog(const std::vector<std::string>& chrVec,
                                            const std::map<std::string, std::map<int, MultiGenomeVar>>& mergedChrVarinat,
                                            const std::string& outPrefix) {
@@ -384,7 +579,7 @@ void SomaticReadBenchmark::writeBedRegionLog(const std::vector<std::string>& chr
         auto varPosIter = chrPosVariants.begin();
 
         while(varPosIter != chrPosVariants.end()){
-            int pos = varPosIter->first + 1;
+            int pos = varPosIter->first + 1;  // Convert to 1-based position
             
             std::string baseInfo = chr + "\t" + std::to_string(pos) + "\t";
             
@@ -408,25 +603,40 @@ void SomaticReadBenchmark::writeBedRegionLog(const std::vector<std::string>& chr
     
     inBedLog.close();
     outBedLog.close();
-
 }
 
+/**
+ * @brief Get metrics pointer for multi-threaded parallel processing
+ * @param chr Chromosome name
+ * @return Pointer to chromosome metrics
+ */
 SomaticReadMetrics* SomaticReadBenchmark::getMetricsPtr(const std::string &chr){
     return &(chrMetrics[chr]);
 }
 
+/**
+ * @brief Write position allele count log
+ * 
+ * Generates a report showing allele counts (reference, alternate, deletion)
+ * for each somatic variant position across all chromosomes.
+ * 
+ * @param chrVec Vector of chromosome names
+ * @param outputFileName Output file name
+ * @param mergedChrVarinat Variant data container
+ */
 void SomaticReadBenchmark::writePosAlleleCountLog(
     std::vector<std::string>& chrVec,
     std::string outputFileName,
     std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat
 ){
-    // if not open testing function, return
+    // If testing function is not enabled, return
     if(!openTestingFunc) return;
 
     std::ofstream *refAltCountLog=NULL;
     refAltCountLog=new std::ofstream(outputFileName);
     int totalVariantCount = 0;
 
+    // Calculate total variant count across all chromosomes
     for(auto chr: chrVec){
         totalVariantCount += chrMetrics[chr].posAltRefDelCount.size();
     }
@@ -450,6 +660,7 @@ void SomaticReadBenchmark::writePosAlleleCountLog(
                           << "DEL_COUNT\n";
     }
 
+    // Write allele counts for each variant position
     for(auto chr: chrVec){
         for(auto &posIter : chrMetrics[chr].posAltRefDelCount){
             (*refAltCountLog) << chr << "\t"
@@ -467,15 +678,24 @@ void SomaticReadBenchmark::writePosAlleleCountLog(
     refAltCountLog = nullptr;
 }
 
+/**
+ * @brief Write tagged read report
+ * 
+ * Generates a report for all tagged reads across all chromosomes.
+ * 
+ * @param chrVec Vector of chromosome names
+ * @param outputFileName Output file name
+ */
 void SomaticReadBenchmark::writeTaggedReadReport(
     const std::vector<std::string>& chrVec,
     std::string outputFileName
 ){
-    // if not open testing function, return
+    // if testing function is not enabled, return
     if(!openTestingFunc) return;
 
     std::map<std::string, std::vector<SomaticReadLog>*> somaticReadVecMap;
 
+    // set up chromosome somatic read vector pointers
     auto metricsIter = chrMetrics.begin();
     while(metricsIter != chrMetrics.end()){
         setChrSomaticReadVecPtr(metricsIter->first, somaticReadVecMap, metricsIter->second.totalReadVec);
@@ -484,18 +704,29 @@ void SomaticReadBenchmark::writeTaggedReadReport(
 
     writeReadLog(chrVec, outputFileName, somaticReadVecMap);
 }
+
+/**
+ * @brief Write tagged somatic read report
+ * 
+ * Generates a comprehensive report for tagged somatic reads including
+ * performance metrics (precision, recall, F1-score) for each haplotype.
+ * 
+ * @param chrVec Vector of chromosome names
+ * @param outputFileName Output file name
+ */
 void SomaticReadBenchmark::writeTaggedSomaticReadReport(
     const std::vector<std::string>& chrVec,
     std::string outputFileName
 ){
-    // if not open testing function, return
+    // If testing function is not enabled, return
     if(!openTestingFunc) return;
 
     time_t begin = time(NULL);
-    std::cerr << "write somatic haplotag metrics report... ";
+    std::cerr << "[Benchmark] writing somatic haplotagging metrics report ... ";
 
     std::map<std::string, std::vector<SomaticReadLog>*> somaticReadVecMap;
 
+    // Set up chromosome somatic read vector pointers
     auto metricsIter = chrMetrics.begin();
     while(metricsIter != chrMetrics.end()){
         setChrSomaticReadVecPtr(metricsIter->first, somaticReadVecMap, metricsIter->second.taggedSomaticReadVec);
@@ -506,16 +737,24 @@ void SomaticReadBenchmark::writeTaggedSomaticReadReport(
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 }
 
+/**
+ * @brief Write total truth somatic read report
+ * 
+ * Generates a report for all reads that cover truth somatic positions.
+ * 
+ * @param chrVec Vector of chromosome names
+ * @param outputFileName Output file name
+ */
 void SomaticReadBenchmark::writeTotalTruthSomaticReadReport(
     const std::vector<std::string>& chrVec,
     std::string outputFileName
 ){
-    // if not open testing function, return
+    // If testing function is not enabled, return
     if(!openTestingFunc) return;
-
 
     std::map<std::string, std::vector<SomaticReadLog>*> somaticReadVecMap;
 
+    // Set up chromosome somatic read vector pointers
     auto metricsIter = chrMetrics.begin();
     while(metricsIter != chrMetrics.end()){
         setChrSomaticReadVecPtr(metricsIter->first, somaticReadVecMap, metricsIter->second.coverTruthSomaticPosReadVec);
@@ -523,9 +762,14 @@ void SomaticReadBenchmark::writeTotalTruthSomaticReadReport(
     }
 
     writeReadLog(chrVec, outputFileName, somaticReadVecMap);
-
 }
 
+/**
+ * @brief Set chromosome somatic read vector pointer for multi-threaded access
+ * @param chr Chromosome name
+ * @param somaticReadVecMap Map of chromosome names to read vector pointers
+ * @param somaticReadVec Somatic read vector
+ */
 void SomaticReadBenchmark::setChrSomaticReadVecPtr(
     const std::string &chr,
     std::map<std::string, std::vector<SomaticReadLog>*> &somaticReadVecMap,
@@ -534,12 +778,22 @@ void SomaticReadBenchmark::setChrSomaticReadVecPtr(
     somaticReadVecMap[chr] = &somaticReadVec;
 }
 
+/**
+ * @brief Write read log to output file
+ * 
+ * Generates comprehensive read log with performance metrics including
+ * precision, recall, and F1-score for each haplotype type.
+ * 
+ * @param chrVec Vector of chromosome names
+ * @param outputFileName Output file name
+ * @param somaticReadVecMap Map of chromosome names to read vector pointers
+ */
 void SomaticReadBenchmark::writeReadLog(
     const std::vector<std::string>& chrVec,
     std::string outputFileName,
     std::map<std::string, std::vector<SomaticReadLog>*> &somaticReadVecMap
 ){
-    // if not open testing function, return
+    // if testing function is not enabled, return
     if(!openTestingFunc) return;
 
     std::ofstream *somaticReadLog=NULL;
@@ -547,19 +801,19 @@ void SomaticReadBenchmark::writeReadLog(
 
     int totalReads = 0;
 
-    // all truth somatic reads
+    // Count all truth somatic reads
     int totalTruthSomaticReads = 0;
     std::map<int, int> truthSomaticReadsMap;
 
-    // all tagged truth somatic reads(TP)
+    // Count all tagged truth somatic reads (TP)
     int totalTaggedTruthSomaticReads = 0;
     std::map<int, int> taggedTruthSomaticReadsMap;
 
-    // all tagged somatic reads(TP+FP)
+    // Count all tagged somatic reads (TP+FP)
     int totalTaggedSomaticReads = 0;
     std::map<int, int> toatlTaggedSomaticReadsMap;
 
-
+    // Calculate statistics across all chromosomes
     for(auto chr: chrVec){
         for(auto readIter :chrMetrics[chr].coverTruthSomaticPosReadVec){
             if(readIter.hpResult == ReadHP::H1_1 || readIter.hpResult == ReadHP::H2_1 || readIter.hpResult == ReadHP::H3){
@@ -587,7 +841,9 @@ void SomaticReadBenchmark::writeReadLog(
         std::cerr<< "Fail to open write file: " << outputFileName << "\n";
         exit(1);
     }
-    float recall = calculateRecall(totalTaggedTruthSomaticReads, totalTruthSomaticReads);;
+    
+    // Calculate overall performance metrics
+    float recall = calculateRecall(totalTaggedTruthSomaticReads, totalTruthSomaticReads);
     float precision = calculatePrecision(totalTaggedTruthSomaticReads, totalTaggedSomaticReads);
     float f1_score = calculateF1Score(recall, precision);
 
@@ -607,6 +863,7 @@ void SomaticReadBenchmark::writeReadLog(
     int separatorLength = 95;
     int columnWidth = 15;
 
+    // Write performance metrics table header
     (*somaticReadLog) << std::left << std::setw(columnWidth) << "## Haplotype" 
                       << std::setw(columnWidth) << "Precision" 
                       << std::setw(columnWidth) << "Recall" 
@@ -616,6 +873,7 @@ void SomaticReadBenchmark::writeReadLog(
                       << std::setw(columnWidth) << "FN" << "\n";
     (*somaticReadLog) << "##" << std::string(separatorLength, '-') << "\n";
     
+    // Calculate and write metrics for each haplotype
     std::vector<ReadHP> haplotypes = {ReadHP::H1_1, ReadHP::H2_1, ReadHP::H3};
     for(const auto& hp : haplotypes) {
         int tp = taggedTruthSomaticReadsMap[hp];
@@ -637,7 +895,7 @@ void SomaticReadBenchmark::writeReadLog(
                         << std::setw(columnWidth) << fn << "\n";
     }
 
-    // overall statistics
+    // Write overall statistics
     (*somaticReadLog) << "##" << std::string(separatorLength, '-') << "\n";
     (*somaticReadLog) << std::left << std::setw(columnWidth) << "## Overall"
                     << std::setw(columnWidth) << std::fixed << std::setprecision(4) << precision
@@ -649,6 +907,7 @@ void SomaticReadBenchmark::writeReadLog(
     
     (*somaticReadLog) << "##\n";
 
+    // Write detailed read information
     (*somaticReadLog) << "#CHROM\t"
                       << "READID\t"
                       << "GERMLINE_VAR_SIMILARITY\t"
@@ -679,6 +938,14 @@ void SomaticReadBenchmark::writeReadLog(
     somaticReadLog = nullptr;
 }
 
+/**
+ * @brief Display somatic variant count
+ * 
+ * Prints the total number of somatic variants across all chromosomes.
+ * 
+ * @param chrVec Vector of chromosome names
+ * @param mergedChrVarinat Variant data container
+ */
 void SomaticReadBenchmark::displaySomaticVarCount(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
     if(!openTestingFunc) return;
     int totalVariantCount = 0;
@@ -696,6 +963,14 @@ void SomaticReadBenchmark::displaySomaticVarCount(std::vector<std::string> &chrV
     std::cout << "Total somatic variants: " << totalVariantCount << "\n";
 }
 
+/**
+ * @brief Display BED region count
+ * 
+ * Prints statistics about BED regions and variant counts inside/outside
+ * BED regions for each genome type (TUMOR, NORMAL, TRUTH_SOMATIC).
+ * 
+ * @param chrVec Vector of chromosome names
+ */
 void SomaticReadBenchmark::displayBedRegionCount(std::vector<std::string> &chrVec){
     if(!openTestingFunc || !loadedBedFile) return;
     int totalBedRegionCount = 0;

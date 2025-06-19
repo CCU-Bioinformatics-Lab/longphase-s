@@ -36,7 +36,7 @@ void HaplotagProcess::printParamsMessage(){
     std::cerr<< "-------------------------------------------\n";
 }
 
-void HaplotagProcess::taggingProcess()
+void HaplotagProcess::pipelineProcess()
 {
     printParamsMessage();
     // decide on the type of tagging for VCF and BAM files
@@ -137,6 +137,8 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, std::string& tagBamFil
     ParsingBamControl control;
     control.mode = ParsingBamMode::SINGLE_THREAD;
     control.writeOutputBam = true;
+    // control.mode = ParsingBamMode::MULTI_THREAD;
+    // control.writeOutputBam = false;
     control.mappingQualityFilter = true;
 
     BamParserContext ctx(tagBamFile, params.fastaFile, *chrVec, *chrLength, *mergedChrVarinat, vcfSet, geneSample);
@@ -151,26 +153,26 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, std::string& tagBamFil
 
 void HaplotagProcess::printExecutionReport(){
     std::cerr<< "-------------------------------------------\n";
-    std::cerr<< "total process time:    " << difftime(time(NULL), processBegin) << "s\n";
-    std::cerr<< "total alignment:       " << readStats.totalAlignment     << "\n";
-    std::cerr<< "total supplementary:   " << readStats.totalSupplementary << "\n";
-    std::cerr<< "total secondary:       " << readStats.totalSecondary     << "\n";
-    std::cerr<< "total unmapped:        " << readStats.totalUnmapped      << "\n";
-    std::cerr<< "total tag alignment:   " << readStats.totalTagCount     << "\n";
-    std::cerr<< "    L----total HP1   : " << readStats.totalHpCount[ReadHP::H1]     << "\n";   
-    std::cerr<< "    L----total HP2   : " << readStats.totalHpCount[ReadHP::H2]     << "\n";   
-    std::cerr<< "    L----total HP1-1 : " << readStats.totalHpCount[ReadHP::H1_1]   << "\n";   
-    std::cerr<< "    L----total HP2-1 : " << readStats.totalHpCount[ReadHP::H2_1]   << "\n";   
-    std::cerr<< "    L----total HP3   : " << readStats.totalHpCount[ReadHP::H3]     << "\n";   
-    std::cerr<< "         L----total read only H3 Snp : " << readStats.totalreadOnlyH3Snp << "\n";  
-    std::cerr<< "total untagged:        " << readStats.totalUnTagCount   << "\n";
-    std::cerr<< "    L----total lower mapping quality:    " << readStats.totalLowerQuality   << "\n"; 
-    std::cerr<< "    L----total EmptyVariant:             " << readStats.totalEmptyVariant   << "\n";
-    std::cerr<< "    L----total start > last variant pos: " << readStats.totalOtherCase   << "\n";  
-    std::cerr<< "    L----total judge to untag:           " << readStats.totalHpCount[ReadHP::unTag] << "\n"; 
-    std::cerr<< "         L----total HighSimilarity:      " << readStats.totalHighSimilarity   << "\n";   
-    std::cerr<< "         L----total CrossTwoBlock:       " << readStats.totalCrossTwoBlock   << "\n";   
-    std::cerr<< "         L----total WithOut Variant:     " << readStats.totalWithOutVaraint   << "\n";   
+    std::cerr<< "total process time        : " << difftime(time(NULL), processBegin) << "s\n";
+    std::cerr<< "total alignment           : " << readStats.totalAlignment     << "\n";
+    std::cerr<< "total supplementary       : " << readStats.totalSupplementary << "\n";
+    std::cerr<< "total secondary           : " << readStats.totalSecondary     << "\n";
+    std::cerr<< "total unmapped            : " << readStats.totalUnmapped      << "\n";
+    std::cerr<< "total tagged alignments   : " << readStats.totalTagCount     << "\n";
+    std::cerr<< "    L----total HP1        : " << readStats.totalHpCount[ReadHP::H1]     << "\n";   
+    std::cerr<< "    L----total HP2        : " << readStats.totalHpCount[ReadHP::H2]     << "\n";   
+    std::cerr<< "    L----total HP1-1      : " << readStats.totalHpCount[ReadHP::H1_1]   << "\n";   
+    std::cerr<< "    L----total HP2-1      : " << readStats.totalHpCount[ReadHP::H2_1]   << "\n";   
+    std::cerr<< "    L----total HP3        : " << readStats.totalHpCount[ReadHP::H3]     << "\n";   
+    std::cerr<< "         L----only H3 SNP : " << readStats.totalreadOnlyH3Snp << "\n";  
+    std::cerr<< "total untagged            : " << readStats.totalUnTagCount   << "\n";
+    std::cerr<< "    L----lower mapping quality        : " << readStats.totalLowerQuality   << "\n"; 
+    std::cerr<< "    L----no variant                   : " << readStats.totalEmptyVariant   << "\n";
+    std::cerr<< "    L----start pos > last variant pos : " << readStats.totalOtherCase   << "\n";  
+    std::cerr<< "    L----judge to untag               : " << readStats.totalHpCount[ReadHP::unTag] << "\n"; 
+    std::cerr<< "         L----high similarity         : " << readStats.totalHighSimilarity   << "\n";   
+    std::cerr<< "         L----cross two block         : " << readStats.totalCrossTwoBlock   << "\n";   
+    std::cerr<< "         L----no variant judge HP     : " << readStats.totalWithOutVaraint   << "\n";   
     std::cerr<< "-------------------------------------------\n";
 }
 
