@@ -17,22 +17,22 @@ HaplotagProcess::~HaplotagProcess(){
 };
 
 void HaplotagProcess::printParamsMessage(){
-    std::cerr<< "LongPhase-S v" << params.config.version << " - Haplotag\n";
+    std::cerr<< "LongPhase-S v" << params.bamCfg.version << " - Haplotag\n";
     std::cerr<< "\n";
     std::cerr<< "phased SNP file:   " << params.snpFile             << "\n";
     std::cerr<< "phased SV file:    " << params.svFile              << "\n";
     std::cerr<< "phased MOD file:   " << params.modFile             << "\n";
     std::cerr<< "input bam file:    " << params.bamFile             << "\n";
     std::cerr<< "input ref file:    " << params.fastaFile           << "\n";
-    std::cerr<< "output bam file:   " << params.config.resultPrefix + "." + params.config.outputFormat << "\n";
-    std::cerr<< "number of threads: " << params.config.numThreads          << "\n";
-    std::cerr<< "write log file:    " << (params.config.writeReadLog ? "true" : "false") << "\n";
-    std::cerr<< "log file:          " << (params.config.writeReadLog ? (params.config.resultPrefix+".out") : "") << "\n";
+    std::cerr<< "output bam file:   " << params.bamCfg.resultPrefix + "." + params.bamCfg.outputFormat << "\n";
+    std::cerr<< "number of threads: " << params.bamCfg.numThreads          << "\n";
+    std::cerr<< "write log file:    " << (params.bamCfg.writeReadLog ? "true" : "false") << "\n";
+    std::cerr<< "log file:          " << (params.bamCfg.writeReadLog ? (params.bamCfg.resultPrefix+".out") : "") << "\n";
     std::cerr<< "-------------------------------------------\n";
-    std::cerr<< "tag region:                    " << (!params.config.region.empty() ? params.config.region : "all") << "\n";
-    std::cerr<< "filter mapping quality below:  " << params.config.qualityThreshold    << "\n";
-    std::cerr<< "percentage threshold:          " << params.config.percentageThreshold << "\n";
-    std::cerr<< "tag supplementary:             " << (params.config.tagSupplementary ? "true" : "false") << "\n";
+    std::cerr<< "tag region:                    " << (!params.bamCfg.region.empty() ? params.bamCfg.region : "all") << "\n";
+    std::cerr<< "filter mapping quality below:  " << params.bamCfg.qualityThreshold    << "\n";
+    std::cerr<< "percentage threshold:          " << params.bamCfg.percentageThreshold << "\n";
+    std::cerr<< "tag supplementary:             " << (params.bamCfg.tagSupplementary ? "true" : "false") << "\n";
     std::cerr<< "-------------------------------------------\n";
 }
 
@@ -96,14 +96,14 @@ void HaplotagProcess::setChrVecAndChrLength(){
 }
 
 void HaplotagProcess::setProcessingChromRegion(){
-    if (!params.config.region.empty()) {
-        auto colonPos = params.config.region.find(":");
+    if (!params.bamCfg.region.empty()) {
+        auto colonPos = params.bamCfg.region.find(":");
         std::string regionChr;
         if (colonPos != std::string::npos) {
-            regionChr = params.config.region.substr(0, colonPos);
+            regionChr = params.bamCfg.region.substr(0, colonPos);
         }
         else {
-            regionChr = params.config.region;
+            regionChr = params.bamCfg.region;
         }
         auto chrVecIter = std::find((*chrVec).begin(), (*chrVec).end(), regionChr);
         if (chrVecIter != (*chrVec).end()) {
@@ -132,7 +132,7 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, std::string& tagBamFil
     std::time_t begin = time(NULL);
     std::cerr<< getTagReadStartMessage();
 
-    ParsingBamConfig& config = params.config;
+    ParsingBamConfig& config = params.bamCfg;
 
     ParsingBamControl control;
     control.mode = ParsingBamMode::SINGLE_THREAD;
@@ -175,7 +175,7 @@ void HaplotagProcess::printExecutionReport(){
 }
 
 GermlineTagLog::GermlineTagLog(const HaplotagParameters& params) 
-    : HaplotagReadLog<HaplotagParameters, TagReadLog>(params, params.config.resultPrefix+".out"){
+    : HaplotagReadLog<HaplotagParameters, TagReadLog>(params, params.bamCfg.resultPrefix+".out"){
 }
 
 GermlineTagLog::~GermlineTagLog(){}
@@ -184,12 +184,12 @@ void GermlineTagLog::addParamsMessage(){
     *tagReadLog << "##snpFile:" << params.snpFile << "\n"
                 << "##svFile:" << params.svFile << "\n"
                 << "##bamFile:" << params.bamFile << "\n"
-                << "##resultPrefix:" << params.config.resultPrefix << "\n"
-                << "##numThreads:" << params.config.numThreads << "\n"
-                << "##region:" << params.config.region << "\n"
-                << "##qualityThreshold:" << params.config.qualityThreshold << "\n"
-                << "##percentageThreshold:" << params.config.percentageThreshold << "\n"
-                << "##tagSupplementary:" << params.config.tagSupplementary << "\n";
+                << "##resultPrefix:" << params.bamCfg.resultPrefix << "\n"
+                << "##numThreads:" << params.bamCfg.numThreads << "\n"
+                << "##region:" << params.bamCfg.region << "\n"
+                << "##qualityThreshold:" << params.bamCfg.qualityThreshold << "\n"
+                << "##percentageThreshold:" << params.bamCfg.percentageThreshold << "\n"
+                << "##tagSupplementary:" << params.bamCfg.tagSupplementary << "\n";
 }
 
 void GermlineTagLog::writeBasicColumns(){
@@ -249,7 +249,7 @@ GermlineHaplotagBamParser::GermlineHaplotagBamParser(
 void GermlineHaplotagBamParser::createTagLog(){
     // Read log can only be written in single thread mode, which is enforced when writeOutputBam is true.
     // This is because log writing requires sequential processing of reads.
-    if(params.config.writeReadLog && control.writeOutputBam){
+    if(params.bamCfg.writeReadLog && control.writeOutputBam){
         tagResult = createTagReadLog();
         tagResult->writeHeader();
     }

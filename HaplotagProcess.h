@@ -14,7 +14,7 @@ struct HaplotagParameters
     std::string bamFile;
     std::string fastaFile;
     
-    ParsingBamConfig config;
+    ParsingBamConfig bamCfg;
 };
 
 struct ReadStatistics {

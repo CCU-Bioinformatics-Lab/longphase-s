@@ -4,7 +4,7 @@
 #include "Haplotag.h"
 #include "ModCall.h"
 #include "SomaticHaplotag.h"
-#include "PurityPrediction.h"
+#include "PurityEstimation.h"
 
 
 #define PROGRAM_BIN "main"
@@ -18,11 +18,11 @@ static const char *STRIDE_USAGE_MESSAGE =
 "Usage: " PROGRAM_BIN " <command> [options]\n"  
 "[Germline Mode]\n"
 "    phase                  run phasing algorithm.\n"
-"    haplotag               tag reads by haplotype.\n"
-"    modcall                convert bam file to modification vcf file.\n\n"
+"    haplotag               tag reads by haplotype.\n\n"
+//"    modcall                convert bam file to modification vcf file.\n\n"
 "[Somatic Mode]\n"
 "    somatic_haplotag       tag reads by somatic haplotype algorithm.\n"
-"    predict_purity         predict tumor purity.\n"
+"    estimate_purity        estimate tumor purity.\n"
 "\n";
 
 int main(int argc, char** argv)
@@ -47,9 +47,9 @@ int main(int argc, char** argv)
     {
         SomaticHaplotagMain(argc - 1, argv + 1, version);
     }
-    else if(command=="predict_purity")
+    else if(command=="estimate_purity")
     {
-        PurityPredictionMain(argc - 1, argv + 1, version);
+        PurityEstimMain(argc - 1, argv + 1, version);
     }
     else if(command=="modcall")
     {

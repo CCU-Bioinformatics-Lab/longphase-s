@@ -598,11 +598,11 @@ void SomaticReadBenchmark::writeReadLog(
     (*somaticReadLog) << "##Truth VCF File: "  << benchmarkVcf << "\n";
     (*somaticReadLog) << "##Truth BED File: "  << benchmarkBed << "\n";
     (*somaticReadLog) << "##MappingQualityThreshold: "  << mappingQualityThreshold << "\n";
-    (*somaticReadLog) << "##Tatal reads: "  << totalReads << "\n";
-    (*somaticReadLog) << "##Tatal truth somatic reads: "  << totalTruthSomaticReads << "\n";
-    (*somaticReadLog) << "##Tatal truth HP1-1: "  << truthSomaticReadsMap[ReadHP::H1_1] << "\n";
-    (*somaticReadLog) << "##Tatal truth HP2-1: "  << truthSomaticReadsMap[ReadHP::H2_1] << "\n";
-    (*somaticReadLog) << "##Tatal truth HP3: "  << truthSomaticReadsMap[ReadHP::H3] << "\n";
+    (*somaticReadLog) << "##Total reads: "  << totalReads << "\n";
+    (*somaticReadLog) << "##Total truth somatic reads: "  << totalTruthSomaticReads << "\n";
+    (*somaticReadLog) << "##Total truth HP1-1: "  << truthSomaticReadsMap[ReadHP::H1_1] << "\n";
+    (*somaticReadLog) << "##Total truth HP2-1: "  << truthSomaticReadsMap[ReadHP::H2_1] << "\n";
+    (*somaticReadLog) << "##Total truth HP3: "  << truthSomaticReadsMap[ReadHP::H3] << "\n";
     
     int separatorLength = 95;
     int columnWidth = 15;
@@ -707,11 +707,11 @@ void SomaticReadBenchmark::displayBedRegionCount(std::vector<std::string> &chrVe
     std::cout << "Variant in bed region count: " << "\n";
     std::cout << "  -Tumor: " << variantInBedRegionCount[Genome::TUMOR] << "\n";
     std::cout << "  -Normal: " << variantInBedRegionCount[Genome::NORMAL] << "\n";
-    std::cout << "  -Benchmark: " << variantInBedRegionCount[Genome::TRUTH_SOMATIC] << "\n";
+    std::cout << "  -Truth Somatic: " << variantInBedRegionCount[Genome::TRUTH_SOMATIC] << "\n";
     std::cout << "\n";
     std::cout << "Variant out bed region count: " << "\n";
     std::cout << "  -Tumor: " << variantOutBedRegionCount[Genome::TUMOR] << "\n";
     std::cout << "  -Normal: " << variantOutBedRegionCount[Genome::NORMAL] << "\n";
-    std::cout << "  -Benchmark: " << variantOutBedRegionCount[Genome::TRUTH_SOMATIC] << "\n";
+    std::cout << "  -Truth Somatic: " << variantOutBedRegionCount[Genome::TRUTH_SOMATIC] << "\n";
     std::cout << "--------------------------------" << "\n";
 }

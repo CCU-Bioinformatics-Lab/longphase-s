@@ -2,7 +2,7 @@
 
 
 SomaticHaplotagProcess::SomaticHaplotagProcess(SomaticHaplotagParameters &params)
-    : HaplotagProcess(params.basic),sParams(params), somaticBenchmark(params.benchmarkVcf, params.benchmarkBedFile, params.basic.config.qualityThreshold)
+    : HaplotagProcess(params.basic),sParams(params), somaticBenchmark(params.benchmarkVcf, params.benchmarkBedFile, params.basic.bamCfg.qualityThreshold)
 {
     hpBeforeInheritance = new ReadHpDistriLog();
     hpAfterInheritance = new ReadHpDistriLog();
@@ -14,7 +14,7 @@ SomaticHaplotagProcess::~SomaticHaplotagProcess(){
 }
 
 void SomaticHaplotagProcess::printParamsMessage(){
-    std::cerr<< "LongPhase-S v" << sParams.basic.config.version << " - Somatic Haplotag\n";
+    std::cerr<< "LongPhase-S v" << sParams.basic.bamCfg.version << " - Somatic Haplotag\n";
     std::cerr<< "\n";
     std::cerr<< "[Input Files]\n";
     std::cerr<< "phased normal SNP file       : " << sParams.basic.snpFile << "\n";
@@ -28,23 +28,23 @@ void SomaticHaplotagProcess::printParamsMessage(){
     std::cerr<< "truth BED file               : " << sParams.benchmarkBedFile << "\n";
     std::cerr<< "\n";
     std::cerr<< "[Output Files]\n";
-    std::cerr<< "tagged tumor BAM file        : " << sParams.basic.config.resultPrefix + "." + sParams.basic.config.outputFormat << "\n";
-    std::cerr<< "purity prediction file       : " << (sParams.callerCfg.predictTumorPurity ? sParams.basic.config.resultPrefix + "_purity.out" : "") << "\n";
-    std::cerr<< "somatic calling VCF file     : " << (sParams.writeSomaticCallingVcf ? sParams.basic.config.resultPrefix + "_sc.vcf" : "") << "\n";
-    std::cerr<< "benchmark metrics file       : " << (sParams.benchmarkVcf != "" ? sParams.basic.config.resultPrefix + sParams.metricsSuffix : "") << "\n";
-    std::cerr<< "log file                     : " << (sParams.basic.config.writeReadLog ? (sParams.basic.config.resultPrefix+".out") : "") << "\n";
+    std::cerr<< "tagged tumor BAM file        : " << sParams.basic.bamCfg.resultPrefix + "." + sParams.basic.bamCfg.outputFormat << "\n";
+    std::cerr<< "purity estimation file       : " << (sParams.callerCfg.estimateTumorPurity ? sParams.basic.bamCfg.resultPrefix + "_purity.out" : "") << "\n";
+    std::cerr<< "somatic calling VCF file     : " << (sParams.writeSomaticCallingVcf ? sParams.basic.bamCfg.resultPrefix + "_sc.vcf" : "") << "\n";
+    std::cerr<< "benchmark metrics file       : " << (sParams.benchmarkVcf != "" ? sParams.basic.bamCfg.resultPrefix + sParams.metricsSuffix : "") << "\n";
+    std::cerr<< "log file                     : " << (sParams.basic.bamCfg.writeReadLog ? (sParams.basic.bamCfg.resultPrefix+".out") : "") << "\n";
     std::cerr<< "-------------------------------------------\n";
     std::cerr<< "[Somatic Haplotag Params] " << "\n";
-    std::cerr<< "number of threads            : " << sParams.basic.config.numThreads << "\n";
-    std::cerr<< "tag region                   : " << (!sParams.basic.config.region.empty() ? sParams.basic.config.region : "all") << "\n";
-    std::cerr<< "filter mapping quality below : " << sParams.basic.config.qualityThreshold << "\n";
-    std::cerr<< "percentage threshold         : " << sParams.basic.config.percentageThreshold << "\n";
-    std::cerr<< "write log file               : " << (sParams.basic.config.writeReadLog ? "enabled" : "disabled") << "\n";
-    std::cerr<< "tag supplementary            : " << (sParams.basic.config.tagSupplementary ? "enabled" : "disabled") << "\n";
+    std::cerr<< "number of threads            : " << sParams.basic.bamCfg.numThreads << "\n";
+    std::cerr<< "tag region                   : " << (!sParams.basic.bamCfg.region.empty() ? sParams.basic.bamCfg.region : "all") << "\n";
+    std::cerr<< "filter mapping quality below : " << sParams.basic.bamCfg.qualityThreshold << "\n";
+    std::cerr<< "percentage threshold         : " << sParams.basic.bamCfg.percentageThreshold << "\n";
+    std::cerr<< "write log file               : " << (sParams.basic.bamCfg.writeReadLog ? "enabled" : "disabled") << "\n";
+    std::cerr<< "tag supplementary            : " << (sParams.basic.bamCfg.tagSupplementary ? "enabled" : "disabled") << "\n";
     std::cerr<< "\n";
     std::cerr<< "[Somatic Calling Params] " << "\n";
-    std::cerr<< "mapping quality              : " << sParams.basic.config.qualityThreshold << "\n";
-    std::cerr<< "tumor purity value           : " << (sParams.callerCfg.predictTumorPurity ? "auto-prediction" : std::to_string(sParams.callerCfg.tumorPurity)) << "\n";
+    std::cerr<< "mapping quality              : " << sParams.basic.bamCfg.qualityThreshold << "\n";
+    std::cerr<< "tumor purity value           : " << (sParams.callerCfg.estimateTumorPurity ? "automatic estimation" : std::to_string(sParams.callerCfg.tumorPurity)) << "\n";
     std::cerr<< "variant filtering            : " << (sParams.callerCfg.enableFilter ? "enabled" : "disabled") << "\n";
     std::cerr<< "write calling VCF            : " << (sParams.writeSomaticCallingVcf ? "enabled" : "disabled") << "\n";
     std::cerr<< "write calling log            : " << (sParams.callerCfg.writeCallingLog ? "enabled" : "disabled") << "\n";
@@ -72,7 +72,7 @@ void SomaticHaplotagProcess::taggingProcess()
                     sParams.basic.snpFile, sParams.tumorSnpFile, 
                     sParams.basic.fastaFile);
 
-    SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(sParams.callerCfg, sParams.basic.config, *chrVec);
+    SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(sParams.callerCfg, sParams.basic.bamCfg, *chrVec);
     somaticVarCaller->variantCalling(ctx, *chrVec, *chrLength, (*mergedChrVarinat), vcfSet);
     somaticVarCaller->getSomaticFlag(*chrVec, *mergedChrVarinat);
     delete somaticVarCaller;
@@ -81,9 +81,9 @@ void SomaticHaplotagProcess::taggingProcess()
     if(sParams.writeSomaticCallingVcf){
         std::cerr<< "writing somatic variants to vcf file ... ";
         std::time_t begin = time(NULL);
-        vcfParser.setCommandLine(sParams.basic.config.command);
-        vcfParser.setVersion(sParams.basic.config.version);
-        vcfParser.writingResultVCF(sParams.tumorSnpFile, vcfSet[Genome::TUMOR], *mergedChrVarinat, sParams.basic.config.resultPrefix);
+        vcfParser.setCommandLine(sParams.basic.bamCfg.command);
+        vcfParser.setVersion(sParams.basic.bamCfg.version);
+        vcfParser.writingResultVCF(sParams.tumorSnpFile, vcfSet[Genome::TUMOR], *mergedChrVarinat, sParams.basic.bamCfg.resultPrefix);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
     }
 
@@ -218,24 +218,24 @@ void SomaticHaplotagProcess::calculateSnpCounts(){
 }
 
 void SomaticHaplotagProcess::postprocessForHaplotag(){
-    somaticBenchmark.writeTaggedSomaticReadReport(*chrVec, sParams.basic.config.resultPrefix + sParams.metricsSuffix);
+    somaticBenchmark.writeTaggedSomaticReadReport(*chrVec, sParams.basic.bamCfg.resultPrefix + sParams.metricsSuffix);
 
     // other log files
     if(sParams.callerCfg.writeCallingLog){
-        hpBeforeInheritance->writeReadHpDistriLog(sParams.basic.config.resultPrefix + "_read_distri_before_inheritance.out", *chrVec);
-        hpAfterInheritance->writeReadHpDistriLog(sParams.basic.config.resultPrefix + "_read_distri_after_inheritance.out", *chrVec);
+        hpBeforeInheritance->writeReadHpDistriLog(sParams.basic.bamCfg.resultPrefix + "_read_distri_before_inheritance.out", *chrVec);
+        hpAfterInheritance->writeReadHpDistriLog(sParams.basic.bamCfg.resultPrefix + "_read_distri_after_inheritance.out", *chrVec);
         //write snp cover region
-        hpAfterInheritance->writePosCoverRegionLog(sParams.basic.config.resultPrefix + "_snp_cover_region.out", *chrVec);
+        hpAfterInheritance->writePosCoverRegionLog(sParams.basic.bamCfg.resultPrefix + "_snp_cover_region.out", *chrVec);
         //write read cover region in whole genome
-        hpAfterInheritance->writeTagReadCoverRegionLog(sParams.basic.config.resultPrefix + "_read_cover_region.bed", *chrVec, *chrLength);
+        hpAfterInheritance->writeTagReadCoverRegionLog(sParams.basic.bamCfg.resultPrefix + "_read_cover_region.bed", *chrVec, *chrLength);
     }
 
     if(sParams.writeBenchmarkLog){
         //write somatic read log
-        somaticBenchmark.writeTotalTruthSomaticReadReport(*chrVec, sParams.basic.config.resultPrefix + "_total_truth_somatic_read.out");
-        somaticBenchmark.writeTaggedReadReport(*chrVec, sParams.basic.config.resultPrefix + "_total_tagged_read.out");
-        somaticBenchmark.writePosAlleleCountLog(*chrVec, sParams.basic.config.resultPrefix + "_allele_count.out", *mergedChrVarinat);
-        somaticBenchmark.writeBedRegionLog(*chrVec, *mergedChrVarinat, sParams.basic.config.resultPrefix);
+        somaticBenchmark.writeTotalTruthSomaticReadReport(*chrVec, sParams.basic.bamCfg.resultPrefix + "_total_truth_somatic_read.out");
+        somaticBenchmark.writeTaggedReadReport(*chrVec, sParams.basic.bamCfg.resultPrefix + "_total_tagged_read.out");
+        somaticBenchmark.writePosAlleleCountLog(*chrVec, sParams.basic.bamCfg.resultPrefix + "_allele_count.out", *mergedChrVarinat);
+        somaticBenchmark.writeBedRegionLog(*chrVec, *mergedChrVarinat, sParams.basic.bamCfg.resultPrefix);
     }
 }
 
@@ -579,13 +579,13 @@ void SomaticTagLog::addParamsMessage(){
                 << "##svFile:" << sParams.basic.svFile << "\n"
                 << "##tumorBamFile:" << sParams.tumorBamFile << "\n"
                 << "##bamFile:" << sParams.basic.bamFile << "\n"
-                << "##resultPrefix:" << sParams.basic.config.resultPrefix << "\n"
-                << "##numThreads:" << sParams.basic.config.numThreads << "\n"
-                << "##region:" << sParams.basic.config.region << "\n"
-                << "##qualityThreshold:" << sParams.basic.config.qualityThreshold << "\n"
-                << "##somaticCallingThreshold:" << sParams.basic.config.qualityThreshold << "\n"
-                << "##percentageThreshold:" << sParams.basic.config.percentageThreshold << "\n"
-                << "##tagSupplementary:" << sParams.basic.config.tagSupplementary << "\n";
+                << "##resultPrefix:" << sParams.basic.bamCfg.resultPrefix << "\n"
+                << "##numThreads:" << sParams.basic.bamCfg.numThreads << "\n"
+                << "##region:" << sParams.basic.bamCfg.region << "\n"
+                << "##qualityThreshold:" << sParams.basic.bamCfg.qualityThreshold << "\n"
+                << "##somaticCallingThreshold:" << sParams.basic.bamCfg.qualityThreshold << "\n"
+                << "##percentageThreshold:" << sParams.basic.bamCfg.percentageThreshold << "\n"
+                << "##tagSupplementary:" << sParams.basic.bamCfg.tagSupplementary << "\n";
 }
 
 void SomaticTagLog::writeBasicColumns(){

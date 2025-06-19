@@ -15,7 +15,6 @@ void ArgumentManager::addOption(const struct option& opt) {
 }
 
 
-// Validate if a required file exists
 bool ArgumentManager::validateRequiredFile(const std::string& filePath, const std::string& fileDescription) {
     if(filePath.empty()) {
         std::cerr << "[ERROR] " << programName  << ": missing " << fileDescription << ".\n";
@@ -31,7 +30,6 @@ bool ArgumentManager::validateRequiredFile(const std::string& filePath, const st
     return true;
 }
 
-// Validate if an optional file exists (if specified)
 bool ArgumentManager::validateOptionalFile(const std::string& filePath, const std::string& fileDescription) {
     if(filePath.empty()) {
         // Optional file not specified, that's OK
@@ -91,7 +89,7 @@ void ArgumentManager::parseOptions(int argc, char** argv)
     }
     
     // Validate numeric parameters
-    if (!validateNumericParameter()) {
+    if (!validateNumericParams()) {
         die = true;
     }
     

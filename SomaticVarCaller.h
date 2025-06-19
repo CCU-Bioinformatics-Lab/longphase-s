@@ -4,7 +4,7 @@
 #include "Util.h" 
 #include "HaplotagType.h"
 #include "HaplotagParsingBam.h"
-#include "TumorPurityPredictor.h"
+#include "TumorPurityEstimator.h"
 #include "HaplotagLogging.h"
 
 struct CallerContext
@@ -21,12 +21,12 @@ struct CallerContext
 struct CallerConfig
 {
     bool enableFilter = true;
-    bool predictTumorPurity = true;
+    bool estimateTumorPurity = true;
     double tumorPurity = 0.0;
     bool writeCallingLog = false;
     CallerConfig() = default;
-    CallerConfig(bool filter, bool predict, double purity, bool writeLog)
-        : enableFilter(filter), predictTumorPurity(predict), tumorPurity(purity), writeCallingLog(writeLog) {}
+    CallerConfig(bool filter, bool isEstimate, double purity, bool writeLog)
+        : enableFilter(filter), estimateTumorPurity(isEstimate), tumorPurity(purity), writeCallingLog(writeLog) {}
 };
 
 struct SomaticVarFilterParams
@@ -369,7 +369,7 @@ class SomaticVarCaller{
             std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
             std::map<Genome, VCF_Info> &vcfSet           
         );
-        double runTumorPurityPredictor(bool writeReadLog, const std::string resultPrefix);
+        double runTumorPurityEstimator(bool writeReadLog, const std::string resultPrefix);
         void getSomaticFlag(const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
 
 };

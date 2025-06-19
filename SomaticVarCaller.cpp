@@ -281,7 +281,8 @@ void ExtractTumDataChrProcessor::processRead(
     int pqValue = 0;   
     double normalHPsimilarity = 0.0;
     double tumorHPsimilarity = 0.0;
-    //calculate germline read HP result for predict tumor purity
+
+    //calculate germline read HP result for estimate tumor purity
     //calculate somatic read HP result for somatic read consistency filter
     int hpResult = somaticJudger.judgeSomaticReadHap(hpCount, pqValue, norCountPS, normalHPsimilarity, tumorHPsimilarity, ctx.params.percentageThreshold, nullptr, nullptr, nullptr);
    
@@ -345,7 +346,7 @@ void ExtractTumDataChrProcessor::processRead(
             }
             // record the base HP whatever it is germline or somatic for statistic read distribution at current position
             (*tumorPosReadCorrBaseHP)[pos][readID] = tumorSnpBaseHP;
-            // record the base HP for predict tumor purity
+            // record the base HP for estimate tumor purity
             (*somaticPosInfo)[pos].base.ReadHpCount[hpResult]++;
         } 
     }
@@ -599,9 +600,9 @@ void SomaticVarCaller::variantCalling(
 
     double tumorPurity = 0.0;
 
-    //predict tumor purity or use the value from parameters
-    if(callerCfg.predictTumorPurity){
-        tumorPurity = runTumorPurityPredictor(callerCfg.writeCallingLog, bamCfg.resultPrefix);
+    //estimate tumor purity or use the value from parameters
+    if(callerCfg.estimateTumorPurity){
+        tumorPurity = runTumorPurityEstimator(callerCfg.writeCallingLog, bamCfg.resultPrefix);
     }else{
         tumorPurity = callerCfg.tumorPurity;
     }
@@ -745,15 +746,15 @@ void SomaticVarCaller::extractSomaticData(
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 }
 
-double SomaticVarCaller::runTumorPurityPredictor(bool writeReadLog, const std::string resultPrefix){
+double SomaticVarCaller::runTumorPurityEstimator(bool writeReadLog, const std::string resultPrefix){
     double tumorPurity = 0.0;
 
-    TumorPurityPredictor* tumorPurityPredictor = new TumorPurityPredictor(chrVec, *chrPosNorBase, *chrPosSomaticInfo, writeReadLog, resultPrefix);
-    // predict tumor purity
-    tumorPurity = tumorPurityPredictor->predictTumorPurity();
-    //flag the position that is used for purity prediction
-    tumorPurityPredictor->markStatisticFlag(*chrPosSomaticInfo);
-    delete tumorPurityPredictor;
+    TumorPurityEstimator* purityEstimator = new TumorPurityEstimator(chrVec, *chrPosNorBase, *chrPosSomaticInfo, writeReadLog, resultPrefix);
+    // estimate tumor purity
+    tumorPurity = purityEstimator->estimateTumorPurity();
+    //flag the position that is used for purity estimation
+    purityEstimator->markStatisticFlag(*chrPosSomaticInfo);
+    delete purityEstimator;
 
     return tumorPurity;
 }
@@ -998,7 +999,6 @@ void SomaticVarCaller::shannonEntropyFilter(const std::string &chr, std::map<int
             char homopolymer_base = ' ';
             int homopolymer_length = 0;
 
-            char max_homopolymer_base= ' ';
             int max_homopolymer_length=0;
             // std::cout << "------somatic SNP------: "<< snp_pos << std::endl;
             for(int pos = window_start; pos <= window_end; pos++){
@@ -1017,7 +1017,6 @@ void SomaticVarCaller::shannonEntropyFilter(const std::string &chr, std::map<int
                 }else{
                     if(max_homopolymer_length < homopolymer_length){
                         max_homopolymer_length = homopolymer_length;
-                        max_homopolymer_base = homopolymer_base;
                         // std::cout << "---------------> max_base: " << max_homopolymer_base << " maxLen: " << max_homopolymer_length << std::endl;
                     }
                     homopolymer_base = base;
@@ -1030,7 +1029,6 @@ void SomaticVarCaller::shannonEntropyFilter(const std::string &chr, std::map<int
             // std::cout << "homopolymer_base: " << homopolymer_base << " homoplerLen: " << homopolymer_length << std::endl;
             if(max_homopolymer_length < homopolymer_length){
                 max_homopolymer_length = homopolymer_length;
-                max_homopolymer_base = homopolymer_base;
             }
             // std::cout << "---------------> max_base: " << max_homopolymer_base << " maxLen: " << max_homopolymer_length << std::endl;
             // std::cout << " " << std::endl;
@@ -1152,9 +1150,6 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, SomaticData> &soma
             std::cerr << "ERROR: somaticPosInfo not found: " << somaticPosIter->first << std::endl;
             exit(1);
         }
-        // if(somaticPosIter->first + 1 == 81435550 || somaticPosIter->first + 1 == 81435861){
-        //     std::cout << "pos: " << somaticPosIter->first + 1 << " readCount: " << readCount << " AltMeanCount: " << altMean << " minStartPos: " << minStartPos<< " maxEndPos: " << maxEndPos << std::endl;
-        // }
     }
 
     //find the interval of tumor SNPs
@@ -1203,9 +1198,6 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, SomaticData> &soma
                     isRecordStartPos = false;
                     startPos = 0;
                     denseSnp.clear();
-                    // std::cout << "------------->endPos: " << pos << " stdDev: " << stdDev << "\n"<< std::endl;
-                }else{
-                    // std::cerr << "ERROR: isStartPos is false: pos: " << curPos << " nextPos: " << nextPos << " startPos: " << startPos << std::endl;
                 }
             }
         }
@@ -1217,10 +1209,8 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, SomaticData> &soma
     if (isRecordStartPos) {
         int endPos = somaticPosInfo.rbegin()->first;
         if(endPos - startPos <= dense_distance){
-            // std::cout << "Last interval ------------->" << "startPos: " << startPos << " endPos: " << endPos << std::endl;
             calculateIntervalData(isRecordStartPos, startPos, endPos, denseSnp, localDenseTumorSnpInterval);
         }
-        // localDenseTumorSnpInterval[startPos] = std::make_pair(somaticPosInfo.rbegin()->first, denseSnpInterval()); // save the last interval
     }
 
     // record the zScore of each SNP in the dense tumor interval

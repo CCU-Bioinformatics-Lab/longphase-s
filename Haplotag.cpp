@@ -89,7 +89,7 @@ bool ParamsHandler<ParsingBamConfig>::loadArgument(ParsingBamConfig& params, cha
     return isLoaded;    
 }
 
-bool ParamsHandler<ParsingBamConfig>::validateNumericParameter(ParsingBamConfig& params, const std::string& programName) {
+bool ParamsHandler<ParsingBamConfig>::validateNumericParams(ParsingBamConfig& params, const std::string& programName) {
     bool isValid = true;
     
     if (params.numThreads < 1) {
@@ -118,11 +118,11 @@ void ParamsHandler<ParsingBamConfig>::recordCommand(ParsingBamConfig& params, in
 
 void ParamsHandler<HaplotagParameters>::initialize(HaplotagParameters& params, const std::string& version) {
     // Initialize default values
-    ParamsHandler<ParsingBamConfig>::initialize(params.config, version);
+    ParamsHandler<ParsingBamConfig>::initialize(params.bamCfg, version);
 }
 
 bool ParamsHandler<HaplotagParameters>::loadArgument(HaplotagParameters& params, char& opt, std::istringstream& arg) {
-    bool isLoaded = ParamsHandler<ParsingBamConfig>::loadArgument(params.config, opt, arg);
+    bool isLoaded = ParamsHandler<ParsingBamConfig>::loadArgument(params.bamCfg, opt, arg);
     
     if(!isLoaded){
         //reset isLoaded
@@ -135,7 +135,7 @@ bool ParamsHandler<HaplotagParameters>::loadArgument(HaplotagParameters& params,
             case 'r': arg >> params.fastaFile; break; 
             case HaplotagOption::SV_FILE:  arg >> params.svFile; break;
             case HaplotagOption::MOD_FILE: arg >> params.modFile; break;     
-            case HaplotagOption::REGION:   arg >> params.config.region; break;        
+            case HaplotagOption::REGION:   arg >> params.bamCfg.region; break;        
             default: isLoaded = false; break;
         }
     }
@@ -157,15 +157,15 @@ bool ParamsHandler<HaplotagParameters>::validateFiles(HaplotagParameters& params
     return isValid;
 }
 
-bool ParamsHandler<HaplotagParameters>::validateNumericParameter(HaplotagParameters& params, const std::string& programName) {
+bool ParamsHandler<HaplotagParameters>::validateNumericParams(HaplotagParameters& params, const std::string& programName) {
 
-    bool isValid = ParamsHandler<ParsingBamConfig>::validateNumericParameter(params.config, programName);
+    bool isValid = ParamsHandler<ParsingBamConfig>::validateNumericParams(params.bamCfg, programName);
 
     return isValid;   
 }
 
 void ParamsHandler<HaplotagParameters>::recordCommand(HaplotagParameters& params, int argc, char** argv) {
-    ParamsHandler<ParsingBamConfig>::recordCommand(params.config, argc, argv);
+    ParamsHandler<ParsingBamConfig>::recordCommand(params.bamCfg, argc, argv);
 }
 
 int ParamsHandler<HaplotagParameters>::getHelpEnumNum() {

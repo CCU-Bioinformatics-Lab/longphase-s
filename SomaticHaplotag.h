@@ -14,7 +14,7 @@ struct ParamsHandler<SomaticHaplotagParameters>{
 
     static bool validateFiles(SomaticHaplotagParameters& params, const std::string& programName);
 
-    static bool validateNumericParameter(SomaticHaplotagParameters& params, const std::string& programName);
+    static bool validateNumericParams(SomaticHaplotagParameters& params, const std::string& programName);
 
     static void recordCommand(SomaticHaplotagParameters& params, int argc, char** argv);
 

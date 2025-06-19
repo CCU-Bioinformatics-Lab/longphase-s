@@ -6,7 +6,7 @@ constexpr const char *CORRECT_USAGE_MESSAGE =
 "Usage: "  " " SUBPROGRAM " [OPTION] ... READSFILE\n"
 "      --help                          display this help and exit.\n\n"
 "required arguments:\n"
-"      -s, --snp-file=NAME             input normal sample SNP VCF file.\n"
+"      -s, --snp-file=NAME             input phased normal sample SNP VCF file.\n"
 "      -b, --bam-file=NAME             input normal sample BAM file.\n"
 "      --tumor-snp-file=NAME           input tumor sample SNP VCF file.\n"
 "      --tumor-bam-file=NAME           input tumor sample BAM file for somatic haplotag.\n"
@@ -26,7 +26,7 @@ constexpr const char *CORRECT_USAGE_MESSAGE =
 "      --log                           an additional log file records the result of each read. default:false\n\n"
 "somatic variant calling arguments:\n"
 "      --tumor-purity=Num              tumor purity (0.1~1.0) for adjusting somatic variant filtering.\n"
-"                                      lower values apply more conservative filters. default: auto-prediction.\n"
+"                                      lower values apply more conservative filters. default: automatic estimation.\n"
 "      --disableFilter                 disable somatic variant filtering and accept all tumor VCF variants. default: false.\n"
 "      --output-somatic-vcf            output filtered somatic variants VCF file based on tumor VCF. default: false.\n"
 "                                      variants passing filters will be marked as PASS, others as LowQual.\n"
@@ -61,7 +61,7 @@ void ParamsHandler<SomaticHaplotagParameters>::initialize(SomaticHaplotagParamet
 
     params.callerCfg.tumorPurity = 0.2;
     params.callerCfg.enableFilter = true;
-    params.callerCfg.predictTumorPurity = true;
+    params.callerCfg.estimateTumorPurity = true;
     params.writeSomaticCallingVcf = false;
     params.callerCfg.writeCallingLog = false;
     params.writeBenchmarkLog = false;
@@ -88,7 +88,7 @@ bool ParamsHandler<SomaticHaplotagParameters>::loadArgument(SomaticHaplotagParam
             case SomaticHaplotagOption::OUTPUT_SOMATIC_VCF: params.writeSomaticCallingVcf = true; break;
             case SomaticHaplotagOption::TUMOR_PURITY: 
                 arg >> params.callerCfg.tumorPurity; 
-                params.callerCfg.predictTumorPurity = false;
+                params.callerCfg.estimateTumorPurity = false;
                 break;
             default: isLoaded = false; 
             break;
@@ -108,8 +108,8 @@ bool ParamsHandler<SomaticHaplotagParameters>::validateFiles(SomaticHaplotagPara
     return isValid;
 }
 
-bool ParamsHandler<SomaticHaplotagParameters>::validateNumericParameter(SomaticHaplotagParameters& params, const std::string& programName) {
-    bool isValid = ParamsHandler<HaplotagParameters>::validateNumericParameter(params.basic, programName);
+bool ParamsHandler<SomaticHaplotagParameters>::validateNumericParams(SomaticHaplotagParameters& params, const std::string& programName) {
+    bool isValid = ParamsHandler<HaplotagParameters>::validateNumericParams(params.basic, programName);
 
     if (params.callerCfg.tumorPurity < 0.1 || params.callerCfg.tumorPurity > 1.0) {
         std::cerr << "[ERROR] " << programName << ": invalid tumor purity. value: " 
@@ -122,10 +122,7 @@ bool ParamsHandler<SomaticHaplotagParameters>::validateNumericParameter(SomaticH
 }
 
 void ParamsHandler<SomaticHaplotagParameters>::recordCommand(SomaticHaplotagParameters& params, int argc, char** argv) {
-    for(int i = 0; i < argc; ++i){
-        params.basic.config.command.append(argv[i]);
-        params.basic.config.command.append(" ");
-    }
+    ParamsHandler<ParsingBamConfig>::recordCommand(params.basic.bamCfg, argc, argv);
 }
 
 int ParamsHandler<SomaticHaplotagParameters>::getHelpEnumNum() {

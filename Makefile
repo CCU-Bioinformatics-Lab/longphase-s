@@ -17,8 +17,8 @@ OBJ = Haplotag.o \
 	  ModCall.o \
 	  ModCallParsingBam.o \
 	  ModCallProcess.o \
+	  TumorPurityEstimator.o \
 	  SomaticVarCaller.o \
-	  TumorPurityPredictor.o \
 	  SomaticBenchmark.o \
 	  SomaticHaplotagProcess.o \
 	  SomaticHaplotag.o \
@@ -26,8 +26,8 @@ OBJ = Haplotag.o \
 	  HaplotagVcfParser.o \
 	  HaplotagLogging.o \
 	  ArgumentManager.o \
-	  PurityPrediction.o \
-	  PurityPredictionProcess.o \
+	  PurityEstimation.o \
+	  PurityEstimationProcess.o \
 	  main.o 
 
 PROGRAMS = longphase-s

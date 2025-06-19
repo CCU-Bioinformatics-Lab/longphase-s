@@ -21,7 +21,7 @@ struct ParamsHandler<HaplotagParameters>{
 
     static bool validateFiles(HaplotagParameters& params, const std::string& programName);
 
-    static bool validateNumericParameter(HaplotagParameters& params, const std::string& programName);
+    static bool validateNumericParams(HaplotagParameters& params, const std::string& programName);
 
     static void recordCommand(HaplotagParameters& params, int argc, char** argv);
 
@@ -35,7 +35,7 @@ struct ParamsHandler<ParsingBamConfig>{
 
     static bool loadArgument(ParsingBamConfig& params, char& opt, std::istringstream& arg);
 
-    static bool validateNumericParameter(ParsingBamConfig& params, const std::string& programName);
+    static bool validateNumericParams(ParsingBamConfig& params, const std::string& programName);
 
     static void recordCommand(ParsingBamConfig& params, int argc, char** argv);
 };
