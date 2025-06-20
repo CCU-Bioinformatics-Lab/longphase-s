@@ -170,6 +170,12 @@ namespace tumor_normal_analysis{
     void calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase);
 };
 
+namespace statisticsUtils{
+    double calculateMean(const std::map<int, double>& data);
+    double calculateStandardDeviation(const std::map<int, double>& data, double mean);
+    void calculateZScores(const std::map<int, double>& data, double mean, double stdDev, std::map<int, double> &zScores);
+};
+
 /**
  * @brief Chromosome processor for extracting normal sample data
  * 
@@ -518,19 +524,13 @@ class SomaticVarCaller{
          * @param chrVec Vector of chromosome names
          */
         void writeDenseTumorSnpIntervalLog(const std::string logFileName, const std::vector<std::string> &chrVec);
-        
-        double calculateMean(const std::map<int, double>& data);
-        double calculateStandardDeviation(const std::map<int, double>& data, double mean);
-        void calculateZScores(const std::map<int, double>& data, double mean, double stdDev, std::map<int, double> &zScores);
+    
         // temporary function
         void shannonEntropyFilter(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants, std::string &ref_string);
         double entropyComponent(int count, int total);
         double calculateShannonEntropy(int nA, int nC, int nT, int nG);
 
         void findOtherSomaticSnpHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants);
-        int convertStrNucToInt(std::string &base);
-        std::string convertIntNucToStr(int base);
-        
         /**
          * @brief Release allocated memory
          * 

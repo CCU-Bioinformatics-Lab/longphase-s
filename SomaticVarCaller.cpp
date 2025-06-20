@@ -34,6 +34,38 @@ void tumor_normal_analysis::calculateBaseCommonInfo(PosBase& baseInfo, std::stri
 }
 
 
+double statisticsUtils::calculateMean(const std::map<int, double>& data){
+    double size = data.size();
+    if(size == 0) return 0.0;
+    
+    double sum = 0.0;
+    for(auto meanIter : data){
+        sum += meanIter.second;
+    }
+    return sum / size;
+}
+
+double statisticsUtils::calculateStandardDeviation(const std::map<int, double>& data, double mean){
+    double variance = 0.0;
+    for (auto meanIter : data) {
+        double value = meanIter.second;
+        variance += (value - mean) * (value - mean);
+    }
+    return std::sqrt(variance / data.size());
+}
+
+void statisticsUtils::calculateZScores(const std::map<int, double>& data, double mean, double stdDev, std::map<int, double> &zScores){
+    for (auto meanIter : data) {
+        double value = meanIter.second;
+        if(stdDev == 0){
+            zScores[meanIter.first] = 0.0;
+        }else{
+            zScores[meanIter.first] = ((value - mean) / stdDev); // calculate z-score
+        }
+    }
+}
+
+
 ExtractNorDataBamParser::ExtractNorDataBamParser(
     const ParsingBamConfig &config, 
     const ParsingBamControl &control,
@@ -682,9 +714,6 @@ void SomaticVarCaller::variantCalling(
         //calculate information and filter somatic SNPs
         somaticFeatureFilter(somaticParams, currentChrVariants, chr, *somaticPosInfo, tumorPurity);
 
-        //find other somatic variants HP4/HP5 (temporary)
-        // FindOtherSomaticSnpHP(chr, *somaticPosInfo, currentChrVariants);
-
         // Shannon entropy filter(temporary)
         // ShannonEntropyFilter(chr, *somaticPosInfo, currentChrVariants, ref_string);
 
@@ -696,6 +725,9 @@ void SomaticVarCaller::variantCalling(
 
         //statistic all read HP in somatic SNP position
         statisticSomaticPosReadHP(chr, *somaticPosInfo, *tumorPosReadCorrBaseHP, *readHpResultSet, *localCallerReadHpDistri);
+        
+        //find other somatic variants Haplotype (HP4/HP5)
+        findOtherSomaticSnpHP(chr, *somaticPosInfo, currentChrVariants);
 
     }
     std::cerr<< difftime(time(NULL), begin) << "s\n";
@@ -1096,41 +1128,10 @@ double SomaticVarCaller::calculateShannonEntropy(int nA, int nC, int nT, int nG)
     return entropy;
 }
 
-double SomaticVarCaller::calculateMean(const std::map<int, double>& data){
-    double size = data.size();
-    if(size == 0) return 0.0;
-    
-    double sum = 0.0;
-    for(auto meanIter : data){
-        sum += meanIter.second;
-    }
-    return sum / size;
-}
-
-double SomaticVarCaller::calculateStandardDeviation(const std::map<int, double>& data, double mean){
-    double variance = 0.0;
-    for (auto meanIter : data) {
-        double value = meanIter.second;
-        variance += (value - mean) * (value - mean);
-    }
-    return std::sqrt(variance / data.size());
-}
-
-void SomaticVarCaller::calculateZScores(const std::map<int, double>& data, double mean, double stdDev, std::map<int, double> &zScores){
-    for (auto meanIter : data) {
-        double value = meanIter.second;
-        if(stdDev == 0){
-            zScores[meanIter.first] = 0.0;
-        }else{
-            zScores[meanIter.first] = ((value - mean) / stdDev); // calculate z-score
-        }
-    }
-}
-
 void SomaticVarCaller::calculateIntervalData(bool &isStartPos, int &startPos, int &endPos, DenseSnpInterval &denseSnp, std::map<int, std::pair<int, DenseSnpInterval>> &localDenseTumorSnpInterval){
-    double mean = calculateMean(denseSnp.snpAltMean);
-    double stdDev = calculateStandardDeviation(denseSnp.snpAltMean, mean);
-    calculateZScores(denseSnp.snpAltMean, mean, stdDev, denseSnp.snpZscore);
+    double mean = statisticsUtils::calculateMean(denseSnp.snpAltMean);
+    double stdDev = statisticsUtils::calculateStandardDeviation(denseSnp.snpAltMean, mean);
+    statisticsUtils::calculateZScores(denseSnp.snpAltMean, mean, stdDev, denseSnp.snpZscore);
 
     denseSnp.totalAltMean = mean;
     denseSnp.StdDev = stdDev;   
@@ -1265,8 +1266,8 @@ void SomaticVarCaller::findOtherSomaticSnpHP(const std::string &chr, std::map<in
             int altAllele;
 
             if(currentChrVariants.find(pos) != currentChrVariants.end()){
-                refAllele = convertStrNucToInt(currentChrVariants[pos].Variant[TUMOR].allele.Ref);
-                altAllele = convertStrNucToInt(currentChrVariants[pos].Variant[TUMOR].allele.Alt);
+                refAllele = NucUtil::convertStrNucToInt(currentChrVariants[pos].Variant[TUMOR].allele.Ref);
+                altAllele = NucUtil::convertStrNucToInt(currentChrVariants[pos].Variant[TUMOR].allele.Alt);
             }else{
                 std::cerr << "[ERROR](FindOtherSomaticSnpHP) => can't find position in currentChrVariants : chr:" << chr << " pos: " << pos + 1;
                 exit(1);
@@ -1302,47 +1303,6 @@ void SomaticVarCaller::findOtherSomaticSnpHP(const std::string &chr, std::map<in
             }
         }
         somaticVarIter++;
-    }
-}
-
-/**
- * @brief Convert string nucleotide to integer representation
- * 
- * Converts single nucleotide strings (A, C, G, T) to their integer
- * representation for efficient processing and comparison.
- * 
- * @param base String representation of nucleotide
- * @return Integer representation of nucleotide
- */
-int SomaticVarCaller::convertStrNucToInt(std::string &base){
-    if(base == "A"){
-        return Nitrogenous::A;
-    }else if(base == "C"){
-        return Nitrogenous::C;
-    }else if(base == "G"){
-        return Nitrogenous::G;
-    }else if(base == "T"){
-        return Nitrogenous::T;
-    }else{
-        std::cerr << "[ERROR](convertNucleotideToInt) => can't find Allele : " << base << "\n";
-        exit(1);
-    }
-}
-
-std::string SomaticVarCaller::convertIntNucToStr(int base){
-    if(base == Nitrogenous::A){
-        return "A";
-    }else if(base == Nitrogenous::C){
-        return "C";
-    }else if(base == Nitrogenous::G){
-        return "G";
-    }else if(base == Nitrogenous::T){
-        return "T";
-    }else if(base == Nitrogenous::UNKOWN){
-        return "UNKOWN";
-    }else {
-        std::cerr << "[ERROR](convertIntNucToStr) => can't find Allele : " << base << "\n";
-        exit(1);
     }
 }
 
@@ -1925,9 +1885,9 @@ void SomaticVarCaller::writeOtherSomaticHpLog(const std::string logFileName, con
                                     << pos + 1 << "\t"
                                     << currentChrVar[pos].Variant[TUMOR].allele.Ref << "\t"
                                     << currentChrVar[pos].Variant[TUMOR].allele.Alt << "\t"
-                                    << convertIntNucToStr(somaticVar.second.somaticHp4Base) << "\t"
+                                    << NucUtil::convertIntNucToStr(somaticVar.second.somaticHp4Base) << "\t"
                                     << somaticVar.second.somaticHp4BaseCount<< "\t"
-                                    << convertIntNucToStr(somaticVar.second.somaticHp5Base) << "\t"
+                                    << NucUtil::convertIntNucToStr(somaticVar.second.somaticHp5Base) << "\t"
                                     << somaticVar.second.somaticHp5BaseCount << "\n";
         }
     

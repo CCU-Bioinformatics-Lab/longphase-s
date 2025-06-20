@@ -8,8 +8,9 @@
 #include <omp.h>
 #include <climits>
 
-// Option identifiers enum
-enum HaplotagOption {
+// Option enum
+enum HaplotagOption
+{
     OPT_HELP = 1,
     TAG_SUP,
     SV_FILE,
@@ -19,7 +20,8 @@ enum HaplotagOption {
     CRAM
 };
 
-enum SomaticHaplotagOption{
+enum SomaticHaplotagOption
+{
     TUM_SNP = 50,
     TUM_BAM,
     DISABLE_FILTER,
@@ -38,7 +40,8 @@ enum Genome
     TRUTH_SOMATIC = 2
 };
 
-enum GenomeType{
+enum GenomeType
+{
     NONE_GT = 0,
     PHASED_HETERO = 1,
     UNPHASED_HETERO = 2,
@@ -296,6 +299,46 @@ namespace ReadHapUtil {
                 std::cerr << "[ERROR] (ReadHapUtil::toString) => Unsupported HP result: " << static_cast<int>(hpResult) << std::endl;
                 exit(1);
         }
+    }
+}
+
+namespace NucUtil {
+    /**
+     * @brief Convert string nucleotide to integer representation
+     * 
+     * Converts single nucleotide strings (A, C, G, T) to their integer
+     * representation for efficient processing and comparison.
+     * 
+     * @param base String representation of nucleotide
+     * @return Integer representation of nucleotide
+     */
+    inline int convertStrNucToInt(const std::string& base) {
+        if(base == "A") return Nitrogenous::A;
+        if(base == "C") return Nitrogenous::C;
+        if(base == "G") return Nitrogenous::G;
+        if(base == "T") return Nitrogenous::T;
+        
+        std::cerr << "[ERROR](NucleotideUtil::convertStrNucToInt) => can't find Allele : " << base << "\n";
+        exit(1);
+    }
+
+    /**
+     * @brief Convert integer nucleotide to string representation
+     * 
+     * Converts integer representation back to string for output and display.
+     * 
+     * @param base Integer representation of nucleotide
+     * @return String representation of nucleotide
+     */
+    inline std::string convertIntNucToStr(int base) {
+        if(base == Nitrogenous::A) return "A";
+        if(base == Nitrogenous::C) return "C";
+        if(base == Nitrogenous::G) return "G";
+        if(base == Nitrogenous::T) return "T";
+        if(base == Nitrogenous::UNKOWN) return "UNKNOWN";
+        
+        std::cerr << "[ERROR](NucleotideUtil::convertIntNucToStr) => can't find Allele : " << base << "\n";
+        exit(1);
     }
 }
 
