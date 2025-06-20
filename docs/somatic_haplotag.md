@@ -29,7 +29,6 @@ longphase-s somatic_haplotag \
 -q 20 \
 ```
 
-
 ### Somatic haplotagging benchmark:
 The benchmark evaluates the performance of somatic haplotagging at the read level by:
 
@@ -50,7 +49,7 @@ The benchmark evaluates the performance of somatic haplotagging at the read leve
    - Overall performance metrics
    - Detailed read-level information including assigned haplotypes
 
-The [benchmark results](#benchmark-metrics-file) are output to a metrics file when truth files (`--truth-vcf` and optionally `--truth-bed`) are provided.
+The benchmark results are output to a [metrics file](#benchmark-metrics-file) when truth files (`--truth-vcf` and optionally `--truth-bed`) are provided.
 
 
 ### The complete list of somatic haplotagging parameters
@@ -113,11 +112,13 @@ Tumor purity: 0.169599
 ### Somatic calling result VCF file
 The somatic calling result VCF file is based on the input tumor VCF with the following modifications:
 
-1. Additional header information:
+1. **Variant filtering**: Only variants that are used in the somatic haplotagging process are included in the output VCF.
+
+2. Additional header information:
    - LongPhase-S version
    - Command line
 
-2. Variant filter status:
+3. Variant filter status:
    - `PASS`: Variants passing quality filters
    - `LowQual`: Variants failing quality filters
 

@@ -137,8 +137,6 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, std::string& tagBamFil
     ParsingBamControl control;
     control.mode = ParsingBamMode::SINGLE_THREAD;
     control.writeOutputBam = true;
-    // control.mode = ParsingBamMode::MULTI_THREAD;
-    // control.writeOutputBam = false;
     control.mappingQualityFilter = true;
 
     BamParserContext ctx(tagBamFile, params.fastaFile, *chrVec, *chrLength, *chrMultiVariants, vcfSet, geneSample);

@@ -726,7 +726,7 @@ void SomaticVarCaller::variantCalling(
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 
     // [debug] calling somatic SNPs count
-    displayCallingSnpCount();
+    // displayCallingSnpCount();
     
     if(callerCfg.writeCallingLog){
         //write the log file for variants with positions tagged as HP3
@@ -1832,7 +1832,7 @@ void SomaticVarCaller::getSomaticFlag(const std::vector<std::string> &chrVec, st
         }
     }
     // [debug] somatic variant count
-    std::cerr << "somatic variant count(Flag): " << somaticVariantCount << "\n";
+    // std::cerr << "somatic variant count(Flag): " << somaticVariantCount << "\n";
 }
 
 /**

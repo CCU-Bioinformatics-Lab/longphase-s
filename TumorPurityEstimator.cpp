@@ -29,7 +29,7 @@ TumorPurityEstimator::~TumorPurityEstimator(){
  * Performs multi-stage filtering and statistical analysis to estimate tumor purity
  */
 double TumorPurityEstimator::estimateTumorPurity(){
-   std::cerr << "estimating tumor purity ... ";
+    std::cerr << "estimating tumor purity ... ";
     std::time_t begin = time(NULL);
 
     // median, iqr
@@ -40,38 +40,21 @@ double TumorPurityEstimator::estimateTumorPurity(){
         // build the feature value vector with first stage filter
         buildPurityFeatureValueVec(purityFeatureValueVec);
 
-        // std::cerr << "initial data size: " << initial_data_size << std::endl;
-        // std::cerr << "\n==========first filter==========" << std::endl;
-        // std::cerr << "[INFO] Data count: " << purityFeatureValueVec.size() << std::endl;
-        // std::cerr << "[INFO] imbalanceRatioInNorBam == 0.0: " << filterCounts.imbalanceRatioInNorBam << std::endl;
-        // std::cerr << "[INFO] imbalanceRatio == 0.0: " << filterCounts.imbalanceRatio << std::endl;
-        // std::cerr << "[INFO] imbalanceRatioInNorBam <= 0.7: " << filterCounts.imbalanceRatioInNorBamMaxThr << std::endl;
-        // std::cerr << "[INFO] readHpCountInNorBam <= 5: " << filterCounts.readHpCountInNorBam << std::endl;
-        // std::cerr << "[INFO] percentageOfGermlineHpInNorBam: >= 0.7 " << filterCounts.percentageOfGermlineHp << std::endl;
-
         // find the threshold of germlineReadHpCount for peak valley filter
         int germlineReadHpCountThreshold = findPeakValleythreshold(purityFeatureValueVec);
 
         // peak valley filter
         peakValleyFilter(purityFeatureValueVec, germlineReadHpCountThreshold);
 
-        // std::cerr << "\n==========second filter==========" << std::endl;
-        // std::cerr << "[INFO] germlineReadHpCountThreshold: " << germlineReadHpCountThreshold << std::endl;
-        // std::cerr << "[INFO] filter peakValley count: " << filterCounts.peakValley << std::endl;
-        // std::cerr << "[INFO] Data count: " << purityFeatureValueVec.size() << std::endl;
-
         BoxPlotValue plotValue = statisticPurityData(purityFeatureValueVec);
 
         //remove outliers for reduce noise 
         size_t iteration_times = 1;
         for(size_t i = 0; i < iteration_times; i++){
-            // std::printf("[INFO]==========iteration %ld==========\n", i+1);
             // remove outliers for reduce noise
             removeOutliers(purityFeatureValueVec, plotValue);
             // statistic the data
             plotValue = statisticPurityData(purityFeatureValueVec);
-            // std::printf("[INFO] wisker : lower = %f, upper = %f\n", plotValue.lowerWhisker, plotValue.upperWhisker);
-            // std::printf("[INFO] after remove outliers: %ld, data size: %ld\n", filterCounts.outliers, plotValue.data_size);
         }
 
 
@@ -88,15 +71,7 @@ double TumorPurityEstimator::estimateTumorPurity(){
         }
 
         std::cerr<< difftime(time(NULL), begin) << "s\n";
-        // std::cerr << "[INFO] ===== tumor purity ===== : " << purity << std::endl;
-        // std::cerr << "[INFO] median: " << plotValue.median << std::endl;
-        // std::cerr << "[INFO] iqr: " << plotValue.iqr << std::endl;
-        // std::cerr << "[INFO] q1: " << plotValue.q1 << std::endl;
-        // std::cerr << "[INFO] q3: " << plotValue.q3 << std::endl;
-        // std::cerr << "[INFO] lowerWhisker: " << plotValue.lowerWhisker << std::endl;
-        // std::cerr << "[INFO] upperWhisker: " << plotValue.upperWhisker << std::endl;
-        // std::cerr << "[INFO] outliers: " << plotValue.outliers << std::endl;
-        
+      
         // write purity log
         writePurityResult(purity, plotValue, iteration_times, germlineReadHpCountThreshold);
     }catch(const std::exception& e){
