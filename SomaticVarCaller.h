@@ -80,8 +80,43 @@ struct SomaticVarFilterParams
     int IntervalSnpCount_minThr;
     float zScore_maxThr;
 
-    // Below the mapping quality read ratio threshold
-    float LowMpqRatioThreshold; 
+    SomaticVarFilterParams() 
+        : tumorPurity(0.0)
+        , norVAF_maxThr(0.0)
+        , norDepth_minThr(0)
+        , MessyReadRatioThreshold(0.0)
+        , ReadCount_minThr(0)
+        , HapConsistency_VAF_maxThr(0.0)
+        , HapConsistency_ReadCount_maxThr(0)
+        , HapConsistency_somaticRead_minThr(0)
+        , IntervalSnpCount_VAF_maxThr(0.0)
+        , IntervalSnpCount_ReadCount_maxThr(0)
+        , IntervalSnpCount_minThr(0)
+        , zScore_maxThr(0.0) {}
+};
+
+enum FilterTier{
+    TIER_1_0 = 1,
+    TIER_0_8 = 2,
+    TIER_0_6 = 3,
+    TIER_0_4 = 4,
+    TIER_0_2 = 5
+};
+
+namespace FilterTierUtils{
+    inline double getTierValue(FilterTier tier){
+        switch(tier){
+            case TIER_1_0: return 1.0;
+            case TIER_0_8: return 0.8;
+            case TIER_0_6: return 0.6;
+            case TIER_0_4: return 0.4;
+            case TIER_0_2: return 0.2;
+            default: {
+                std::cerr << "[ERROR] Invalid filter tier: " << tier << std::endl;
+                exit(1);
+            }
+        }
+    }
 };
 
 /**
@@ -424,8 +459,6 @@ class SomaticVarCaller{
         std::map<std::string, std::map<std::string, ReadVarHpCount>> *chrReadHpResultSet;
         // chr, position, read ID, baseHP 
         std::map<std::string, std::map<int, std::map<std::string, int>>> *chrTumorPosReadCorrBaseHP;
-
-        void initialSomaticFilterParams();
 
         /**
          * @brief Set filter parameters based on tumor purity

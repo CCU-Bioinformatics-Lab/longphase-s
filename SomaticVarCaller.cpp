@@ -655,9 +655,6 @@ void SomaticVarCaller::variantCalling(
     std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants,
     std::map<Genome, VCF_Info> &vcfSet
 ){
-    
-    // setting somatic calling filter params
-    initialSomaticFilterParams();  
 
     // extract somatic data from normal and tumor BAM
     extractSomaticData(ctx.normalBamFile, ctx.tumorBamFile, ctx.fastaFile, bamCfg, chrVec, chrLength, chrMultiVariants, vcfSet);
@@ -672,7 +669,6 @@ void SomaticVarCaller::variantCalling(
     }
 
     // set filter params with tumor purity
-    std::cerr << "setting filter params with tumor purity: " << tumorPurity << std::endl;
     SetFilterParamsWithPurity(somaticParams, tumorPurity);
     
     std::cerr<< "calling somatic variants ... ";
@@ -714,9 +710,6 @@ void SomaticVarCaller::variantCalling(
         //calculate information and filter somatic SNPs
         somaticFeatureFilter(somaticParams, currentChrVariants, chr, *somaticPosInfo, tumorPurity);
 
-        // Shannon entropy filter(temporary)
-        // ShannonEntropyFilter(chr, *somaticPosInfo, currentChrVariants, ref_string);
-
         //calibrate read HP to remove low confidence H3 SNP
         calibrateReadHP(chr, *somaticPosInfo, *readHpResultSet, *tumorPosReadCorrBaseHP);
 
@@ -727,7 +720,7 @@ void SomaticVarCaller::variantCalling(
         statisticSomaticPosReadHP(chr, *somaticPosInfo, *tumorPosReadCorrBaseHP, *readHpResultSet, *localCallerReadHpDistri);
         
         //find other somatic variants Haplotype (HP4/HP5)
-        findOtherSomaticSnpHP(chr, *somaticPosInfo, currentChrVariants);
+        // findOtherSomaticSnpHP(chr, *somaticPosInfo, currentChrVariants);
 
     }
     std::cerr<< difftime(time(NULL), begin) << "s\n";
@@ -738,35 +731,17 @@ void SomaticVarCaller::variantCalling(
     if(callerCfg.writeCallingLog){
         //write the log file for variants with positions tagged as HP3
         writeSomaticVarCallingLog(ctx ,somaticParams, chrVec, chrMultiVariants);
-
-        writeOtherSomaticHpLog(bamCfg.resultPrefix + "_other_allele_somatic_var.log", chrVec, chrMultiVariants);
-
         writeDenseTumorSnpIntervalLog(bamCfg.resultPrefix + "_dense_tumor_snp_interval.log", chrVec);
 
         callerReadHpDistri->writeReadHpDistriLog(bamCfg.resultPrefix + "_read_distri_scaller.out", chrVec);
-
         // remove the position that derived by HP1 or HP2
         callerReadHpDistri->removeNotDeriveByH1andH2pos(chrVec);
-
         // record the position that can't derived because exist H1-1 and H2-1 reads
         callerReadHpDistri->writeReadHpDistriLog(bamCfg.resultPrefix + "_read_distri_scaller_derive_by_H1_H2.out", chrVec);
 
+        // writeOtherSomaticHpLog(bamCfg.resultPrefix + "_other_allele_somatic_var.log", chrVec, chrMultiVariants);
     }
     return;
-}
-
-void SomaticVarCaller::initialSomaticFilterParams(){
-    
-    somaticParams.tumorPurity = callerCfg.tumorPurity;
-
-    somaticParams.MessyReadRatioThreshold = 0.0;
-    somaticParams.ReadCount_minThr = 0;
-
-    somaticParams.HapConsistency_ReadCount_maxThr = 0;
-    somaticParams.HapConsistency_VAF_maxThr = 0.0;
-
-    somaticParams.IntervalSnpCount_ReadCount_maxThr = 0;
-    somaticParams.IntervalSnpCount_VAF_maxThr = 0.0;
 }
 
 void SomaticVarCaller::extractSomaticData(
@@ -816,116 +791,111 @@ double SomaticVarCaller::runTumorPurityEstimator(bool writeReadLog, const std::s
 void SomaticVarCaller::SetFilterParamsWithPurity(SomaticVarFilterParams &somaticParams, double &tumorPurity){
 
     somaticParams.tumorPurity = tumorPurity;
+    // display the filter tier
+    FilterTier filterTier = TIER_0_2;
 
-    // tumor purity 1.0
-    if (tumorPurity >= 0.9 && tumorPurity <= 1.0) 
-    {
-        somaticParams.norVAF_maxThr = 0.13;
-        somaticParams.norDepth_minThr = 1;
+    if(tumorPurity >= 0.9 && tumorPurity <= 1.0){ filterTier = TIER_1_0;}
+    else if(tumorPurity >= 0.7 && tumorPurity < 0.9){ filterTier = TIER_0_8;}
+    else if(tumorPurity >= 0.5 && tumorPurity < 0.7){ filterTier = TIER_0_6;}
+    else if(tumorPurity >= 0.3 && tumorPurity < 0.5){ filterTier = TIER_0_4;}
+    else{ filterTier = TIER_0_2;}
 
-        somaticParams.MessyReadRatioThreshold = 1.0;    
-        somaticParams.ReadCount_minThr = 3.0;
+    switch(filterTier){
+        // Tier 1.0: High purity tumors (0.9-1.0) - Most strict filtering
+        case TIER_1_0:
+            somaticParams.norVAF_maxThr = 0.13;
+            somaticParams.norDepth_minThr = 1;
 
-        somaticParams.HapConsistency_ReadCount_maxThr = 12.0;
-        somaticParams.HapConsistency_VAF_maxThr = 0.144;
-        somaticParams.HapConsistency_somaticRead_minThr = 0.0;
+            somaticParams.MessyReadRatioThreshold = 1.0;    
+            somaticParams.ReadCount_minThr = 3.0;
 
-        somaticParams.IntervalSnpCount_ReadCount_maxThr = 12.0;
-        somaticParams.IntervalSnpCount_VAF_maxThr = 0.189;
-        somaticParams.IntervalSnpCount_minThr = 4.0;
-        somaticParams.zScore_maxThr = 5.233;
-    } 
-    // tumor purity 0.8
-    else if (tumorPurity >= 0.7 && tumorPurity < 0.9) 
-    {
-        somaticParams.norVAF_maxThr = 0.13;
-        somaticParams.norDepth_minThr = 1;
+            somaticParams.HapConsistency_ReadCount_maxThr = 12.0;
+            somaticParams.HapConsistency_VAF_maxThr = 0.144;
+            somaticParams.HapConsistency_somaticRead_minThr = 0.0;
 
-        somaticParams.MessyReadRatioThreshold = 1.0;    
-        somaticParams.ReadCount_minThr = 3.0;
+            somaticParams.IntervalSnpCount_ReadCount_maxThr = 12.0;
+            somaticParams.IntervalSnpCount_VAF_maxThr = 0.189;
+            somaticParams.IntervalSnpCount_minThr = 4.0;
+            somaticParams.zScore_maxThr = 5.233;
+            break;
+        // Tier 0.8: Medium-high purity tumors (0.7-0.9)
+        case TIER_0_8:
+            somaticParams.norVAF_maxThr = 0.13;
+            somaticParams.norDepth_minThr = 1;
 
-        somaticParams.HapConsistency_ReadCount_maxThr = 10.0;
-        somaticParams.HapConsistency_VAF_maxThr = 0.130;
-        somaticParams.HapConsistency_somaticRead_minThr = 1.0;
+            somaticParams.MessyReadRatioThreshold = 1.0;    
+            somaticParams.ReadCount_minThr = 3.0;
 
-        somaticParams.IntervalSnpCount_ReadCount_maxThr = 10.0;
-        somaticParams.IntervalSnpCount_VAF_maxThr = 0.133;
-        somaticParams.IntervalSnpCount_minThr = 4.0;
-        somaticParams.zScore_maxThr = 2.676;
-    } 
-    // tumor purity 0.6
-    else if (tumorPurity >= 0.5 && tumorPurity < 0.7) 
-    {
-        somaticParams.norVAF_maxThr = 0.105;
-        somaticParams.norDepth_minThr = 1;
+            somaticParams.HapConsistency_ReadCount_maxThr = 10.0;
+            somaticParams.HapConsistency_VAF_maxThr = 0.130;
+            somaticParams.HapConsistency_somaticRead_minThr = 1.0;
 
-        somaticParams.MessyReadRatioThreshold = 1.0;    
-        somaticParams.ReadCount_minThr = 1.0;
+            somaticParams.IntervalSnpCount_ReadCount_maxThr = 10.0;
+            somaticParams.IntervalSnpCount_VAF_maxThr = 0.133;
+            somaticParams.IntervalSnpCount_minThr = 4.0;
+            somaticParams.zScore_maxThr = 2.676;
+            break;
+        // Tier 0.6: Medium purity tumors (0.5-0.7)
+        case TIER_0_6:
+            somaticParams.norVAF_maxThr = 0.105;
+            somaticParams.norDepth_minThr = 1;
 
-        somaticParams.HapConsistency_ReadCount_maxThr = 10.0;
-        somaticParams.HapConsistency_VAF_maxThr = 0.071;
-        somaticParams.HapConsistency_somaticRead_minThr = 0.0;
+            somaticParams.MessyReadRatioThreshold = 1.0;    
+            somaticParams.ReadCount_minThr = 1.0;
 
-        somaticParams.IntervalSnpCount_ReadCount_maxThr = 10.0;
-        somaticParams.IntervalSnpCount_VAF_maxThr = 0.105;
-        somaticParams.IntervalSnpCount_minThr = 4.0;
-        somaticParams.zScore_maxThr = 5.683;
+            somaticParams.HapConsistency_ReadCount_maxThr = 10.0;
+            somaticParams.HapConsistency_VAF_maxThr = 0.071;
+            somaticParams.HapConsistency_somaticRead_minThr = 0.0;
+
+            somaticParams.IntervalSnpCount_ReadCount_maxThr = 10.0;
+            somaticParams.IntervalSnpCount_VAF_maxThr = 0.105;
+            somaticParams.IntervalSnpCount_minThr = 4.0;
+            somaticParams.zScore_maxThr = 5.683;
+            break;
+        // Tier 0.4: Medium-low purity tumors (0.3-0.5)
+        case TIER_0_4:
+            somaticParams.norVAF_maxThr = 0.117;
+            somaticParams.norDepth_minThr = 1;
+
+            somaticParams.MessyReadRatioThreshold = 1.0;    
+            somaticParams.ReadCount_minThr = 1.0;
+
+            somaticParams.HapConsistency_ReadCount_maxThr = 8.0;
+            somaticParams.HapConsistency_VAF_maxThr = 0.035;
+            somaticParams.HapConsistency_somaticRead_minThr = 1.0;
+
+            somaticParams.IntervalSnpCount_ReadCount_maxThr = 8.0;
+            somaticParams.IntervalSnpCount_VAF_maxThr = 0.049;
+            somaticParams.IntervalSnpCount_minThr = 4.0;
+            somaticParams.zScore_maxThr = 3.043;
+            break;
+        // Tier 0.2: Low purity tumors (0.0-0.3) - Most lenient filtering
+        case TIER_0_2:
+            somaticParams.norVAF_maxThr = 0.130;
+            somaticParams.norDepth_minThr = 1;
+
+            somaticParams.MessyReadRatioThreshold = 1.0;    
+            somaticParams.ReadCount_minThr = 1.0;
+
+            somaticParams.HapConsistency_ReadCount_maxThr = 8.0;
+            somaticParams.HapConsistency_VAF_maxThr = 0.020;
+            somaticParams.HapConsistency_somaticRead_minThr = 1.0;
+
+            somaticParams.IntervalSnpCount_ReadCount_maxThr = 8.0;
+            somaticParams.IntervalSnpCount_VAF_maxThr = 0.025;
+            somaticParams.IntervalSnpCount_minThr = 8.0;
+            somaticParams.zScore_maxThr = 1.953;
+            break;
+        default:
+            std::cerr << "[ERROR] Unexpected filter tier: " << filterTier << std::endl;
+            exit(1);
     }
-    // tumor purity 0.4 
-    else if (tumorPurity >= 0.3 && tumorPurity < 0.5) 
-    {
-        somaticParams.norVAF_maxThr = 0.117;
-        somaticParams.norDepth_minThr = 1;
 
-        somaticParams.MessyReadRatioThreshold = 1.0;    
-        somaticParams.ReadCount_minThr = 1.0;
-
-        somaticParams.HapConsistency_ReadCount_maxThr = 8.0;
-        somaticParams.HapConsistency_VAF_maxThr = 0.035;
-        somaticParams.HapConsistency_somaticRead_minThr = 1.0;
-
-        somaticParams.IntervalSnpCount_ReadCount_maxThr = 8.0;
-        somaticParams.IntervalSnpCount_VAF_maxThr = 0.049;
-        somaticParams.IntervalSnpCount_minThr = 4.0;
-        somaticParams.zScore_maxThr = 3.043;
-    }
-    // tumor purity 0.2
-    else if (tumorPurity > 0 && tumorPurity < 0.3) 
-    {
-        somaticParams.norVAF_maxThr = 0.130;
-        somaticParams.norDepth_minThr = 1;
-
-        somaticParams.MessyReadRatioThreshold = 1.0;    
-        somaticParams.ReadCount_minThr = 1.0;
-
-        somaticParams.HapConsistency_ReadCount_maxThr = 8.0;
-        somaticParams.HapConsistency_VAF_maxThr = 0.020;
-        somaticParams.HapConsistency_somaticRead_minThr = 1.0;
-
-        somaticParams.IntervalSnpCount_ReadCount_maxThr = 8.0;
-        somaticParams.IntervalSnpCount_VAF_maxThr = 0.025;
-        somaticParams.IntervalSnpCount_minThr = 8.0;
-        somaticParams.zScore_maxThr = 1.953;
-    } 
-    else 
-    {
+    if (tumorPurity <= 0 || tumorPurity > 1.0) {
         std::cerr << "[WARNING] tumor purity is not in the range of 0.0 to 1.0: " << tumorPurity << std::endl;
-        std::cerr << "[WARNING] setting default parameters" << std::endl;
-        // default parameters (tumor purity = 0.2)
-        somaticParams.norVAF_maxThr = 0.130;
-        somaticParams.norDepth_minThr = 1;
-
-        somaticParams.MessyReadRatioThreshold = 1.0;    
-        somaticParams.ReadCount_minThr = 1.0;
-
-        somaticParams.HapConsistency_ReadCount_maxThr = 8.0;
-        somaticParams.HapConsistency_VAF_maxThr = 0.020;
-        somaticParams.HapConsistency_somaticRead_minThr = 1.0;
-
-        somaticParams.IntervalSnpCount_ReadCount_maxThr = 8.0;
-        somaticParams.IntervalSnpCount_VAF_maxThr = 0.025;
-        somaticParams.IntervalSnpCount_minThr = 8.0;
-        somaticParams.zScore_maxThr = 1.953;
+        std::cerr << "[WARNING] setting default parameters (tier " <<  FilterTierUtils::getTierValue(filterTier) << ")" << std::endl;
+    }else{
+        std::cerr << "setting filter params " << "(tier " << FilterTierUtils::getTierValue(filterTier) << ")" << " with tumor purity: " << tumorPurity << std::endl;
     }
 }
 
@@ -1156,62 +1126,6 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, SomaticData> &soma
     }
 }
 
-void SomaticVarCaller::findOtherSomaticSnpHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants){
-    std::map<int, SomaticData>::iterator somaticVarIter = somaticPosInfo.begin();
-    while(somaticVarIter != somaticPosInfo.end()){
-        if((*somaticVarIter).second.isHighConSomaticSNP){
-            int pos = (*somaticVarIter).first;
-
-            std::map<int, int> NucCount;
-            NucCount[Nitrogenous::A] = (*somaticVarIter).second.base.MPQ_A_count;
-            NucCount[Nitrogenous::C] = (*somaticVarIter).second.base.MPQ_C_count;
-            NucCount[Nitrogenous::T] = (*somaticVarIter).second.base.MPQ_T_count;
-            NucCount[Nitrogenous::G] = (*somaticVarIter).second.base.MPQ_G_count;
-
-            int refAllele;
-            int altAllele;
-
-            if(currentChrVariants.find(pos) != currentChrVariants.end()){
-                refAllele = NucUtil::convertStrNucToInt(currentChrVariants[pos].Variant[TUMOR].allele.Ref);
-                altAllele = NucUtil::convertStrNucToInt(currentChrVariants[pos].Variant[TUMOR].allele.Alt);
-            }else{
-                std::cerr << "[ERROR](FindOtherSomaticSnpHP) => can't find position in currentChrVariants : chr:" << chr << " pos: " << pos + 1;
-                exit(1);
-            }
-
-            NucCount.erase(refAllele);
-            NucCount.erase(altAllele);
-
-            int maxNuc = Nitrogenous::UNKOWN;
-            int maxNucCount = 0;
-
-            int minNuc = Nitrogenous::UNKOWN;
-            int minNucCount = 0;
-            for(auto nuc : NucCount){
-                if(nuc.second > 1){
-                    if(nuc.second > maxNucCount){
-                        minNuc = maxNuc;
-                        minNucCount = maxNucCount;
-                        maxNuc = nuc.first;
-                        maxNucCount = nuc.second;
-                    }
-                }
-            }
-
-            if(maxNuc != Nitrogenous::UNKOWN){
-                (*somaticVarIter).second.somaticHp4Base = maxNuc;
-                (*somaticVarIter).second.somaticHp4BaseCount = maxNucCount;
-            }
-
-            if(minNuc != Nitrogenous::UNKOWN){
-                (*somaticVarIter).second.somaticHp5Base = minNuc;
-                (*somaticVarIter).second.somaticHp5BaseCount = minNucCount;
-            }
-        }
-        somaticVarIter++;
-    }
-}
-
 /**
  * @brief Calibrate read haplotype assignments
  * 
@@ -1245,8 +1159,8 @@ void SomaticVarCaller::calibrateReadHP(const std::string &chr, std::map<int, Som
                             case SnpHP::SOMATIC_H3:
                                 readHpResultSet[readID].HP3--; break;
                             default:
-                                break;
-                        }
+            break;
+    }
 
                         if(readHpResultSet[readID].HP3 < 0){
                             std::cerr << "[ERROR](calibrate read HP) => read HP3 or HP4 SNP count < 0 :" << std::endl;
@@ -1368,22 +1282,6 @@ void SomaticVarCaller::statisticSomaticPosReadHP(
                 }
                 //record derive HP of current snp
                 localReadHpDistri.recordDeriveHp(pos, (*somaticVarIter).second.somaticReadDeriveByHP, 0.0);
-
-                //error: haven't exist somatic HP read in current position 
-                if( localReadHpDistri.posReadHpResult[pos].readHpCounter[ReadHP::H3] == 0 && 
-                    localReadHpDistri.posReadHpResult[pos].readHpCounter[ReadHP::H1_1] == 0 &&
-                    localReadHpDistri.posReadHpResult[pos].readHpCounter[ReadHP::H2_1] == 0){
-                    // std::cerr << "[ERROR](statistic all read HP) => hadn't exist somatic HP read in : chr: "<< chr << " pos: " << pos+1 <<std::endl;
-                    // std::cerr << "HP1-1: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H1_1] 
-                    //           << " HP1-2: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H1_2] 
-                    //           << " HP2-1: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H2_1] 
-                    //           << " HP2-2: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H2_2] 
-                    //           << " HP3: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H3] 
-                    //           << " HP4: "<< readHpDistributed[pos].hpResultCounter[ReadHP::H4]
-                    //           << std::endl;
-                    // exit(1); 
-                }
-
             }else{
                 std::cerr << "[ERROR](statistic all read HP) => can't find pos in tumorPosReadCorrBaseHP : chr: "<< chr << " pos: " << pos+1 <<std::endl;
                 exit(1); 
@@ -1394,6 +1292,61 @@ void SomaticVarCaller::statisticSomaticPosReadHP(
     }
 }
 
+void SomaticVarCaller::findOtherSomaticSnpHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants){
+    std::map<int, SomaticData>::iterator somaticVarIter = somaticPosInfo.begin();
+    while(somaticVarIter != somaticPosInfo.end()){
+        if((*somaticVarIter).second.isHighConSomaticSNP){
+            int pos = (*somaticVarIter).first;
+
+            std::map<int, int> NucCount;
+            NucCount[Nitrogenous::A] = (*somaticVarIter).second.base.MPQ_A_count;
+            NucCount[Nitrogenous::C] = (*somaticVarIter).second.base.MPQ_C_count;
+            NucCount[Nitrogenous::T] = (*somaticVarIter).second.base.MPQ_T_count;
+            NucCount[Nitrogenous::G] = (*somaticVarIter).second.base.MPQ_G_count;
+
+            int refAllele;
+            int altAllele;
+
+            if(currentChrVariants.find(pos) != currentChrVariants.end()){
+                refAllele = NucUtil::convertStrNucToInt(currentChrVariants[pos].Variant[TUMOR].allele.Ref);
+                altAllele = NucUtil::convertStrNucToInt(currentChrVariants[pos].Variant[TUMOR].allele.Alt);
+            }else{
+                std::cerr << "[ERROR](FindOtherSomaticSnpHP) => can't find position in currentChrVariants : chr:" << chr << " pos: " << pos + 1;
+                exit(1);
+            }
+
+            NucCount.erase(refAllele);
+            NucCount.erase(altAllele);
+
+            int maxNuc = Nitrogenous::UNKOWN;
+            int maxNucCount = 0;
+
+            int minNuc = Nitrogenous::UNKOWN;
+            int minNucCount = 0;
+            for(auto nuc : NucCount){
+                if(nuc.second > 1){
+                    if(nuc.second > maxNucCount){
+                        minNuc = maxNuc;
+                        minNucCount = maxNucCount;
+                        maxNuc = nuc.first;
+                        maxNucCount = nuc.second;
+                    }
+                }
+            }
+
+            if(maxNuc != Nitrogenous::UNKOWN){
+                (*somaticVarIter).second.somaticHp4Base = maxNuc;
+                (*somaticVarIter).second.somaticHp4BaseCount = maxNucCount;
+            }
+
+            if(minNuc != Nitrogenous::UNKOWN){
+                (*somaticVarIter).second.somaticHp5Base = minNuc;
+                (*somaticVarIter).second.somaticHp5BaseCount = minNucCount;
+            }
+        }
+        somaticVarIter++;
+    }
+}
 
 void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const SomaticVarFilterParams &somaticParams, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
     std::ofstream *tagHP3Log = new std::ofstream(bamCfg.resultPrefix+"_somatic_var.out");
@@ -1870,8 +1823,8 @@ void SomaticVarCaller::getSomaticFlag(const std::vector<std::string> &chrVec, st
     for(auto chr: chrVec){
         for(auto somaticVar: (*chrPosSomaticInfo)[chr]){
             // [debug] logic for somatic tagging validation
-            if(!somaticVar.second.isFilterOut && somaticVar.second.isHighConSomaticSNP){
-            // if(somaticVar.second.isHighConSomaticSNP){
+            // if(!somaticVar.second.isFilterOut && somaticVar.second.isHighConSomaticSNP){
+            if(somaticVar.second.isHighConSomaticSNP){
                 chrMultiVariants[chr][somaticVar.first].isSomaticVariant = true;
                 chrMultiVariants[chr][somaticVar.first].somaticReadDeriveByHP = somaticVar.second.somaticReadDeriveByHP;
                 somaticVariantCount++;
