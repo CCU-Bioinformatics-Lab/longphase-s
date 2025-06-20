@@ -38,7 +38,7 @@ This figure compares tumor purity estimation results between "ASCAT v3.2.0" and 
 
 ## IGV Visualization of Somatic Haplotagging Result
 This figure shows an example of tagged tumor BAM file visualized in IGV, demonstrating somatic haplotagging results on HCC1395/HCC1395BL tumor/normal ONT data.
-![haplotagging IGV case](./images/somatic_tagging_IGV_case_2.png)
+![haplotagging IGV case](./images/somatic_tagging_IGV_case.png)
 
 ## Contents
 - [Installation](#installation)
@@ -68,7 +68,7 @@ This figure shows an example of tagged tumor BAM file visualized in IGV, demonst
 	- [Generate alignment and index files](./docs/input_preparation.md#generate-alignment-and-index-files)
 	- [Generate germline SNP file](./docs/input_preparation.md#generate-germline-snp-vcf-file)
 	- [Generate somatic SNP file](./docs/input_preparation.md#generate-somatic-snp-vcf-file)
-	- [Preprocessing for somatic mode commands](#preprocessing-workflow-for-somatic-commands)
+	- [Preprocessing for somatic mode commands](#preprocessing-for-somatic-mode-commands)
 - [Citation](#citation)
 - [Contact](#contact)
 ---
@@ -83,7 +83,7 @@ tar -xJf longphase_linux-x64.tar.xz
 An executable file, longphase_linux-x64, can be executed directly. If you need to compile a local version, you can clone and compile using the following commands, and make sure that the environment has zlib installed. If you require setting up a virtual environment, we also provide a [Dockerfile](https://github.com/twolinin/longphase/blob/main/Dockerfile).
 
 ```
-git clone https://github.com/twolinin/longphase.git
+git clone https://github.com/ming-en-ho/longphase-s.git
 cd longphase
 autoreconf -i
 ./configure
