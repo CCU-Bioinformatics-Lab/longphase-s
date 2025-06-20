@@ -25,7 +25,7 @@ FastaParser::FastaParser(std::string fastaFile,  std::vector<std::string> chrNam
     fai = fai_load(fastaFile.c_str());
     
     // iterating all chr
-    #pragma omp parallfel for schedule(dynamic) num_threads(numThreads)
+    // #pragma omp parallfel for schedule(dynamic) num_threads(numThreads)
     for(std::vector<std::string>::iterator iter = chrName.begin() ; iter != chrName.end() ; iter++){
         int index = iter - chrName.begin();
         
@@ -39,14 +39,19 @@ FastaParser::FastaParser(std::string fastaFile,  std::vector<std::string> chrNam
         int ref_len = 0;
 
         // read file
-        std::string chr_info(faidx_fetch_seq(fai , (*iter).c_str() , 0 , last_pos.at(index)+5 , &ref_len));
+        //std::string chr_info(faidx_fetch_seq(fai , (*iter).c_str() , 0 , last_pos.at(index)+5 , &ref_len));
+        char* chr_info = faidx_fetch_seq(fai , (*iter).c_str() , 0 , last_pos.at(index)+5 , &ref_len);
+
         if(ref_len == 0){
             std::cout<<"nothing in reference file \n";
         }
 
         // update map
-        chrString[(*iter)] = chr_info;
+        chrString[(*iter)] = std::string(chr_info);
+
+        free(chr_info);
     }
+    fai_destroy(fai);
 }
 
 FastaParser::~FastaParser(){

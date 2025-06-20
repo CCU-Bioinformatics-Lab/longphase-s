@@ -27,6 +27,7 @@ int homopolymerLength(int snp_pos, const std::string &ref_string){
     }
     
     char element = ref_string.at(snp_pos);
+    // printf("snp_pos: %d, element: %c\n", snp_pos, element);
     
     int pos = snp_pos-1;
     while( ref_string.at(pos) == element ){

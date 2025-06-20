@@ -3,13 +3,12 @@
 #include "Util.h"
 #include <getopt.h>
 
-
 #define SUBPROGRAM "haplotag"
 
-static const char *CORRECT_USAGE_MESSAGE =
+constexpr const char *CORRECT_USAGE_MESSAGE =
 "Usage: "  " " SUBPROGRAM " [OPTION] ... READSFILE\n"
 "      --help                          display this help and exit.\n\n"
-"require arguments:\n"
+"required arguments:\n"
 "      -s, --snp-file=NAME             input SNP vcf file.\n"
 "      -b, --bam-file=NAME             input bam file.\n"
 "      -r, --reference=NAME            reference fasta.\n"
@@ -30,194 +29,161 @@ static const char *CORRECT_USAGE_MESSAGE =
 "      --log                           an additional log file records the result of each read. default:false\n";
 
 
-static const char* shortopts = "s:b:o:t:q:p:r:";
+void HaplotagOptionDefiner::defineOptions(ArgumentManager& manager) {
+    // Initialize short options string
+    manager.setShortOption("s:b:o:t:q:p:r:");
 
-enum { OPT_HELP = 1, TAG_SUP, SV_FILE, REGION, LOG, MOD_FILE, CRAM};
-
-static const struct option longopts[] = { 
-    { "help",                 no_argument,        NULL, OPT_HELP },
-    { "snp-file",             required_argument,  NULL, 's' },
-    { "bam-file",             required_argument,  NULL, 'b' },
-    { "reference",            required_argument,  NULL, 'r' },
-    { "tagSupplementary",     no_argument,        NULL, TAG_SUP },
-    { "sv-file",              required_argument,  NULL, SV_FILE },
-    { "mod-file",             required_argument,  NULL, MOD_FILE },
-    { "out-prefix",           required_argument,  NULL, 'o' },
-    { "cram",                 no_argument,        NULL, CRAM },
-    { "threads",              required_argument,  NULL, 't' },
-    { "qualityThreshold",     required_argument,  NULL, 'q' },
-    { "percentageThreshold",  required_argument,  NULL, 'p' },
-    { "region",               required_argument,  NULL, REGION },
-    { "log",                  no_argument,        NULL, LOG },
-    { NULL, 0, NULL, 0 }
-};
-
-namespace opt
-{
-    static int numThreads = 1;
-    static int qualityThreshold = 1;
-    static double percentageThreshold = 0.6;
-    static std::string snpFile="";
-    static std::string svFile="";
-    static std::string modFile="";
-    static std::string bamFile="";
-    static std::string fastaFile="";
-    static std::string resultPrefix="result";
-    static std::string region="";
-    static std::string outputFormat="bam";
-    static bool tagSupplementary = false;
-    static bool writeReadLog = false;
-    static std::string command="longphase ";
+    // Help option
+    manager.addOption({"help", no_argument, NULL, OPT_HELP});
+    
+    // Input/Output files
+    manager.addOption({"snp-file",            required_argument, NULL, 's'});
+    manager.addOption({"bam-file",            required_argument, NULL, 'b'});
+    manager.addOption({"reference",           required_argument, NULL, 'r'});
+    manager.addOption({"sv-file",             required_argument, NULL, SV_FILE});
+    manager.addOption({"mod-file",            required_argument, NULL, MOD_FILE});
+        
+    // Processing options
+    manager.addOption({"threads",             required_argument, NULL, 't'});
+    manager.addOption({"qualityThreshold",    required_argument, NULL, 'q'});
+    manager.addOption({"percentageThreshold", required_argument, NULL, 'p'});
+    manager.addOption({"tagSupplementary",    no_argument,       NULL, TAG_SUP});
+    manager.addOption({"out-prefix",          required_argument, NULL, 'o'});
+    manager.addOption({"region",              required_argument, NULL, REGION});
+    manager.addOption({"cram",                no_argument,       NULL, CRAM});
+    manager.addOption({"log",                 no_argument,       NULL, LOG});
+    
+    // Add terminator
+    manager.addOption({NULL, 0, NULL, 0});
 }
 
-void HaplotagOptions(int argc, char** argv)
-{
-    optind=1;    //reset getopt
-    
-    bool die = false;
-    for (char c; (c = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1;)
+void ParamsHandler<ParsingBamConfig>::initialize(ParsingBamConfig& params, const std::string& version) {
+    // Initialize default values
+    params.numThreads = 1;
+    params.qualityThreshold = 1;
+    params.percentageThreshold = 0.6;
+    params.resultPrefix = "result";
+    params.outputFormat = "bam";
+    params.region = "";
+    params.tagSupplementary = false;
+    params.writeReadLog = false;
+    params.command = "longphase-s ";
+    params.version = version;
+}
+
+bool ParamsHandler<ParsingBamConfig>::loadArgument(ParsingBamConfig& params, char& opt, std::istringstream& arg) {
+    bool isLoaded = true;
+    switch (opt)
     {
-        std::istringstream arg(optarg != NULL ? optarg : "");
-        switch (c)
-        {
-            case 's': arg >> opt::snpFile; break;
-            case 't': arg >> opt::numThreads; break;
-            case 'b': arg >> opt::bamFile; break;
-            case 'r': arg >> opt::fastaFile; break; 
-            case 'o': arg >> opt::resultPrefix; break;
-            case 'q': arg >> opt::qualityThreshold; break;
-            case 'p': arg >> opt::percentageThreshold; break;
-            case SV_FILE:  arg >> opt::svFile; break;
-            case MOD_FILE: arg >> opt::modFile; break;     
-            case REGION:   arg >> opt::region; break;        
-            case TAG_SUP:  opt::tagSupplementary = true; break;
-            case CRAM:     opt::outputFormat = "cram"; break;
-            case LOG:      opt::writeReadLog = true; break;
-            case OPT_HELP:
-                std::cout << CORRECT_USAGE_MESSAGE;
-                exit(EXIT_SUCCESS);
-            default: die = true; break;
-        }
+        case 't': arg >> params.numThreads; break;
+        case 'o': arg >> params.resultPrefix; break;
+        case 'q': arg >> params.qualityThreshold; break;
+        case 'p': arg >> params.percentageThreshold; break;
+        case HaplotagOption::TAG_SUP:  params.tagSupplementary = true; break;
+        case HaplotagOption::REGION:   arg >> params.region; break;        
+        case HaplotagOption::CRAM:     params.outputFormat = "cram"; break;
+        case HaplotagOption::LOG:      params.writeReadLog = true; break;
+        default: isLoaded = false; break;
     }
 
+    return isLoaded;    
+}
+
+bool ParamsHandler<ParsingBamConfig>::validateNumericParams(ParsingBamConfig& params, const std::string& programName) {
+    bool isValid = true;
+    
+    if (params.numThreads < 1) {
+        std::cerr << "[ERROR] " << programName << ": invalid threads. value: " 
+                << params.numThreads 
+                << "\nplease check -t, --threads=Num\n";
+        isValid = false;
+    }
+    
+    if (params.percentageThreshold > 1 || params.percentageThreshold < 0) {
+        std::cerr << "[ERROR] " << programName << ": invalid percentage threshold. value: " 
+                << params.percentageThreshold
+                << "\nthis value need: 0~1, please check -p, --percentageThreshold=Num\n";
+        isValid = false;
+    }
+
+    return isValid;   
+}
+
+void ParamsHandler<ParsingBamConfig>::recordCommand(ParsingBamConfig& params, int argc, char** argv) {
     for(int i = 0; i < argc; ++i){
-        opt::command.append(argv[i]);
-        opt::command.append(" ");
+        params.command.append(argv[i]);
+        params.command.append(" ");
     }
+}
 
-    if (argc - optind < 0 )
-    {
-        std::cerr << SUBPROGRAM ": missing arguments\n";
-        die = true;
-    }
-    
-    if( opt::snpFile != "")
-    {
-        std::ifstream openFile( opt::snpFile.c_str() );
-        if( !openFile.is_open() )
-        {
-            std::cerr<< "File " << opt::snpFile << " not exist.\n\n";
-            die = true;
-        }
-    }
-    else{
-        std::cerr << SUBPROGRAM ": missing SNP file.\n";
-        die = true;
-    }
-    
-    if( opt::svFile != "")
-    {
-        std::ifstream openFile( opt::svFile.c_str() );
-        if( !openFile.is_open() )
-        {
-            std::cerr<< "File " << opt::svFile << " not exist.\n\n";
-            die = true;
-        }
-    }
-    
-    if( opt::modFile != "")
-    {
-        std::ifstream openFile( opt::modFile.c_str() );
-        if( !openFile.is_open() )
-        {
-            std::cerr<< "File " << opt::modFile << " not exist.\n\n";
-            die = true;
-        }
-    }
-    
-    if( opt::bamFile != "")
-    {
-        std::ifstream openFile( opt::bamFile.c_str() );
-        if( !openFile.is_open() )
-        {
-            std::cerr<< "File " << opt::bamFile << " not exist.\n\n";
-            die = true;
-        }
-    }
-    else{
-        std::cerr << SUBPROGRAM ": missing bam file.\n";
-        die = true;
-    }
-    
-    if( opt::fastaFile != "")
-    {
-        std::ifstream openFile( opt::snpFile.c_str() );
-        if( !openFile.is_open() )
-        {
-            std::cerr<< "File " << opt::fastaFile << " not exist.\n\n";
-            die = true;
-        }
-    }
-    else{
-        std::cerr << SUBPROGRAM ": missing reference.\n";
-        die = true;
-    }  
-    
-    if ( opt::numThreads < 1 ){
-        std::cerr << SUBPROGRAM " invalid threads. value: " 
-                  << opt::numThreads 
-                  << "\nplease check -t, --threads=Num\n";
-        die = true;
-    }
-    
-    if ( opt::percentageThreshold > 1 || opt::percentageThreshold < 0 ){
-        std::cerr << SUBPROGRAM " invalid percentage threshold. value: " 
-                  << opt::percentageThreshold
-                  << "\nthis value need: 0~1, please check -p, --percentageThreshold=Num\n";
-        die = true;
-    }
-    
-    if (die)
-    {
-        std::cerr << "\n" << CORRECT_USAGE_MESSAGE;
-        exit(EXIT_FAILURE);
-    }
+void ParamsHandler<HaplotagParameters>::initialize(HaplotagParameters& params, const std::string& version) {
+    // Initialize default values
+    ParamsHandler<ParsingBamConfig>::initialize(params.bamCfg, version);
+}
 
+bool ParamsHandler<HaplotagParameters>::loadArgument(HaplotagParameters& params, char& opt, std::istringstream& arg) {
+    bool isLoaded = ParamsHandler<ParsingBamConfig>::loadArgument(params.bamCfg, opt, arg);
+    
+    if(!isLoaded){
+        //reset isLoaded
+        isLoaded = true;
+        //load somatic haplotag options
+        switch (opt)
+        {
+            case 's': arg >> params.snpFile; break;
+            case 'b': arg >> params.bamFile; break;
+            case 'r': arg >> params.fastaFile; break; 
+            case HaplotagOption::SV_FILE:  arg >> params.svFile; break;
+            case HaplotagOption::MOD_FILE: arg >> params.modFile; break;     
+            case HaplotagOption::REGION:   arg >> params.bamCfg.region; break;        
+            default: isLoaded = false; break;
+        }
+    }
+    return isLoaded;    
+}
+
+bool ParamsHandler<HaplotagParameters>::validateFiles(HaplotagParameters& params, const std::string& programName) {
+    bool isValid = true;
+    
+    // Required files
+    isValid &= FileValidator::validateRequiredFile(params.snpFile, "SNP file", programName);
+    isValid &= FileValidator::validateRequiredFile(params.bamFile, "BAM file", programName);
+    isValid &= FileValidator::validateRequiredFile(params.fastaFile, "reference file", programName);
+    
+    // Optional files
+    isValid &= FileValidator::validateOptionalFile(params.svFile, "SV file", programName);
+    isValid &= FileValidator::validateOptionalFile(params.modFile, "MOD file", programName);
+    
+    return isValid;
+}
+
+bool ParamsHandler<HaplotagParameters>::validateNumericParams(HaplotagParameters& params, const std::string& programName) {
+
+    bool isValid = ParamsHandler<ParsingBamConfig>::validateNumericParams(params.bamCfg, programName);
+
+    return isValid;   
+}
+
+void ParamsHandler<HaplotagParameters>::recordCommand(HaplotagParameters& params, int argc, char** argv) {
+    ParamsHandler<ParsingBamConfig>::recordCommand(params.bamCfg, argc, argv);
+}
+
+int ParamsHandler<HaplotagParameters>::getHelpEnumNum() {
+    return HaplotagOption::OPT_HELP;
 }
 
 int HaplotagMain(int argc, char** argv, std::string in_version)
 {
-    HaplotagParameters ecParams;
-    // set parameters
-    HaplotagOptions(argc, argv);
+    HaplotagArgumentManager optionManager(SUBPROGRAM, in_version, CORRECT_USAGE_MESSAGE);
 
-    ecParams.numThreads=opt::numThreads;
-    ecParams.qualityThreshold=opt::qualityThreshold;
-    ecParams.snpFile=opt::snpFile;
-    ecParams.svFile=opt::svFile;
-    ecParams.modFile=opt::modFile;
-    ecParams.bamFile=opt::bamFile;
-    ecParams.fastaFile=opt::fastaFile;
-    ecParams.resultPrefix=opt::resultPrefix;
-    ecParams.tagSupplementary=opt::tagSupplementary;
-    ecParams.percentageThreshold=opt::percentageThreshold;
-    ecParams.region=opt::region;
-    ecParams.writeReadLog=opt::writeReadLog;
-    ecParams.version=in_version;
-    ecParams.command=opt::command;
-    ecParams.outputFormat=opt::outputFormat;
+    optionManager.setOptions();
 
+    optionManager.parseOptions(argc, argv);
+
+    HaplotagParameters ecParams = optionManager.getParams();
+    
     HaplotagProcess processor(ecParams);
+    processor.pipelineProcess();
 
     return 0;
 }
