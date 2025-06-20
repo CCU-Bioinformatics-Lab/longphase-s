@@ -23,7 +23,7 @@ OBJ = Haplotag.o \
 	  SomaticHaplotagProcess.o \
 	  SomaticHaplotag.o \
 	  HaplotagParsingBam.o \
-	  HaplotagStragtegy.o \
+	  HaplotagStrategy.o \
 	  HaplotagVcfParser.o \
 	  HaplotagLogging.o \
 	  ArgumentManager.o \

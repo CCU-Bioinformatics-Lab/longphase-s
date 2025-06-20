@@ -219,7 +219,7 @@ void HaplotagBamParser::parsingBam(BamParserContext& ctx){
         
         std::vector<int> last_pos;
         // get the last variant position of the reference
-        getLastVarPos(last_pos, ctx.chrVec, ctx.mergedChrVarinat, ctx.genomeSample);
+        getLastVarPos(last_pos, ctx.chrVec, ctx.chrMultiVariants, ctx.genomeSample);
         // reference fasta parser
         FastaParser fastaParser(ctx.fastaFile, ctx.chrVec, last_pos, config.numThreads);
 
@@ -284,7 +284,7 @@ void HaplotagBamParser::processBamParallel(
         // Create the chromosome processor using factory method
         auto chrProcessor = createProcessor(chr);
         // Process the chromosome
-        chrProcessor->processSingleChrom(commonCtx, bamRAII, fastaParser, ctx.mergedChrVarinat);
+        chrProcessor->processSingleChrom(commonCtx, bamRAII, fastaParser, ctx.chrMultiVariants);
     }
 }
 
@@ -316,7 +316,7 @@ void HaplotagBamParser::processBamWithOutput(
         // Create the chromosome processor using factory method
         auto chrProcessor = createProcessor(chr);
         // Process the chromosome
-        chrProcessor->processSingleChrom(commonCtx, bamRAII, fastaParser, ctx.mergedChrVarinat);
+        chrProcessor->processSingleChrom(commonCtx, bamRAII, fastaParser, ctx.chrMultiVariants);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
     }
 }
@@ -325,7 +325,7 @@ void HaplotagBamParser::processBamWithOutput(
  * @brief Gets the last variant position for each chromosome
  * @param last_pos Vector to store last variant positions
  * @param chrVec Vector of chromosome names
- * @param mergedChrVarinat Map of variants by chromosome
+ * @param chrMultiVariants Map of variants by chromosome
  * @param genomeSample Genome type (NORMAL/TUMOR)
  * 
  * Determines the last variant position for efficient processing.
@@ -336,14 +336,14 @@ void HaplotagBamParser::processBamWithOutput(
 void HaplotagBamParser::getLastVarPos(
     std::vector<int>& last_pos, 
     const std::vector<std::string>& chrVec, 
-    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
+    std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants,
     const Genome& genomeSample
 ){
     for( auto chr : chrVec ){
         bool existLastPos = false;
 
         // Search for last variant from end of chromosome
-        for (auto lastVariantIter = mergedChrVarinat[chr].rbegin(); lastVariantIter != mergedChrVarinat[chr].rend(); ++lastVariantIter) {
+        for (auto lastVariantIter = chrMultiVariants[chr].rbegin(); lastVariantIter != chrMultiVariants[chr].rend(); ++lastVariantIter) {
             if (genomeSample == NORMAL) {
                 // For normal genome, find last phased variant
                 if ((*lastVariantIter).second.isExists(NORMAL) && (*lastVariantIter).second.Variant[NORMAL].isExistPhasedSet()) {
@@ -400,7 +400,7 @@ ChromosomeProcessor::~ChromosomeProcessor(){
  * @param ctx Chromosome processing context
  * @param bamRAII BAM file RAII wrapper
  * @param fastaParser Reference sequence parser
- * @param mergedChrVarinat Map of variants by chromosome
+ * @param chrMultiVariants Map of variants by chromosome
  * 
  * Main function for processing all reads in a chromosome.
  * 
@@ -422,7 +422,7 @@ void ChromosomeProcessor::processSingleChrom(
     ChrProcContext& ctx,
     BamFileRAII& bamRAII,
     const FastaParser& fastaParser,
-    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat  
+    std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants  
 ){
     const std::string& chr = ctx.chrName;
     const int& chrLength = ctx.chrLength;
@@ -433,7 +433,7 @@ void ChromosomeProcessor::processSingleChrom(
 
     #pragma omp critical
     {
-        currentVariants = mergedChrVarinat[chr];
+        currentVariants = chrMultiVariants[chr];
     }
     // since each read is sorted based on the start coordinates, to save time, 
     // firstVariantIter keeps track of the first variant that each read needs to check.

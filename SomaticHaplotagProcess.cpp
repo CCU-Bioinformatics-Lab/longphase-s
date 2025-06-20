@@ -73,8 +73,8 @@ void SomaticHaplotagProcess::pipelineProcess()
                     sParams.basic.fastaFile);
 
     SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(sParams.callerCfg, sParams.basic.bamCfg, *chrVec);
-    somaticVarCaller->variantCalling(ctx, *chrVec, *chrLength, (*mergedChrVarinat), vcfSet);
-    somaticVarCaller->getSomaticFlag(*chrVec, *mergedChrVarinat);
+    somaticVarCaller->variantCalling(ctx, *chrVec, *chrLength, (*chrMultiVariants), vcfSet);
+    somaticVarCaller->getSomaticFlag(*chrVec, *chrMultiVariants);
     delete somaticVarCaller;
 
     // write somatic calling vcf
@@ -83,7 +83,7 @@ void SomaticHaplotagProcess::pipelineProcess()
         std::time_t begin = time(NULL);
         vcfParser.setCommandLine(sParams.basic.bamCfg.command);
         vcfParser.setVersion(sParams.basic.bamCfg.version);
-        vcfParser.writingResultVCF(sParams.tumorSnpFile, vcfSet[Genome::TUMOR], *mergedChrVarinat, sParams.basic.bamCfg.resultPrefix);
+        vcfParser.writingResultVCF(sParams.tumorSnpFile, vcfSet[Genome::TUMOR], *chrMultiVariants, sParams.basic.bamCfg.resultPrefix);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
     }
 
@@ -91,7 +91,7 @@ void SomaticHaplotagProcess::pipelineProcess()
     if(somaticBenchmark.isLoadBedFile() && somaticBenchmark.isEnabled()){
         std::cerr << "[Benchmark] removing tumor & truth somatic variants outside bed regions ... ";
         std::time_t begin = time(NULL);
-        somaticBenchmark.removeVariantsOutBedRegion(*mergedChrVarinat);
+        somaticBenchmark.removeVariantsOutBedRegion(*chrMultiVariants);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
         // [debug] display variants in bed region count
         // somaticBenchmark.displayBedRegionCount(*chrVec);
@@ -117,7 +117,7 @@ void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
         std::time_t begin = time(NULL);
         std::cerr<< "parsing tumor SNP VCF ... ";
         vcfParser.setParseSnpFile(true);
-        vcfParser.parsingVCF(sParams.tumorSnpFile, vcfSet[Genome::TUMOR], *mergedChrVarinat);
+        vcfParser.parsingVCF(sParams.tumorSnpFile, vcfSet[Genome::TUMOR], *chrMultiVariants);
         vcfParser.reset();
         std::cerr<< difftime(time(NULL), begin) << "s\n";
     }
@@ -127,11 +127,11 @@ void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
         std::time_t begin = time(NULL);
         std::cerr<< "[Benchmark] parsing truth VCF ... ";
         somaticBenchmark.setEnabled(true);
-        somaticBenchmark.loadTruthSomaticVCF(sParams.benchmarkVcf, vcfSet[Genome::TRUTH_SOMATIC], *mergedChrVarinat);
+        somaticBenchmark.loadTruthSomaticVCF(sParams.benchmarkVcf, vcfSet[Genome::TRUTH_SOMATIC], *chrMultiVariants);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
 
         // [debug] display somatic variant count
-        // somaticBenchmark.displaySomaticVarCount(vcfSet[Genome::TRUTH_SOMATIC].chrVec, *mergedChrVarinat);
+        // somaticBenchmark.displaySomaticVarCount(vcfSet[Genome::TRUTH_SOMATIC].chrVec, *chrMultiVariants);
     }
 
     // parse benchmark bed file
@@ -142,7 +142,7 @@ void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
         std::cerr<< difftime(time(NULL), begin) << "s\n";
 
         // mark variants in bed regions
-        somaticBenchmark.markVariantsInBedRegions(vcfSet[TUMOR].chrVec, *mergedChrVarinat);
+        somaticBenchmark.markVariantsInBedRegions(vcfSet[TUMOR].chrVec, *chrMultiVariants);
     }
 }
 
@@ -198,8 +198,8 @@ void SomaticHaplotagProcess::displaySnpCounts(){
     int normal_snp_count = 0;
     int overlap_snp_count = 0;
     for(auto& chrIter : (*chrVec)){
-        auto chrVarIter = (*mergedChrVarinat)[chrIter].begin();
-        while(chrVarIter != (*mergedChrVarinat)[chrIter].end()){
+        auto chrVarIter = (*chrMultiVariants)[chrIter].begin();
+        while(chrVarIter != (*chrMultiVariants)[chrIter].end()){
             if((*chrVarIter).second.isExists(TUMOR)){
                 tumor_snp_count++;
             }
@@ -234,8 +234,8 @@ void SomaticHaplotagProcess::postprocessForHaplotag(){
         //write somatic read log
         somaticBenchmark.writeTotalTruthSomaticReadReport(*chrVec, sParams.basic.bamCfg.resultPrefix + "_total_truth_somatic_read.out");
         somaticBenchmark.writeTaggedReadReport(*chrVec, sParams.basic.bamCfg.resultPrefix + "_total_tagged_read.out");
-        somaticBenchmark.writePosAlleleCountLog(*chrVec, sParams.basic.bamCfg.resultPrefix + "_allele_count.out", *mergedChrVarinat);
-        somaticBenchmark.writeBedRegionLog(*chrVec, *mergedChrVarinat, sParams.basic.bamCfg.resultPrefix);
+        somaticBenchmark.writePosAlleleCountLog(*chrVec, sParams.basic.bamCfg.resultPrefix + "_allele_count.out", *chrMultiVariants);
+        somaticBenchmark.writeBedRegionLog(*chrVec, *chrMultiVariants, sParams.basic.bamCfg.resultPrefix);
     }
 }
 

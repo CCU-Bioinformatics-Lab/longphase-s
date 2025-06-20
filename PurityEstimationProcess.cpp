@@ -40,7 +40,7 @@ void PurityEstimProcess::parseVariantFiles(VcfParser& vcfParser) {
         std::time_t begin = time(NULL);
         std::cerr<< "parsing tumor SNP VCF ... ";
         vcfParser.setParseSnpFile(true);
-        vcfParser.parsingVCF(params.tumorSnpFile, vcfSet[Genome::TUMOR], *mergedChrVarinat);
+        vcfParser.parsingVCF(params.tumorSnpFile, vcfSet[Genome::TUMOR], *chrMultiVariants);
         vcfParser.reset();
         std::cerr<< difftime(time(NULL), begin) << "s\n";
     }
@@ -63,7 +63,7 @@ void PurityEstimProcess::estimatePurity() {
     //estimate tumor purity 
     CallerConfig callerCfg;
     SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(callerCfg, params.basic.bamCfg, *chrVec);
-    somaticVarCaller->extractSomaticData(params.basic.bamFile, params.tumorBamFile, params.basic.fastaFile, params.basic.bamCfg, *chrVec, *chrLength, *mergedChrVarinat, vcfSet);
+    somaticVarCaller->extractSomaticData(params.basic.bamFile, params.tumorBamFile, params.basic.fastaFile, params.basic.bamCfg, *chrVec, *chrLength, *chrMultiVariants, vcfSet);
     tumorPurity = somaticVarCaller->runTumorPurityEstimator(params.basic.bamCfg.writeReadLog, params.basic.bamCfg.resultPrefix);
     delete somaticVarCaller;
 

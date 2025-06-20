@@ -61,7 +61,7 @@ struct BamParserContext{
     const std::string &fastaFile;
     const std::vector<std::string> &chrVec; 
     const std::map<std::string, int> &chrLength; 
-    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat; 
+    std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants; 
     std::map<Genome, VCF_Info> &vcfSet;
     const Genome genomeSample;
     
@@ -70,7 +70,7 @@ struct BamParserContext{
         const std::string &fastaFile,
         const std::vector<std::string> &chrVec, 
         const std::map<std::string, int> &chrLength, 
-        std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat, 
+        std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants, 
         std::map<Genome, VCF_Info> &vcfSet,
         const Genome genomeSample
     ): 
@@ -78,7 +78,7 @@ struct BamParserContext{
     fastaFile(fastaFile),
     chrVec(chrVec),
     chrLength(chrLength),
-    mergedChrVarinat(mergedChrVarinat),
+    chrMultiVariants(chrMultiVariants),
     vcfSet(vcfSet),
     genomeSample(genomeSample)
     {}
@@ -273,7 +273,7 @@ class HaplotagBamParser{
          * @brief Gets the last variant position for each chromosome
          * @param last_pos Vector to store last variant positions
          * @param chrVec Vector of chromosome names
-         * @param mergedChrVarinat Map of variants by chromosome
+         * @param chrMultiVariants Map of variants by chromosome
          * @param geneSample Genome type (NORMAL/TUMOR)
          * 
          * Determines the last variant position for efficient processing
@@ -281,7 +281,7 @@ class HaplotagBamParser{
         void getLastVarPos(
             std::vector<int>& last_pos,
             const std::vector<std::string>& chrVec,
-            std::map<std::string,std::map<int, MultiGenomeVar>> &mergedChrVarinat,
+            std::map<std::string,std::map<int, MultiGenomeVar>> &chrMultiVariants,
             const Genome& geneSample
         );
 
@@ -387,7 +387,7 @@ class ChromosomeProcessor{
          * @param ctx Chromosome processing context
          * @param bamRAII BAM file RAII wrapper
          * @param fastaParser Reference sequence parser
-         * @param mergedChrVarinat Map of variants by chromosome
+         * @param chrMultiVariants Map of variants by chromosome
          * 
          * Main function for processing all reads in a chromosome
          */
@@ -395,7 +395,7 @@ class ChromosomeProcessor{
             ChrProcContext& ctx,
             BamFileRAII& bamRAII,
             const FastaParser& fastaParser,
-            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat        
+            std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants        
         );
 };
 

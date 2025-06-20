@@ -1,4 +1,4 @@
-#include "HaplotagStragtegy.h"
+#include "HaplotagStrategy.h"
 
 /**
  * @brief Judges SNP haplotype for germline samples

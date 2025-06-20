@@ -176,9 +176,9 @@ class SomaticReadBenchmark: public VcfParser{
          * @brief Override parserProcess to handle truth somatic VCF parsing
          * @param input VCF line content
          * @param Info VCF metadata and sample information
-         * @param mergedChrVarinat Output container for parsed variants
+         * @param chrMultiVariants Output container for parsed variants
          */
-        void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat) override;
+        void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants) override;
         
         /**
          * @brief Set chromosome somatic read vector pointer for multi-threaded access
@@ -287,9 +287,9 @@ class SomaticReadBenchmark: public VcfParser{
          * @brief Load truth somatic VCF file
          * @param input Input VCF file path
          * @param Info VCF metadata and sample information
-         * @param mergedChrVarinat Output container for parsed variants
+         * @param chrMultiVariants Output container for parsed variants
          */
-        void loadTruthSomaticVCF(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        void loadTruthSomaticVCF(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
         
         /**
          * @brief Parse benchmark BED file
@@ -300,28 +300,28 @@ class SomaticReadBenchmark: public VcfParser{
         /**
          * @brief Mark variants in BED regions
          * @param chrVec Vector of chromosome names
-         * @param mergedChrVarinat Variant data container
+         * @param chrMultiVariants Variant data container
          */
         void markVariantsInBedRegions(
             std::vector<std::string> &chrVec,
-            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+            std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
         
         /**
          * @brief Remove variants outside BED regions
-         * @param mergedChrVarinat Variant data container
+         * @param chrMultiVariants Variant data container
          */
         void removeVariantsOutBedRegion(
-            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat
+            std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants
         );
 
         /**
          * @brief Write BED region log
          * @param chrVec Vector of chromosome names
-         * @param mergedChrVarinat Variant data container
+         * @param chrMultiVariants Variant data container
          * @param outPrefix Output file prefix
          */
         void writeBedRegionLog(const std::vector<std::string>& chrVec, 
-                        const std::map<std::string, std::map<int, MultiGenomeVar>>& mergedChrVarinat,
+                        const std::map<std::string, std::map<int, MultiGenomeVar>>& chrMultiVariants,
                         const std::string& outPrefix);
 
         /**
@@ -335,12 +335,12 @@ class SomaticReadBenchmark: public VcfParser{
          * @brief Write position allele count log
          * @param chrVec Vector of chromosome names
          * @param outputFileName Output file name
-         * @param mergedChrVarinat Variant data container
+         * @param chrMultiVariants Variant data container
          */
         void writePosAlleleCountLog(
             std::vector<std::string>& chrVec,
             std::string outputFileName,
-            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat
+            std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants
         );
         
         /**
@@ -376,9 +376,9 @@ class SomaticReadBenchmark: public VcfParser{
         /**
          * @brief Display somatic variant count
          * @param chrVec Vector of chromosome names
-         * @param mergedChrVarinat Variant data container
+         * @param chrMultiVariants Variant data container
          */
-        void displaySomaticVarCount(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        void displaySomaticVarCount(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
         
         /**
          * @brief Display BED region count

@@ -275,11 +275,11 @@ void SomaticReadBenchmark::loadChrKey(const std::string &chr){
  * @brief Load truth somatic VCF file
  * @param input Input VCF file path
  * @param Info VCF metadata and sample information
- * @param mergedChrVarinat Output container for parsed variants
+ * @param chrMultiVariants Output container for parsed variants
  */
-void SomaticReadBenchmark::loadTruthSomaticVCF(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void SomaticReadBenchmark::loadTruthSomaticVCF(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
     if(!openTestingFunc) return;
-    parsingVCF(input, Info, mergedChrVarinat);
+    parsingVCF(input, Info, chrMultiVariants);
 }
 
 /**
@@ -290,9 +290,9 @@ void SomaticReadBenchmark::loadTruthSomaticVCF(std::string &input, VCF_Info &Inf
  * 
  * @param input VCF line content
  * @param Info VCF metadata and sample information
- * @param mergedChrVarinat Output container for parsed variants
+ * @param chrMultiVariants Output container for parsed variants
  */
-void SomaticReadBenchmark::parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void SomaticReadBenchmark::parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
     if(!openTestingFunc) return;
     
     if( input.substr(0, 2) == "##" && getParseSnpFile()){
@@ -332,7 +332,7 @@ void SomaticReadBenchmark::parserProcess(std::string &input, VCF_Info &Info, std
         VarData varData;
         varData.allele.Ref = fields[3];
         varData.allele.Alt = fields[4];
-        mergedChrVarinat[chr][pos].Variant[Genome::TRUTH_SOMATIC] = varData;
+        chrMultiVariants[chr][pos].Variant[Genome::TRUTH_SOMATIC] = varData;
     }
 }
 
@@ -413,15 +413,15 @@ bool SomaticReadBenchmark::processBedLine(const std::string& line) {
  * Uses efficient algorithm to traverse bed regions and variants simultaneously.
  * 
  * @param chrVec Vector of chromosome names
- * @param mergedChrVarinat Variant data container
+ * @param chrMultiVariants Variant data container
  */
-void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat) {
+void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants) {
     if(!openTestingFunc || !loadedBedFile) return;
     time_t begin = time(NULL);
     std::cerr<< "[Benchmark] marking variants in bed regions ... ";
     
     for (auto& chr : chrVec) {
-        auto& chrPosVariants = mergedChrVarinat[chr];
+        auto& chrPosVariants = chrMultiVariants[chr];
         
         // check if this chromosome has bed regions
         auto bedIt = bedRegions.find(chr);
@@ -512,13 +512,13 @@ void SomaticReadBenchmark::markVariantsInBedRegions(std::vector<std::string> &ch
  * If a position has no NORMAL data, the entire position is removed.
  * Otherwise, only TUMOR and TRUTH_SOMATIC data are removed.
  * 
- * @param mergedChrVarinat Variant data container
+ * @param chrMultiVariants Variant data container
  */
-void SomaticReadBenchmark::removeVariantsOutBedRegion(std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void SomaticReadBenchmark::removeVariantsOutBedRegion(std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
     if(!openTestingFunc || !loadedBedFile) return;
 
     // remove variants outside bed regions
-    for (auto& chrPair : mergedChrVarinat) {
+    for (auto& chrPair : chrMultiVariants) {
         auto& chrPosVariants = chrPair.second;
         
         auto varPosIter = chrPosVariants.begin();
@@ -559,11 +559,11 @@ void SomaticReadBenchmark::removeVariantsOutBedRegion(std::map<std::string, std:
  * Creates two output files: _var_in_bed.out and _var_out_bed.out
  * 
  * @param chrVec Vector of chromosome names
- * @param mergedChrVarinat Variant data container
+ * @param chrMultiVariants Variant data container
  * @param outPrefix Output file prefix
  */
 void SomaticReadBenchmark::writeBedRegionLog(const std::vector<std::string>& chrVec,
-                                           const std::map<std::string, std::map<int, MultiGenomeVar>>& mergedChrVarinat,
+                                           const std::map<std::string, std::map<int, MultiGenomeVar>>& chrMultiVariants,
                                            const std::string& outPrefix) {
     if(!openTestingFunc || !loadedBedFile) return;
     std::ofstream inBedLog(outPrefix + "_var_in_bed.out");
@@ -574,7 +574,7 @@ void SomaticReadBenchmark::writeBedRegionLog(const std::vector<std::string>& chr
     outBedLog << header;
 
     for (const auto& chr : chrVec) {
-        auto chrPosVariants = mergedChrVarinat.at(chr);
+        auto chrPosVariants = chrMultiVariants.at(chr);
 
         auto varPosIter = chrPosVariants.begin();
 
@@ -622,12 +622,12 @@ SomaticReadMetrics* SomaticReadBenchmark::getMetricsPtr(const std::string &chr){
  * 
  * @param chrVec Vector of chromosome names
  * @param outputFileName Output file name
- * @param mergedChrVarinat Variant data container
+ * @param chrMultiVariants Variant data container
  */
 void SomaticReadBenchmark::writePosAlleleCountLog(
     std::vector<std::string>& chrVec,
     std::string outputFileName,
-    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat
+    std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants
 ){
     // If testing function is not enabled, return
     if(!openTestingFunc) return;
@@ -665,8 +665,8 @@ void SomaticReadBenchmark::writePosAlleleCountLog(
         for(auto &posIter : chrMetrics[chr].posAltRefDelCount){
             (*refAltCountLog) << chr << "\t"
                               << posIter.first << "\t"
-                              << mergedChrVarinat[chr][posIter.first].Variant[TRUTH_SOMATIC].allele.Ref << "\t"
-                              << mergedChrVarinat[chr][posIter.first].Variant[TRUTH_SOMATIC].allele.Alt << "\t"
+                              << chrMultiVariants[chr][posIter.first].Variant[TRUTH_SOMATIC].allele.Ref << "\t"
+                              << chrMultiVariants[chr][posIter.first].Variant[TRUTH_SOMATIC].allele.Alt << "\t"
                               << posIter.second.refCount << "\t"
                               << posIter.second.altCount << "\t"
                               << posIter.second.delCount << "\n";
@@ -944,15 +944,15 @@ void SomaticReadBenchmark::writeReadLog(
  * Prints the total number of somatic variants across all chromosomes.
  * 
  * @param chrVec Vector of chromosome names
- * @param mergedChrVarinat Variant data container
+ * @param chrMultiVariants Variant data container
  */
-void SomaticReadBenchmark::displaySomaticVarCount(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void SomaticReadBenchmark::displaySomaticVarCount(std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
     if(!openTestingFunc) return;
     int totalVariantCount = 0;
     
     for(auto &chr : chrVec){
-        std::map<int, MultiGenomeVar>::iterator chrVariantIter = mergedChrVarinat[chr].begin();
-        while(chrVariantIter != mergedChrVarinat[chr].end()){
+        std::map<int, MultiGenomeVar>::iterator chrVariantIter = chrMultiVariants[chr].begin();
+        while(chrVariantIter != chrMultiVariants[chr].end()){
             if(chrVariantIter->second.isExists(Genome::TRUTH_SOMATIC)){
                 totalVariantCount++;
             }

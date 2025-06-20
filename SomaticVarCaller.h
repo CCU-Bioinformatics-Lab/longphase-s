@@ -4,7 +4,7 @@
 #include "Util.h" 
 #include "HaplotagType.h"
 #include "HaplotagParsingBam.h"
-#include "HaplotagStragtegy.h"
+#include "HaplotagStrategy.h"
 #include "TumorPurityEstimator.h"
 #include "HaplotagLogging.h"
 
@@ -499,18 +499,18 @@ class SomaticVarCaller{
          * @param ctx Caller context
          * @param somaticParams Somatic filter parameters
          * @param chrVec Vector of chromosome names
-         * @param mergedChrVarinat Merged chromosome variants
+         * @param chrMultiVariants Multi-genome chromosome variants
          */
         void writeSomaticVarCallingLog(const CallerContext &ctx, const SomaticVarFilterParams &somaticParams, const std::vector<std::string> &chrVec
-                                     , std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+                                     , std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
         
         /**
          * @brief Write other somatic haplotype log
          * @param logFileName Log file name
          * @param chrVec Vector of chromosome names
-         * @param mergedChrVarinat Merged chromosome variants
+         * @param chrMultiVariants Multi-genome chromosome variants
          */
-        void writeOtherSomaticHpLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        void writeOtherSomaticHpLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
         
         /**
          * @brief Write dense tumor SNP interval log
@@ -519,13 +519,13 @@ class SomaticVarCaller{
          */
         void writeDenseTumorSnpIntervalLog(const std::string logFileName, const std::vector<std::string> &chrVec);
         
+        double calculateMean(const std::map<int, double>& data);
         double calculateStandardDeviation(const std::map<int, double>& data, double mean);
         void calculateZScores(const std::map<int, double>& data, double mean, double stdDev, std::map<int, double> &zScores);
         // temporary function
         void shannonEntropyFilter(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants, std::string &ref_string);
         double entropyComponent(int count, int total);
         double calculateShannonEntropy(int nA, int nC, int nT, int nG);
-        double calculateMean(const std::map<int, double>& data);
 
         void findOtherSomaticSnpHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants);
         int convertStrNucToInt(std::string &base);
@@ -557,14 +557,14 @@ class SomaticVarCaller{
          * @param ctx Caller context with input files
          * @param chrVec Vector of chromosome names
          * @param chrLength Map of chromosome names to lengths
-         * @param mergedChrVarinat Merged chromosome variants
+         * @param chrMultiVariants Multi-genome chromosome variants
          * @param vcfSet VCF information by genome type
          */
         void variantCalling(
             const CallerContext &ctx,
             const std::vector<std::string> &chrVec,
             const std::map<std::string, int> &chrLength,
-            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
+            std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants,
             std::map<Genome, VCF_Info> &vcfSet
         );
 
@@ -578,7 +578,7 @@ class SomaticVarCaller{
          * @param config Parsing configuration
          * @param chrVec Vector of chromosome names
          * @param chrLength Map of chromosome names to lengths
-         * @param mergedChrVarinat Merged chromosome variants
+         * @param chrMultiVariants Multi-genome chromosome variants
          * @param vcfSet VCF information by genome type
          */
         void extractSomaticData(
@@ -588,7 +588,7 @@ class SomaticVarCaller{
             const ParsingBamConfig &config,
             const std::vector<std::string> &chrVec,
             const std::map<std::string, int> &chrLength,
-            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
+            std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants,
             std::map<Genome, VCF_Info> &vcfSet           
         );
         
@@ -605,9 +605,9 @@ class SomaticVarCaller{
          * 
          * Marks variants as somatic based on calling results
          * @param chrVec Vector of chromosome names
-         * @param mergedChrVarinat Merged chromosome variants
+         * @param chrMultiVariants Multi-genome chromosome variants
          */
-        void getSomaticFlag(const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        void getSomaticFlag(const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
 
         /**
          * @brief Display calling SNP count

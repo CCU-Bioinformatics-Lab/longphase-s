@@ -8,12 +8,12 @@ params(params),chrVec(nullptr),chrLength(nullptr),readStats(),processBegin(time(
     vcfSet[Genome::TUMOR] = VCF_Info{.sample = Genome::TUMOR};
     vcfSet[Genome::TRUTH_SOMATIC] = VCF_Info{.sample = Genome::TRUTH_SOMATIC};
 
-    mergedChrVarinat = new std::map<std::string, std::map<int, MultiGenomeVar>>();
+    chrMultiVariants = new std::map<std::string, std::map<int, MultiGenomeVar>>();
 
 }
 
 HaplotagProcess::~HaplotagProcess(){
-    delete mergedChrVarinat;
+    delete chrMultiVariants;
 };
 
 void HaplotagProcess::printParamsMessage(){
@@ -65,7 +65,7 @@ void HaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
     std::cerr<< getNormalSnpParsingMessage();
 
     vcfParser.setParseSnpFile(true);
-    vcfParser.parsingVCF(params.snpFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
+    vcfParser.parsingVCF(params.snpFile, vcfSet[Genome::NORMAL], *chrMultiVariants);
     vcfParser.reset();
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 
@@ -74,7 +74,7 @@ void HaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
         begin = time(NULL);
         std::cerr<< "parsing SV VCF ... ";
         vcfParser.setParseSVFile(true);
-        vcfParser.parsingVCF(params.svFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
+        vcfParser.parsingVCF(params.svFile, vcfSet[Genome::NORMAL], *chrMultiVariants);
         vcfParser.reset();
         std::cerr<< difftime(time(NULL), begin) << "s\n";    
     }
@@ -84,7 +84,7 @@ void HaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
         begin = time(NULL);
         std::cerr<< "parsing MOD VCF ... ";
         vcfParser.setParseMODFile(true);
-        vcfParser.parsingVCF(params.modFile, vcfSet[Genome::NORMAL], *mergedChrVarinat);
+        vcfParser.parsingVCF(params.modFile, vcfSet[Genome::NORMAL], *chrMultiVariants);
         vcfParser.reset();
         std::cerr<< difftime(time(NULL), begin) << "s\n";    
     }
@@ -115,10 +115,10 @@ void HaplotagProcess::setProcessingChromRegion(){
     }
 
     // remove variant on chromosome not in chrVec
-    std::map<std::string, std::map<int, MultiGenomeVar>>::iterator iter = mergedChrVarinat->begin();
-    while(iter != mergedChrVarinat->end()){
+    std::map<std::string, std::map<int, MultiGenomeVar>>::iterator iter = chrMultiVariants->begin();
+    while(iter != chrMultiVariants->end()){
         if(std::find((*chrVec).begin(), (*chrVec).end(), iter->first) == (*chrVec).end()){
-            mergedChrVarinat->erase(iter++);
+            chrMultiVariants->erase(iter++);
         }else{
             iter++;
         }
@@ -141,7 +141,7 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, std::string& tagBamFil
     // control.writeOutputBam = false;
     control.mappingQualityFilter = true;
 
-    BamParserContext ctx(tagBamFile, params.fastaFile, *chrVec, *chrLength, *mergedChrVarinat, vcfSet, geneSample);
+    BamParserContext ctx(tagBamFile, params.fastaFile, *chrVec, *chrLength, *chrMultiVariants, vcfSet, geneSample);
     GermlineHaplotagBamParser* haplotagBamParser = createHaplotagBamParser(config, control, readStats);
     haplotagBamParser->createTagLog();
     haplotagBamParser->parsingBam(ctx);

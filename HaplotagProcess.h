@@ -3,7 +3,7 @@
 
 #include "HaplotagType.h"
 #include "HaplotagParsingBam.h"
-#include "HaplotagStragtegy.h"
+#include "HaplotagStrategy.h"
 #include "HaplotagVcfParser.h"
 #include "HaplotagLogging.h"
 
@@ -200,7 +200,7 @@ class HaplotagProcess
         std::map<std::string, int> *chrLength;
 
         // chr, variant position (0-base), allele haplotype set
-        std::map<std::string, std::map<int, MultiGenomeVar>> *mergedChrVarinat;
+        std::map<std::string, std::map<int, MultiGenomeVar>> *chrMultiVariants;
 
         // variant position (0-base), allele haplotype set
         std::map<int, MultiGenomeVar> currentChrVariants;

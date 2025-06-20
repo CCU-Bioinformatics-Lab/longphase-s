@@ -38,17 +38,17 @@ void VcfParser::reset(){
  * 
  * @param variantFile Input VCF file path
  * @param Info VCF metadata and sample information
- * @param mergedChrVarinat Output container for parsed variants
+ * @param chrMultiVariants Output container for parsed variants
  */
-void VcfParser::parsingVCF(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void VcfParser::parsingVCF(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
     mode = VCF_PARSER_LOAD_NODE;
     if( variantFile.find("gz") != std::string::npos ){
         // .vcf.gz 
-        compressParser(variantFile, Info, mergedChrVarinat);
+        compressParser(variantFile, Info, chrMultiVariants);
     }
     else if( variantFile.find("vcf") != std::string::npos ){
         // .vcf
-        unCompressParser(variantFile, Info, mergedChrVarinat);
+        unCompressParser(variantFile, Info, chrMultiVariants);
     }
     else{
         std::cerr<<"file: "<< variantFile << "\nnot vcf file. please check filename extension\n";
@@ -65,13 +65,13 @@ void VcfParser::parsingVCF(std::string &variantFile, VCF_Info &Info, std::map<st
  * 
  * @param variantFile Input VCF file path (for header information)
  * @param Info VCF metadata and sample information
- * @param mergedChrVarinat Input container with processed variants
+ * @param chrMultiVariants Input container with processed variants
  * @param outputPrefix Output file prefix
  */
 void VcfParser::writingResultVCF(
     std::string &variantFile,
     VCF_Info &Info,
-    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
+    std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants,
     const std::string &outputPrefix
 ){
     mode = VCF_PARSER_WRITE_NODE;
@@ -84,11 +84,11 @@ void VcfParser::writingResultVCF(
     
     if( variantFile.find("gz") != std::string::npos ){
         // .vcf.gz 
-        compressParser(variantFile, Info, mergedChrVarinat);
+        compressParser(variantFile, Info, chrMultiVariants);
     }
     else if( variantFile.find("vcf") != std::string::npos ){
         // .vcf
-        unCompressParser(variantFile, Info, mergedChrVarinat);
+        unCompressParser(variantFile, Info, chrMultiVariants);
     }
     else{
         std::cerr<<"file: "<< variantFile << "\nnot vcf file. please check filename extension\n";
@@ -109,9 +109,9 @@ void VcfParser::writingResultVCF(
  * 
  * @param variantFile Input compressed VCF file path
  * @param Info VCF metadata and sample information
- * @param mergedChrVarinat Output container for parsed variants
+ * @param chrMultiVariants Output container for parsed variants
  */
-void VcfParser::compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void VcfParser::compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
     gzFile file = gzopen(variantFile.c_str(), "rb");
     if(variantFile=="")
         return;
@@ -155,7 +155,7 @@ void VcfParser::compressParser(std::string &variantFile, VCF_Info &Info, std::ma
             for (char* eol; (cur<end) && (eol = std::find(cur, end, '\n')) < end; cur = eol + 1)
             {
                 std::string input = std::string(cur, eol);
-                processLine(input, Info, mergedChrVarinat);
+                processLine(input, Info, chrMultiVariants);
             }
             // any trailing data in [eol, end) now is a partial line
             offset = std::copy(cur, end, buffer);
@@ -172,9 +172,9 @@ void VcfParser::compressParser(std::string &variantFile, VCF_Info &Info, std::ma
  * 
  * @param variantFile Input uncompressed VCF file path
  * @param Info VCF metadata and sample information
- * @param mergedChrVarinat Output container for parsed variants
+ * @param chrMultiVariants Output container for parsed variants
  */
-void VcfParser::unCompressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void VcfParser::unCompressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
     std::ifstream originVcf(variantFile);
     if(variantFile=="")
         return;
@@ -186,7 +186,7 @@ void VcfParser::unCompressParser(std::string &variantFile, VCF_Info &Info, std::
         std::string input;
         while(! originVcf.eof() ){
             std::getline(originVcf, input);
-            processLine(input, Info, mergedChrVarinat);
+            processLine(input, Info, chrMultiVariants);
         }
     }
 }
@@ -198,15 +198,15 @@ void VcfParser::unCompressParser(std::string &variantFile, VCF_Info &Info, std::
  * 
  * @param input VCF line content
  * @param Info VCF metadata and sample information
- * @param mergedChrVarinat Variant data container
+ * @param chrMultiVariants Variant data container
  */
-void VcfParser::processLine(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void VcfParser::processLine(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
     switch(mode){
         case VCF_PARSER_LOAD_NODE:
-            parserProcess(input, Info, mergedChrVarinat);
+            parserProcess(input, Info, chrMultiVariants);
             break;
         case VCF_PARSER_WRITE_NODE:
-            writeProcess(input, Info, mergedChrVarinat);
+            writeProcess(input, Info, chrMultiVariants);
             break;
         default:
             std::cerr<< "[ERROR](VcfParser::processLine): invalid mode\n";
@@ -231,9 +231,9 @@ void VcfParser::processLine(std::string &input, VCF_Info &Info, std::map<std::st
  * 
  * @param input VCF line content
  * @param Info VCF metadata and sample information
- * @param mergedChrVarinat Output container for parsed variants
+ * @param chrMultiVariants Output container for parsed variants
  */
-void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
     if( input.substr(0, 2) == "##" && parseSnpFile){
         if( input.find("contig=")!= std::string::npos ){
             // Extract chromosome information from contig header
@@ -366,9 +366,9 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
 
                 // Store variant data for appropriate sample
                 if(Info.sample == NORMAL){
-                    mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;
+                    chrMultiVariants[chr][pos].Variant[NORMAL] = varData;
                 }else if(Info.sample == TUMOR){
-                    mergedChrVarinat[chr][pos].Variant[TUMOR] = varData;
+                    chrMultiVariants[chr][pos].Variant[TUMOR] = varData;
                 }
             }
             // sv file
@@ -450,9 +450,9 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                     varData.setVariantType();
 
                     if(Info.sample == NORMAL){
-                        mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;
+                        chrMultiVariants[chr][pos].Variant[NORMAL] = varData;
                     }else if(Info.sample == TUMOR){
-                        mergedChrVarinat[chr][pos].Variant[TUMOR] = varData;
+                        chrMultiVariants[chr][pos].Variant[TUMOR] = varData;
                     }
                 }
             //unphased heterozygous
@@ -467,9 +467,9 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                     varData.setVariantType();
 
                     if(Info.sample == NORMAL){
-                        mergedChrVarinat[chr][pos].Variant[NORMAL] = varData;
+                        chrMultiVariants[chr][pos].Variant[NORMAL] = varData;
                     }else if(Info.sample == TUMOR){
-                        mergedChrVarinat[chr][pos].Variant[TUMOR] = varData;
+                        chrMultiVariants[chr][pos].Variant[TUMOR] = varData;
                     }
                 }
             }
@@ -489,9 +489,9 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
  * 
  * @param input VCF line content
  * @param Info VCF metadata and sample information
- * @param mergedChrVarinat Input container with processed variants
+ * @param chrMultiVariants Input container with processed variants
  */
-void VcfParser::writeProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void VcfParser::writeProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
     if(resultVcf == nullptr){
         std::cerr<< "[ERROR](VcfParser::writeProcess): resultVcf is nullptr\n";
         exit(EXIT_FAILURE);
@@ -522,8 +522,8 @@ void VcfParser::writeProcess(std::string &input, VCF_Info &Info, std::map<std::s
             std::string chr = fields[0];
 
             // Check if variant exists in processed data
-            auto chrIt = mergedChrVarinat.find(chr);
-            if (chrIt != mergedChrVarinat.end()) {
+            auto chrIt = chrMultiVariants.find(chr);
+            if (chrIt != chrMultiVariants.end()) {
 
                 auto posIt = chrIt->second.find(pos);
                 if (posIt != chrIt->second.end()) {

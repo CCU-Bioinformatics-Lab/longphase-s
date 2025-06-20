@@ -76,12 +76,12 @@ ExtractNorDataChrProcessor::~ExtractNorDataChrProcessor(){
 }
 
 void ExtractNorDataChrProcessor::processRead(
-            bam1_t &aln, 
-            const bam_hdr_t &bamHdr,
-            const std::string &ref_string,
-            std::map<int, MultiGenomeVar> &currentVariants,
-            std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
-            ChrProcContext& ctx
+    bam1_t &aln, 
+    const bam_hdr_t &bamHdr,
+    const std::string &ref_string,
+    std::map<int, MultiGenomeVar> &currentVariants,
+    std::map<int, MultiGenomeVar>::iterator &firstVariantIter,
+    ChrProcContext& ctx
 ){
 
     std::map<int, int> hpCount;
@@ -620,7 +620,7 @@ void SomaticVarCaller::variantCalling(
     const CallerContext &ctx,
     const std::vector<std::string> &chrVec,
     const std::map<std::string, int> &chrLength,
-    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
+    std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants,
     std::map<Genome, VCF_Info> &vcfSet
 ){
     
@@ -628,7 +628,7 @@ void SomaticVarCaller::variantCalling(
     initialSomaticFilterParams();  
 
     // extract somatic data from normal and tumor BAM
-    extractSomaticData(ctx.normalBamFile, ctx.tumorBamFile, ctx.fastaFile, bamCfg, chrVec, chrLength, mergedChrVarinat, vcfSet);
+    extractSomaticData(ctx.normalBamFile, ctx.tumorBamFile, ctx.fastaFile, bamCfg, chrVec, chrLength, chrMultiVariants, vcfSet);
 
     double tumorPurity = 0.0;
 
@@ -673,7 +673,7 @@ void SomaticVarCaller::variantCalling(
             localDenseTumorSnpInterval = &((*denseTumorSnpInterval)[chr]);
             readHpResultSet = &((*chrReadHpResultSet)[chr]);
             tumorPosReadCorrBaseHP = &((*chrTumorPosReadCorrBaseHP)[chr]);
-            currentChrVariants = mergedChrVarinat[chr];
+            currentChrVariants = chrMultiVariants[chr];
         }
 
         //get close somatic SNP interval
@@ -705,9 +705,9 @@ void SomaticVarCaller::variantCalling(
     
     if(callerCfg.writeCallingLog){
         //write the log file for variants with positions tagged as HP3
-        writeSomaticVarCallingLog(ctx ,somaticParams, chrVec, mergedChrVarinat);
+        writeSomaticVarCallingLog(ctx ,somaticParams, chrVec, chrMultiVariants);
 
-        writeOtherSomaticHpLog(bamCfg.resultPrefix + "_other_allele_somatic_var.log", chrVec, mergedChrVarinat);
+        writeOtherSomaticHpLog(bamCfg.resultPrefix + "_other_allele_somatic_var.log", chrVec, chrMultiVariants);
 
         writeDenseTumorSnpIntervalLog(bamCfg.resultPrefix + "_dense_tumor_snp_interval.log", chrVec);
 
@@ -744,7 +744,7 @@ void SomaticVarCaller::extractSomaticData(
     const ParsingBamConfig &config,
     const std::vector<std::string> &chrVec,
     const std::map<std::string, int> &chrLength,
-    std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
+    std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants,
     std::map<Genome, VCF_Info> &vcfSet
 ){
     //Count each base numbers at tumor SNP position in the Normal.bam
@@ -754,14 +754,14 @@ void SomaticVarCaller::extractSomaticData(
 
     ParsingBamControl control;
 
-    BamParserContext norBamCtx(normalBamFile, fastaFile, chrVec, chrLength, mergedChrVarinat, vcfSet, Genome::NORMAL);
+    BamParserContext norBamCtx(normalBamFile, fastaFile, chrVec, chrLength, chrMultiVariants, vcfSet, Genome::NORMAL);
     ExtractNorDataBamParser normalBamParser(config, control, *chrPosNorBase);
     normalBamParser.parsingBam(norBamCtx);
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 
     std::cerr << "extracting data from tumor BAM ... ";
     begin = time(NULL);
-    BamParserContext tumBamCtx(tumorBamFile, fastaFile, chrVec, chrLength, mergedChrVarinat, vcfSet, Genome::TUMOR);
+    BamParserContext tumBamCtx(tumorBamFile, fastaFile, chrVec, chrLength, chrMultiVariants, vcfSet, Genome::TUMOR);
     ExtractTumDataBamParser tumorBamParser(config, control, *chrPosSomaticInfo, *chrReadHpResultSet, *chrTumorPosReadCorrBaseHP);
     tumorBamParser.parsingBam(tumBamCtx);
     std::cerr<< difftime(time(NULL), begin) << "s\n";
@@ -1529,7 +1529,7 @@ void SomaticVarCaller::statisticSomaticPosReadHP(
 }
 
 
-void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const SomaticVarFilterParams &somaticParams, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const SomaticVarFilterParams &somaticParams, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
     std::ofstream *tagHP3Log = new std::ofstream(bamCfg.resultPrefix+"_somatic_var.out");
 
     if(!tagHP3Log->is_open()){
@@ -1691,9 +1691,9 @@ void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const
             std::string RefBase;
             std::string AltBase;
                 
-            if(mergedChrVarinat[chr][(*somaticVarIter).first].isExists(TUMOR) == true){
-                RefBase = mergedChrVarinat[chr][(*somaticVarIter).first].Variant[TUMOR].allele.Ref;
-                AltBase = mergedChrVarinat[chr][(*somaticVarIter).first].Variant[TUMOR].allele.Alt;
+            if(chrMultiVariants[chr][(*somaticVarIter).first].isExists(TUMOR) == true){
+                RefBase = chrMultiVariants[chr][(*somaticVarIter).first].Variant[TUMOR].allele.Ref;
+                AltBase = chrMultiVariants[chr][(*somaticVarIter).first].Variant[TUMOR].allele.Alt;
             }else{
                 std::cerr << "[ERROR](write tag HP3 log file) => can't find the position : chr:" << chr << " pos: " << ((*somaticVarIter).first) + 1;
                 exit(1);
@@ -1860,7 +1860,7 @@ void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const
                         << zScore << "\t" //57
                         << (*somaticVarIter).second.intervalSnpCount << "\t" //58
                         << (*somaticVarIter).second.minDistance << "\t" //59
-                        << mergedChrVarinat[chr][(*somaticVarIter).first].isExists(NORMAL) << "\t" //60
+                        << chrMultiVariants[chr][(*somaticVarIter).first].isExists(NORMAL) << "\t" //60
                         << (*somaticVarIter).second.statisticPurity << "\t" //61
                         << (*somaticVarIter).second.isFilterOut << "\t" //62
                         << norNonDelAF << "\t" //63
@@ -1877,7 +1877,7 @@ void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const
     std::cerr<< difftime(time(NULL), begin) << "s\n";  
 }
 
-void SomaticVarCaller::writeOtherSomaticHpLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void SomaticVarCaller::writeOtherSomaticHpLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
     std::ofstream *OtherHpSomaticVarLog=NULL;
     OtherHpSomaticVarLog=new std::ofstream(logFileName);
 
@@ -1909,7 +1909,7 @@ void SomaticVarCaller::writeOtherSomaticHpLog(const std::string logFileName, con
     }
 
     for(auto chr: chrVec){
-        auto currentChrVar = mergedChrVarinat[chr];
+        auto currentChrVar = chrMultiVariants[chr];
         for(auto somaticVar: (*chrPosSomaticInfo)[chr]){
             int pos = somaticVar.first;
 
@@ -1997,17 +1997,17 @@ void SomaticVarCaller::writeDenseTumorSnpIntervalLog(const std::string logFileNa
  * for downstream analysis and reporting.
  * 
  * @param chrVec Vector of chromosome names to process
- * @param mergedChrVarinat Merged chromosome variants to update
+ * @param chrMultiVariants Multi-genome chromosome variants to update
  */
-void SomaticVarCaller::getSomaticFlag(const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat){
+void SomaticVarCaller::getSomaticFlag(const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
     int somaticVariantCount = 0;
     for(auto chr: chrVec){
         for(auto somaticVar: (*chrPosSomaticInfo)[chr]){
             // [debug] logic for somatic tagging validation
             if(!somaticVar.second.isFilterOut && somaticVar.second.isHighConSomaticSNP){
             // if(somaticVar.second.isHighConSomaticSNP){
-                mergedChrVarinat[chr][somaticVar.first].isSomaticVariant = true;
-                mergedChrVarinat[chr][somaticVar.first].somaticReadDeriveByHP = somaticVar.second.somaticReadDeriveByHP;
+                chrMultiVariants[chr][somaticVar.first].isSomaticVariant = true;
+                chrMultiVariants[chr][somaticVar.first].somaticReadDeriveByHP = somaticVar.second.somaticReadDeriveByHP;
                 somaticVariantCount++;
             }
         }

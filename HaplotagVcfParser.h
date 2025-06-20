@@ -63,27 +63,27 @@ class VcfParser{
         /**
          * @brief Parse compressed VCF file (.vcf.gz)
          */
-        void compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        void compressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
         
         /**
          * @brief Parse uncompressed VCF file (.vcf)
          */
-        void unCompressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        void unCompressParser(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
         
         /**
          * @brief Process a single VCF line based on current mode
          */
-        void processLine(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        void processLine(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
         
         /**
          * @brief Parse and load variant data from VCF line
          */
-        virtual void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        virtual void parserProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
         
         /**
          * @brief Write processed variant data to output VCF
          */
-        virtual void writeProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        virtual void writeProcess(std::string &input, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
     protected:
 
     public:
@@ -140,7 +140,7 @@ class VcfParser{
         /**
          * @brief Parse VCF file and load variant data
          */
-        void parsingVCF(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat);
+        void parsingVCF(std::string &variantFile, VCF_Info &Info, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
         
         /**
          * @brief Write processed variant data to output VCF file
@@ -148,7 +148,7 @@ class VcfParser{
         void writingResultVCF(
             std::string &variantFile,
             VCF_Info &Info,
-            std::map<std::string, std::map<int, MultiGenomeVar>> &mergedChrVarinat,
+            std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants,
             const std::string &outputPrefix
         );
 };
