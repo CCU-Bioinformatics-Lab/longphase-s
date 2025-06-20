@@ -510,13 +510,6 @@ class SomaticVarCaller{
         void writeSomaticVarCallingLog(const CallerContext &ctx, const SomaticVarFilterParams &somaticParams, const std::vector<std::string> &chrVec
                                      , std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
         
-        /**
-         * @brief Write other somatic haplotype log
-         * @param logFileName Log file name
-         * @param chrVec Vector of chromosome names
-         * @param chrMultiVariants Multi-genome chromosome variants
-         */
-        void writeOtherSomaticHpLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
         
         /**
          * @brief Write dense tumor SNP interval log
@@ -524,19 +517,32 @@ class SomaticVarCaller{
          * @param chrVec Vector of chromosome names
          */
         void writeDenseTumorSnpIntervalLog(const std::string logFileName, const std::vector<std::string> &chrVec);
-    
-        // temporary function
-        void shannonEntropyFilter(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants, std::string &ref_string);
-        double entropyComponent(int count, int total);
-        double calculateShannonEntropy(int nA, int nC, int nT, int nG);
 
-        void findOtherSomaticSnpHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants);
         /**
          * @brief Release allocated memory
          * 
          * Deletes all dynamically allocated data structures
          */
         void releaseMemory();
+        
+        /**
+         * @brief Find other somatic SNP haplotypes
+          * @note Temporary function for analysis
+         * Analyzes and identifies additional somatic SNP haplotypes (HP4, HP5)
+         * @param chr Chromosome name
+         * @param somaticPosInfo Somatic position information
+         * @param currentChrVariants Current chromosome variants
+         */
+        void findOtherSomaticSnpHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<int, MultiGenomeVar> &currentChrVariants);
+
+        /**
+         * @brief Write other somatic haplotype log
+         * @note Temporary function for analysis
+         * @param logFileName Log file name
+         * @param chrVec Vector of chromosome names
+         * @param chrMultiVariants Multi-genome chromosome variants
+         */
+        void writeOtherSomaticHpLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
 
     protected:
 
