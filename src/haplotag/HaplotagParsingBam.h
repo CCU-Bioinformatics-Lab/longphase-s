@@ -2,6 +2,14 @@
 #define HAPLOTAG_PARSING_BAM_H
 
 #include "HaplotagType.h"
+#include <htslib/sam.h>
+#include <htslib/faidx.h>
+#include <htslib/khash.h>
+#include <htslib/kbitset.h>
+#include <htslib/thread_pool.h>
+#include <htslib/vcf.h>
+#include <htslib/vcfutils.h>
+#include <zlib.h>
 
 class HaplotagBamParser;
 class ChromosomeProcessor;

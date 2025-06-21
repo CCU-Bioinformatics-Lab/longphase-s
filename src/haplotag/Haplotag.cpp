@@ -1,6 +1,6 @@
 #include "Haplotag.h"
 #include "HaplotagProcess.h"
-#include "Util.h"
+#include "../shared/Util.h"
 #include <getopt.h>
 
 #define SUBPROGRAM "haplotag"

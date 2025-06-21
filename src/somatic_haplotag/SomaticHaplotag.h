@@ -1,8 +1,8 @@
 #ifndef SOMATIC_HAPLOTAG_H
 #define SOMATIC_HAPLOTAG_H
 
-#include "Haplotag.h"
-#include "ArgumentManager.h"
+#include "../shared/ArgumentManager.h"
+#include "../haplotag/Haplotag.h"
 #include "SomaticHaplotagProcess.h"
 
 

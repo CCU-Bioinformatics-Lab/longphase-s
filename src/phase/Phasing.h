@@ -1,6 +1,6 @@
 #ifndef PHASING_H
 #define PHASING_H
-#include "Util.h"
+#include "../shared/Util.h"
 
 // functions
 int PhasingMain(int argc, char** argv, std::string version);

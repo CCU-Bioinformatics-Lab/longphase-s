@@ -1,7 +1,7 @@
 #ifndef PARSINGBAM_H
 #define PARSINGBAM_H
 
-#include "Util.h"
+#include "../shared/Util.h"
 #include "PhasingProcess.h"
 #include <htslib/sam.h>
 #include <htslib/faidx.h>

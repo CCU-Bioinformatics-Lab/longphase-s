@@ -1,6 +1,6 @@
 #include "ModCallParsingBam.h"
-#include "PhasingGraph.h"
-#include "Util.h"
+#include "../phase/PhasingGraph.h"
+#include "../shared/Util.h"
 
 #include <cmath>
 #include <iostream>

@@ -1,7 +1,7 @@
 #ifndef PHASINGGRAPH_H
 #define PHASINGGRAPH_H
 
-#include "Util.h"
+#include "../shared/Util.h"
 #include "ParsingBam.h"
 #include "PhasingProcess.h"
 

@@ -92,7 +92,7 @@ Clone and compile using the following commands, and make sure that the environme
 
 ```
 git clone https://github.com/ming-en-ho/longphase-s.git
-cd longphase
+cd longphase-s
 autoreconf -i
 ./configure
 make -j 4
