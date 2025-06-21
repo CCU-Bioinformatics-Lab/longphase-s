@@ -1,8 +1,7 @@
 #ifndef HAPLOTAG_TYPE_H
 #define HAPLOTAG_TYPE_H
 
-#include "Util.h"
-#include "ParsingBam.h"
+#include "../phase/ParsingBam.h"
 #include <cmath>
 #include <iomanip>
 #include <omp.h>

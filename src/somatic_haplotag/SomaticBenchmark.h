@@ -2,9 +2,9 @@
 #define SOMATIC_BENCHMARK_H
 
 #include <iomanip>
-#include "Util.h"
-#include "HaplotagType.h"
-#include "HaplotagVcfParser.h"
+#include "../shared/Util.h"
+#include "../haplotag/HaplotagType.h"
+#include "../haplotag/HaplotagVcfParser.h"
 
 /**
  * @brief Structure to store somatic read logging information

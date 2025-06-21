@@ -25,6 +25,7 @@
 *.sdf
 *.opensdf
 *.un~ 
+.vscode/
 
 # Build directories
 build/
@@ -34,7 +35,7 @@ out/
 .DS_Store
 Thumbs.db
  
-longphase 
+longphase-s 
 htslib/*
 jemalloc/*
 configure

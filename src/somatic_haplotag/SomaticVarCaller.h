@@ -1,12 +1,12 @@
 #ifndef SOMATIC_VAR_CALLER_H
 #define SOMATIC_VAR_CALLER_H
 
-#include "Util.h" 
-#include "HaplotagType.h"
-#include "HaplotagParsingBam.h"
-#include "HaplotagStrategy.h"
+#include "../shared/Util.h" 
+#include "../haplotag/HaplotagType.h"
+#include "../haplotag/HaplotagParsingBam.h"
+#include "../haplotag/HaplotagStrategy.h"
+#include "../haplotag/HaplotagLogging.h"
 #include "TumorPurityEstimator.h"
-#include "HaplotagLogging.h"
 
 /**
  * @brief Context information for somatic variant calling

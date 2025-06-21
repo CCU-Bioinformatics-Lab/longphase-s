@@ -1,4 +1,4 @@
-CC        = gcc
+CC       = gcc
 CXX      = g++
 AR       = ar
 AWK      = awk
@@ -40,7 +40,7 @@ all: subprojects
 	$(MAKE)	-C	./htslib
 	$(MAKE)	$(PROGRAMS)
 
-ALL_CPPFLAGS = -I. $(CPPFLAGS) -Ihtslib -Ijemalloc
+ALL_CPPFLAGS = -I. -Isrc $(CPPFLAGS) -Ihtslib -Ijemalloc
 ALL_LDFLAGS  = $(LDFLAGS) -Lhtslib/htslib -Ljemalloc/lib
 
 #gun-malloc
@@ -73,8 +73,24 @@ $(PROGRAMS): $(OBJ)
 # $(PROGRAMS): $(OBJ)
 # 	$(CXX) $(ALL_CPPFLAGS) $(ALL_LDFLAGS)	-o $@ $^ $(HTSLIB_LIB)
 
-%.o: %.cpp
-	$(CXX) $(ALL_CPPFLAGS) -o $@ -c $^
+# 編譯規則 - 所有 .o 檔案都放在最上層
+%.o: src/shared/%.cpp
+	$(CXX) $(ALL_CPPFLAGS) -o $@ -c $<
+
+%.o: src/haplotag/%.cpp
+	$(CXX) $(ALL_CPPFLAGS) -o $@ -c $<
+
+%.o: src/phase/%.cpp
+	$(CXX) $(ALL_CPPFLAGS) -o $@ -c $<
+
+%.o: src/modcall/%.cpp
+	$(CXX) $(ALL_CPPFLAGS) -o $@ -c $<
+
+%.o: src/somatic_haplotag/%.cpp
+	$(CXX) $(ALL_CPPFLAGS) -o $@ -c $<
+
+%.o: src/%.cpp
+	$(CXX) $(ALL_CPPFLAGS) -o $@ -c $<
 
 mostlyclean:
 	-rm -f *.o

@@ -1,8 +1,8 @@
 #ifndef PURITY_ESTIMATION_H
 #define PURITY_ESTIMATION_H
 
-#include "Haplotag.h"
-#include "ArgumentManager.h"
+#include "../haplotag/Haplotag.h"
+#include "../shared/ArgumentManager.h"
 #include "PurityEstimationProcess.h"
 
 template<>

@@ -1,7 +1,7 @@
 #ifndef PURITY_ESTIMATION_PROCESS_H
 #define PURITY_ESTIMATION_PROCESS_H
 
-#include "HaplotagProcess.h"
+#include "../haplotag/HaplotagProcess.h"
 #include "SomaticVarCaller.h"
 #include "TumorPurityEstimator.h"
 

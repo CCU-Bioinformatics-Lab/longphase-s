@@ -18,7 +18,8 @@ We evaluated the performance across 6 cell lines using different truth variant s
 - **COLO829** : Truth variants from New York Genome Center
 - **Other 4 cell lines** : Truth variants from DeepSomatic orthogonal tools benchmark
 #### **SNV performance**
-This figure compares the performance of somatic SNV calling between "ClairS v0.4.1 with SS+RS model" and "DeepSomatic v1.8.0", before and after applying LongPhase-S
+This figure compares the performance of somatic SNV calling between "ClairS v0.4.1 with SS+RS model" and "DeepSomatic v1.8.0", before and after applying LongPhase-S 
+
 ![SNV performance (original cell line)](./images/comparison_clairS_ssrs_deepSomatic_1.0_orig_bam.png)
 
 #### **SNV performance across varying tumor purity**
@@ -37,7 +38,8 @@ This figure compares tumor purity estimation results between "ASCAT v3.2.0" and 
 ![Purity estimation](./images/tumor_purity_estimation.png)
 
 ## IGV Visualization of Somatic Haplotagging Result
-This figure shows an example of tagged tumor BAM file visualized in IGV, demonstrating somatic haplotagging results on HCC1395/HCC1395BL tumor/normal ONT data.
+This figure shows an example of tagged tumor BAM file visualized in IGV, demonstrating somatic haplotagging results on HCC1395/HCC1395BL tumor/normal ONT data. 
+
 ![haplotagging IGV case](./images/somatic_tagging_IGV_case.png)
 
 ## Contents
@@ -79,12 +81,18 @@ This figure shows an example of tagged tumor BAM file visualized in IGV, demonst
 wget https://github.com/twolinin/longphase/releases/download/v1.7.3/longphase_linux-x64.tar.xz
 tar -xJf longphase_linux-x64.tar.xz
 ``` -->
+<!-- An executable file, longphase_linux-x64, can be executed directly. If 
+you need to compile a local version, you can clone and compile using 
+the following commands, and make sure that the environment has zlib 
+installed. If you require setting up a virtual environment, we also 
+provide a [Dockerfile](https://github.com/ming-en-ho/longphase-
+s/blob/somatic-develop/Dockerfile). -->
 
-An executable file, longphase_linux-x64, can be executed directly. If you need to compile a local version, you can clone and compile using the following commands, and make sure that the environment has zlib installed. If you require setting up a virtual environment, we also provide a [Dockerfile](https://github.com/twolinin/longphase/blob/main/Dockerfile).
+Clone and compile using the following commands, and make sure that the environment has zlib installed. If you require setting up a virtual environment, we also provide a [Dockerfile](https://github.com/ming-en-ho/longphase-s/blob/somatic-develop/Dockerfile).
 
 ```
 git clone https://github.com/ming-en-ho/longphase-s.git
-cd longphase
+cd longphase-s
 autoreconf -i
 ./configure
 make -j 4

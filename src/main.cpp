@@ -1,10 +1,10 @@
 #include <fstream>
 #include <iostream>
-#include "Phasing.h"
-#include "Haplotag.h"
-#include "ModCall.h"
-#include "SomaticHaplotag.h"
-#include "PurityEstimation.h"
+#include "phase/Phasing.h"
+#include "haplotag/Haplotag.h"
+#include "modcall/ModCall.h"
+#include "somatic_haplotag/SomaticHaplotag.h"
+#include "somatic_haplotag/PurityEstimation.h"
 
 
 #define PROGRAM_BIN "main"

@@ -1,7 +1,7 @@
 #ifndef MODCALLPARSINGBAM_H
 #define MODCALLPARSINGBAM_H
 
-#include "Util.h"
+#include "../shared/Util.h"
 #include "ModCallProcess.h"
 #include <htslib/sam.h>
 #include <htslib/faidx.h>
@@ -12,9 +12,9 @@
 #include <htslib/vcfutils.h>
 #include <htslib/kstring.h>
 
-#include "ParsingBam.h"
-#include "PhasingGraph.h"
-#include "PhasingProcess.h"
+#include "../phase/ParsingBam.h"
+#include "../phase/PhasingGraph.h"
+#include "../phase/PhasingProcess.h"
 
 
 struct MethPosInfo{

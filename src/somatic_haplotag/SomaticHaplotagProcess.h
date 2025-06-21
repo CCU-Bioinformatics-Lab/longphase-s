@@ -1,13 +1,13 @@
 #ifndef SOMATICHAPLOTAGPROCESS_H
 #define SOMATICHAPLOTAGPROCESS_H
 
-#include "HaplotagType.h"
-#include "HaplotagProcess.h"
-#include "HaplotagParsingBam.h"
-#include "HaplotagVcfParser.h"
+#include "../haplotag/HaplotagType.h"
+#include "../haplotag/HaplotagProcess.h"
+#include "../haplotag/HaplotagParsingBam.h"
+#include "../haplotag/HaplotagVcfParser.h"
+#include "../haplotag/HaplotagLogging.h"
 #include "SomaticVarCaller.h"
 #include "SomaticBenchmark.h"
-#include "HaplotagLogging.h"
 
 struct SomaticHaplotagParameters
 {

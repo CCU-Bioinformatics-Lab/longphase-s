@@ -1,8 +1,8 @@
 #ifndef TUMOR_PURITY_ESTIMATOR_H
 #define TUMOR_PURITY_ESTIMATOR_H
 
-#include "Util.h" 
-#include "HaplotagType.h"
+#include "../shared/Util.h" 
+#include "../haplotag/HaplotagType.h"
 
 /**
  * @brief Peak trend enumeration for histogram analysis

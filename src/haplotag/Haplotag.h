@@ -1,10 +1,10 @@
 #ifndef HAPLOTAG_H
 #define HAPLOTAG_H
 
-#include "Util.h"
-#include "HaplotagType.h"  // Include the header that defines HaplotagParameters
+#include "../shared/Util.h"
+#include "../shared/ArgumentManager.h"
+#include "HaplotagType.h"
 #include "HaplotagProcess.h"
-#include "ArgumentManager.h"
 #include <getopt.h>
 #include <vector>
 #include <string>
