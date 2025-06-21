@@ -25,6 +25,7 @@
 *.sdf
 *.opensdf
 *.un~ 
+.vscode/
 
 # Build directories
 build/
