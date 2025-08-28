@@ -467,7 +467,7 @@ class SomaticVarCaller{
          * @param somaticParams Filter parameters to update
          * @param tumorPurity Estimated tumor purity value
          */
-        void SetFilterParamsWithPurity(SomaticVarFilterParams &somaticParams, double &tumorPurity);
+        void setFilterParamsWithPurity(SomaticVarFilterParams &somaticParams, double &tumorPurity);
 
         
         /**

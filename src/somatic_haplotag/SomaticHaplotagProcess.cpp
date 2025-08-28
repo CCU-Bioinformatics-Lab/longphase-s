@@ -358,7 +358,7 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
 
     if(hpResult == ReadHP::H3){
         // Inherit haplotype information for H3 reads based on somatic variant derived haplotype
-        hpResult = inheritHaplotype(deriveByHpSimilarity, params.percentageThreshold, somaticVarDeriveHP, hpCount, hpResult);
+        hpResult = inheritHaplotype(deriveByHpSimilarity, params.percentageThreshold, somaticVarDeriveHP, hpCount, hpResult, aln);
     }
  
 
@@ -388,14 +388,6 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
             localReadStats.totalreadOnlyH3Snp++;
         }
     }
-
-    //std::cout << "---------------------------------------" << std::endl;
-    //std::cout << "HP1: "<< hpCount[1]<< " HP2: "<< hpCount[2]<< " HP3: "<< hpCount[3]<< " HP4: "<< hpCount[4] << std::endl;
-    //std::cout << "TmaxC: "<< tumorMaxHPcount<< " TminC: "<< tumorMinHPcount<< " NmaxC: "<< normalMaxHPcount<< " NminC: "<< normalMinHPcount << std::endl;
-    //std::cout << "TmaxHP: "<< maxTumorHP<< " NmaxHP: "<< maxNormalHP << std::endl;
-    //std::cout << "Tsimilar: "<< tumorHPsimilarity<< " Nsimilar: "<< normalHPsimilarity << std::endl;
-    //std::cout << "TpsCountSize: "<< tumCountPS.size()<< " NpsCountSize: "<< norCountPS.size() << std::endl;
-    //std::cout << "hpResult: "<< hpResult << std::endl;
 
     std::string hpResultStr = ".";
     std::string psResultStr = ".";
@@ -459,7 +451,8 @@ int SomaticHaplotagChrProcessor::inheritHaplotype(
     double percentageThreshold,
     std::map<int, std::pair<int , int>>& somaticVarDeriveHP,
     std::map<int, int>& hpCount,
-    int &hpResult
+    int &hpResult,
+    const bam1_t &aln
 ){
     int deriveByH1 = 0;
     int deriveByH2 = 0;
@@ -495,14 +488,16 @@ int SomaticHaplotagChrProcessor::inheritHaplotype(
         maxHp = SnpHP::GERMLINE_H2;
     }
 
-    //float deriveByHpSimilarity = (max == 0) ? 0.0 : ((float)max / ((float)max + (float)min));
     deriveByHpSimilarity = (max == 0) ? 0.0 : ((float)max / ((float)max + (float)min));
 
     if(deriveByHpSimilarity != 1.0 && deriveByHpSimilarity != 0.0){
+        // std::string readID = bam_get_qname(&aln);
+        // for(auto& somaticVarIter : somaticVarDeriveHP){
+        //     std::cerr << "pos: " << somaticVarIter.first+1 << " BaseHP: " << somaticVarIter.second.first << " deriveHP: " << somaticVarIter.second.second << std::endl;
+        // }
         // std::cerr << "deriveByH1: " << deriveByH1 << " deriveByH2: " << deriveByH2 << std::endl;
         // std::cerr << "deriveByHpSimilarity: " << deriveByHpSimilarity << std::endl;
-        // std::cerr << "readID: " << bam_get_qname(&aln) << std::endl;
-        //exit(1);
+        // std::cerr << "readID: " << readID << std::endl;
     }
 
     if(deriveByHpSimilarity >= percentageThreshold){
@@ -554,9 +549,7 @@ void SomaticHaplotagCigarParser::processMatchOperation(int& length, uint32_t* ci
     if(currentVariantIter->second.isSomaticVariant){
         int& deriveByHp = currentVariantIter->second.somaticReadDeriveByHP;
         int BaseHp = SnpHP::NONE_SNP;
-        // if(base == (*currentVariantIter).second.Variant[TUMOR].Alt){
-        //     BaseHp = SnpHP::SOMATIC_H3;
-        // }
+
         if(variantsHP->find((*currentVariantIter).first) != variantsHP->end()){
             if(variantsHP->at((*currentVariantIter).first) == SnpHP::SOMATIC_H3){
                 BaseHp = SnpHP::SOMATIC_H3;

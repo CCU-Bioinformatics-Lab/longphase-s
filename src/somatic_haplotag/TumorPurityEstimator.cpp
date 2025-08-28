@@ -37,14 +37,14 @@ double TumorPurityEstimator::estimateTumorPurity(){
     double purity = 0.0;
 
     try{
-        // build the feature value vector with first stage filter
+        // build the feature value vector with LCVF (Low-Confidence Variant Filtering)
         buildPurityFeatureValueVec(purityFeatureValueVec);
 
-        // find the threshold of germlineReadHpCount for peak valley filter
-        int germlineReadHpCountThreshold = findPeakValleythreshold(purityFeatureValueVec);
+        // find the threshold of germlineReadHpCount for bimodal valley filter
+        int germlineReadHpCountThreshold = findBimodalValleyThreshold(purityFeatureValueVec);
 
-        // peak valley filter
-        peakValleyFilter(purityFeatureValueVec, germlineReadHpCountThreshold);
+        // bimodal valley filter
+        bimodalValleyFilter(purityFeatureValueVec, germlineReadHpCountThreshold);
 
         BoxPlotValue plotValue = statisticPurityData(purityFeatureValueVec);
 
@@ -112,7 +112,7 @@ void TumorPurityEstimator::buildPurityFeatureValueVec(std::vector<PurityData> &p
 
             bool includeInStatistics = true;
 
-            // statistic the filter out data
+            // statistic the filter out data (LCVF)
             if(germlineReadHpImbalanceRatioInNorBam == GERMLINE_HP_IMBALANCE_RATIO_IN_NOR_BAM_MIN_THR){
                 includeInStatistics = false;
                 filterCounts.imbalanceRatioInNorBam++;
@@ -137,7 +137,6 @@ void TumorPurityEstimator::buildPurityFeatureValueVec(std::vector<PurityData> &p
                         .germlineReadHpCountInNorBam = germlineReadHpCountInNorBam
                     }
                 );
-                // (*somaticPosIter).second.statisticPurity = true;
                 chrPosSomaticFlag[chr][(*somaticPosIter).first].statisticPurity = true;
             }
             somaticPosIter++;
@@ -156,7 +155,7 @@ void TumorPurityEstimator::buildPurityFeatureValueVec(std::vector<PurityData> &p
  * 
  * Uses histogram analysis and peak detection to determine optimal filtering threshold
  */
-int TumorPurityEstimator::findPeakValleythreshold(const std::vector<PurityData> &purityFeatureValueVec){
+int TumorPurityEstimator::findBimodalValleyThreshold(const std::vector<PurityData> &purityFeatureValueVec){
     int threshold = 0;
 
     try{
@@ -193,7 +192,7 @@ int TumorPurityEstimator::findPeakValleythreshold(const std::vector<PurityData> 
         //find the main peak
         peakSet.findMainPeakCandidates();
         //set the threshold by the lowest valley
-        peakSet.SetThresholdByValley(smoothedHistogram.getHistogram(), smoothedHistogram.getMaxHeight());
+        peakSet.setThresholdByValley(smoothedHistogram.getHistogram(), smoothedHistogram.getMaxHeight());
 
         threshold = peakSet.getThreshold();
 
@@ -233,7 +232,7 @@ int TumorPurityEstimator::findPeakValleythreshold(const std::vector<PurityData> 
  * 
  * Removes data points below the dynamic threshold determined by peak analysis
  */
-void TumorPurityEstimator::peakValleyFilter(std::vector<PurityData> &purityFeatureValueVec, int &germlineReadHpCountThreshold){
+void TumorPurityEstimator::bimodalValleyFilter(std::vector<PurityData> &purityFeatureValueVec, int &germlineReadHpCountThreshold){
     std::vector<PurityData>::iterator vecFeatureIter = purityFeatureValueVec.begin();
     while(vecFeatureIter != purityFeatureValueVec.end()){
         if((*vecFeatureIter).germlineReadHpCountInNorBam < germlineReadHpCountThreshold){
@@ -633,7 +632,7 @@ Histogram Histogram::getSmoothedHistogram(double sigma) {
 PeakProcessor::PeakProcessor(){
     mainPeakCount = 0;
     mainPeak = MainPeakInfo();
-    saddlePoint = SaddlePointInfo();
+    secPeak = SecPeakInfo();
 }
 
 PeakProcessor::~PeakProcessor(){
@@ -839,22 +838,26 @@ bool PeakProcessor::findFirstPriorityMainPeak() {
 }
 
 /**
- * @brief Find saddle point for threshold determination
- * @return True if saddle point is found, false otherwise
- * 
- * Locates the saddle point (valley) before the first main peak for threshold calculation
+ * @brief Find a secondary peak for threshold determination
+ * @return True if a secondary peak is found, false otherwise
+ *
+ * A secondary peak is defined here as a local peak whose height is lower than
+ * both adjacent peaks in peaksVec (left_trend == DOWN and right_trend == UP).
+ * This function locates the secondary peak immediately to the left of the first
+ * main peak. If the first main peak is also the very first peak, no secondary peak
+ * is available (index = -1). If none matches the pattern, it falls back to the first peak.
  */
-bool PeakProcessor::findSaddlePoint() {
-    //find the saddle point
-    bool found_saddle_point = false;
+bool PeakProcessor::findSecondaryPeak() {
+    // find the secondary peak
+    bool found_secondary_peak = false;
     try{
         auto peakVecIter = peaksVec.begin();
-        //if the first main peak is the first peak
+        // if the first main peak is the first peak
         if (peakVecIter->histo_index == mainPeak.index){
-            saddlePoint.index = -1;
+            secPeak.index = -1;
             exec_log.push_back("[INFO] the first main peak is the first peak");
         }else{
-            //align the peakVecIter to the first main peak
+            // align the peakVecIter to the first main peak
             while(peakVecIter->histo_index != mainPeak.index){
                 if(peakVecIter == peaksVec.end()){
                     throw std::runtime_error("Main peak not found in peaksVec");
@@ -862,37 +865,37 @@ bool PeakProcessor::findSaddlePoint() {
                 peakVecIter++;
             }
 
-            //align the peakVecIter to the left peak of the first main peak
+            // align the peakVecIter to the left peak of the first main peak
             peakVecIter--;
 
-            //if the first main peak is the second peak
+            // if the first main peak is actually the second peak
             if(peakVecIter == peaksVec.begin()){
-                saddlePoint.index = peakVecIter->histo_index;
-                found_saddle_point = true;
+                secPeak.index = peakVecIter->histo_index;
+                found_secondary_peak = true;
             }else{
                 while(peakVecIter != peaksVec.begin()){
-                    //record the valley of the peak or the first peak as the saddle point
+                    // record the peak with DOWN->UP trend as the secondary peak
                     if((peakVecIter->left_trend == PeakTrend::DOWN && peakVecIter->right_trend == PeakTrend::UP)){
-                        saddlePoint.index = peakVecIter->histo_index;
-                        found_saddle_point = true;
+                        secPeak.index = peakVecIter->histo_index;
+                        found_secondary_peak = true;
                         break;
                     }
                     peakVecIter--;
                 }
-                //if no saddle point found, select the first peak as the saddle point
-                if(!found_saddle_point){
-                    exec_log.push_back("[INFO] no saddle point found, select the first peak as the saddle point");
-                    saddlePoint.index = peaksVec.begin()->histo_index;
-                    found_saddle_point = true;
+                // if no secondary peak found, select the very first peak as fallback
+                if(!found_secondary_peak){
+                    exec_log.push_back("[INFO] no secondary peak found, select the first peak as the secondary peak: " + std::to_string(peaksVec.begin()->histo_index));
+                    secPeak.index = peaksVec.begin()->histo_index;
+                    found_secondary_peak = true;
                 }
             }
         }
 
     }catch(const std::exception& e){
-        throw std::runtime_error("Failed to find saddle point: " + std::string(e.what()));
+        throw std::runtime_error("Failed to find secondary peak: " + std::string(e.what()));
     }
 
-    return found_saddle_point;
+    return found_secondary_peak;
 }
 
 /**
@@ -938,15 +941,15 @@ bool PeakProcessor::findLowestValley(const std::vector<HistogramData>& histogram
  * 
  * Determines optimal threshold by analyzing valleys between peaks
  */
-void PeakProcessor::SetThresholdByValley(const std::vector<HistogramData>& histogram, const double &max_height){
+void PeakProcessor::setThresholdByValley(const std::vector<HistogramData>& histogram, const double &max_height){
     bool found_first_main_peak = false;
     mainPeak.peak = Peak();
     
-    bool found_saddle_point = false;
-    saddlePoint.peak = Peak();
+    bool found_secondary_peak = false;
+    secPeak.peak = Peak();
 
-    saddlePoint.next_peak = Peak();
-    saddlePoint.pre_peak = Peak();
+    secPeak.next_peak = Peak();
+    secPeak.pre_peak = Peak();
 
     lowestValley = Valley();
     thresholdPercentage = 0.0;
@@ -958,16 +961,16 @@ void PeakProcessor::SetThresholdByValley(const std::vector<HistogramData>& histo
     if(found_first_main_peak){
         mainPeak.peak = getPeak(mainPeak.index, 0);
         exec_log.push_back("[INFO] found the first main peak :" + std::to_string(mainPeak.peak.histo_index));
-        //find the saddle point
-        found_saddle_point = findSaddlePoint();
-        if(found_saddle_point){
-            saddlePoint.peak = getPeak(saddlePoint.index, 0);
-            exec_log.push_back("[INFO] found the saddle point :" + std::to_string(saddlePoint.peak.histo_index));
-            exec_log.push_back("[INFO] check the next peak of the saddle point");
+        //find the secondary peak
+        found_secondary_peak = findSecondaryPeak();
+        if(found_secondary_peak){
+            secPeak.peak = getPeak(secPeak.index, 0);
+            exec_log.push_back("[INFO] found the secondary peak :" + std::to_string(secPeak.peak.histo_index));
+            exec_log.push_back("[INFO] check the next peak of the secondary peak");
 
-            saddlePoint.next_peak = getPeak(saddlePoint.index, 1);
-            // find the lowest height valley between the saddle point and its next peak
-            bool found_valley = findLowestValley(histogram, saddlePoint.peak.histo_index, saddlePoint.next_peak.histo_index, lowestValley);
+            secPeak.next_peak = getPeak(secPeak.index, 1);
+            // find the lowest height valley between the secondary peak and its next peak
+            bool found_valley = findLowestValley(histogram, secPeak.peak.histo_index, secPeak.next_peak.histo_index, lowestValley);
             if(found_valley){
                 exec_log.push_back("[INFO] find the lowest height valley: " + std::to_string(lowestValley.index) + "(" + std::to_string(lowestValley.percentage) + ")");
                 thresholdPercentage = lowestValley.percentage;
@@ -986,27 +989,27 @@ void PeakProcessor::SetThresholdByValley(const std::vector<HistogramData>& histo
                 bool found_valley = false;
 
                 exec_log.push_back("[INFO] threshold >= " + std::to_string(THRESHOLD_PERCENTAGE_LIMIT) + "%, reset threshold to " + std::to_string(threshold) + "(" + std::to_string(thresholdPercentage) + ")");
-                exec_log.push_back("[INFO] check the pre peak of the saddle point");
+                exec_log.push_back("[INFO] check the pre peak of the secondary peak");
                 
-                // saddle point is not the first peak
-                if(saddlePoint.peak.histo_index != peaksVec[0].histo_index){
-                    saddlePoint.pre_peak = getPeak(saddlePoint.peak.histo_index, -1);
-                    exec_log.push_back("[INFO] saddle point have a pre peak " + std::to_string(saddlePoint.pre_peak.histo_index) + "->" + std::to_string(saddlePoint.peak.histo_index));
-                    //find the lowest height valley between the saddle point and its pre peak
-                    found_valley = findLowestValley(histogram, saddlePoint.pre_peak.histo_index, saddlePoint.peak.histo_index, lowestValley);
+                // secondary peak is not the first peak
+                if(secPeak.peak.histo_index != peaksVec[0].histo_index){
+                    secPeak.pre_peak = getPeak(secPeak.peak.histo_index, -1);
+                    exec_log.push_back("[INFO] secondary peak have a pre peak " + std::to_string(secPeak.pre_peak.histo_index) + "->" + std::to_string(secPeak.peak.histo_index));
+                    //find the lowest height valley between the secondary peak and its pre peak
+                    found_valley = findLowestValley(histogram, secPeak.pre_peak.histo_index, secPeak.peak.histo_index, lowestValley);
                     if(found_valley){
                         exec_log.push_back("[INFO] find the lowest height valley : " + std::to_string(lowestValley.index) + "(" + std::to_string(lowestValley.percentage) + ")");
                         thresholdPercentage = lowestValley.percentage;
                         threshold = lowestValley.index;
                     }else{
-                        exec_log.push_back("[INFO] no valley found between the saddle point and its pre peak");
+                        exec_log.push_back("[INFO] no valley found between the secondary peak and its pre peak");
                     }
                 }else{
                     exec_log.push_back("[INFO] no pre peak found");
                 }
             }
         }else{
-            exec_log.push_back("[INFO] no saddle point found");
+            exec_log.push_back("[INFO] no secondary peak found");
         }
     }
     //check valley height 
@@ -1176,12 +1179,12 @@ void PeakProcessor::writePeakValleyLog(
         } 
     }
 
-    histogramFile << "\n#==========Selected Peak & Valley==========" << std::endl;
-    histogramFile << "#first main peak       : " << mainPeak.peak.histo_index << "\t" << mainPeak.peak.height << "\t" << transformTrend(mainPeak.peak.left_trend) << "\t" << transformTrend(mainPeak.peak.right_trend) << std::endl;
-    histogramFile << "#saddle point          : " << saddlePoint.peak.histo_index << "\t" << saddlePoint.peak.height << "\t" << transformTrend(saddlePoint.peak.left_trend) << "\t" << transformTrend(saddlePoint.peak.right_trend) << std::endl;
-    histogramFile << "#saddle point next peak: " << saddlePoint.next_peak.histo_index << "\t" << saddlePoint.next_peak.height << "\t" << transformTrend(saddlePoint.next_peak.left_trend) << "\t" << transformTrend(saddlePoint.next_peak.right_trend) << std::endl;
-    histogramFile << "#saddle point pre peak : " << saddlePoint.pre_peak.histo_index << "\t" << saddlePoint.pre_peak.height << "\t" << transformTrend(saddlePoint.pre_peak.left_trend) << "\t" << transformTrend(saddlePoint.pre_peak.right_trend) << std::endl;
-    histogramFile << "#lowest height valley  : " << lowestValley.index << "\t" << lowestValley.percentage << std::endl;
+    histogramFile << "\n#==========Selected Peaks & Valleys==========" << std::endl;
+    histogramFile << "#first main peak         : " << mainPeak.peak.histo_index << "\t" << mainPeak.peak.height << "\t" << transformTrend(mainPeak.peak.left_trend) << "\t" << transformTrend(mainPeak.peak.right_trend) << std::endl;
+    histogramFile << "#secondary peak          : " << secPeak.peak.histo_index << "\t" << secPeak.peak.height << "\t" << transformTrend(secPeak.peak.left_trend) << "\t" << transformTrend(secPeak.peak.right_trend) << std::endl;
+    histogramFile << "#secondary peak next peak: " << secPeak.next_peak.histo_index << "\t" << secPeak.next_peak.height << "\t" << transformTrend(secPeak.next_peak.left_trend) << "\t" << transformTrend(secPeak.next_peak.right_trend) << std::endl;
+    histogramFile << "#secondary peak prev peak: " << secPeak.pre_peak.histo_index << "\t" << secPeak.pre_peak.height << "\t" << transformTrend(secPeak.pre_peak.left_trend) << "\t" << transformTrend(secPeak.pre_peak.right_trend) << std::endl;
+    histogramFile << "#lowest height valley    : " << lowestValley.index << "\t" << lowestValley.percentage << std::endl;
     histogramFile << "#threshold percentage: " << thresholdPercentage << std::endl;
     histogramFile << "#threshold: " << threshold << std::endl;
     histogramFile.close();  

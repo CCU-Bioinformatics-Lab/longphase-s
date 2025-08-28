@@ -231,7 +231,7 @@ struct SomaticData{
     double somaticHaplotypeImbalanceRatio;
 
     //interval snp filter information
-    float MeanAltCountPerVarRead;
+    float meanAltCountPerVarRead;
     float zScore;
     int intervalSnpCount;
     int minDistance;
@@ -248,7 +248,7 @@ struct SomaticData{
              , base(), GTtype(""), somaticHp4Base(Nitrogenous::UNKOWN), somaticHp5Base(Nitrogenous::UNKOWN), somaticHp4BaseCount(0), somaticHp5BaseCount(0)
              , isHighConSomaticSNP(false), somaticReadDeriveByHP(0), shannonEntropy(0.0), homopolymerLength(0)
              , statisticPurity(false), allelicImbalanceRatio(0.0), somaticHaplotypeImbalanceRatio(0.0)
-             , MeanAltCountPerVarRead(0.0), zScore(0.0), intervalSnpCount(0), minDistance(0), inDenseTumorInterval(false)
+             , meanAltCountPerVarRead(0.0), zScore(0.0), intervalSnpCount(0), minDistance(0), inDenseTumorInterval(false)
              , isFilterOut(false), somaticReadHpCount(std::map<int, int>()){}
 };
 

@@ -73,7 +73,6 @@ $(PROGRAMS): $(OBJ)
 # $(PROGRAMS): $(OBJ)
 # 	$(CXX) $(ALL_CPPFLAGS) $(ALL_LDFLAGS)	-o $@ $^ $(HTSLIB_LIB)
 
-# 編譯規則 - 所有 .o 檔案都放在最上層
 %.o: src/shared/%.cpp
 	$(CXX) $(ALL_CPPFLAGS) -o $@ -c $<
 

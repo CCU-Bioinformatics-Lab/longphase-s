@@ -669,7 +669,7 @@ void SomaticVarCaller::variantCalling(
     }
 
     // set filter params with tumor purity
-    SetFilterParamsWithPurity(somaticParams, tumorPurity);
+    setFilterParamsWithPurity(somaticParams, tumorPurity);
     
     std::cerr<< "calling somatic variants ... ";
     std::time_t begin = time(NULL);
@@ -788,7 +788,7 @@ double SomaticVarCaller::runTumorPurityEstimator(bool writeReadLog, const std::s
 }
 
 
-void SomaticVarCaller::SetFilterParamsWithPurity(SomaticVarFilterParams &somaticParams, double &tumorPurity){
+void SomaticVarCaller::setFilterParamsWithPurity(SomaticVarFilterParams &somaticParams, double &tumorPurity){
 
     somaticParams.tumorPurity = tumorPurity;
     // display the filter tier
@@ -915,20 +915,20 @@ void SomaticVarCaller::somaticFeatureFilter(const SomaticVarFilterParams &somati
         // current variant is SNP
         if (curVar.variantType == VariantType::SNP) {
                 
-            //normal VAF filter parameter
+            //TINC filter parameter
             float norVAF_maxThr = somaticParams.norVAF_maxThr;
             int norDepth_minThr = somaticParams.norDepth_minThr;
 
-            //messy read filter parameter
+            //read-level filter parameter
             float messyReadRatioThreshold = somaticParams.MessyReadRatioThreshold;
             int readCountThreshold = somaticParams.ReadCount_minThr;
 
-            //haplotype consistency filter parameter
+            //haplotype origin filter parameter
             float HapConsistency_VAF_maxThr=somaticParams.HapConsistency_VAF_maxThr;
             int HapConsistency_ReadCount_maxThr=somaticParams.HapConsistency_ReadCount_maxThr;
             int HapConsistency_somaticRead_minThr=somaticParams.HapConsistency_somaticRead_minThr;
 
-            //interval snp count filter parameter
+            //variant cluster filter parameter
             float IntervalSnpCount_VAF_maxThr=somaticParams.IntervalSnpCount_VAF_maxThr;
             int IntervalSnpCount_ReadCount_maxThr=somaticParams.IntervalSnpCount_ReadCount_maxThr;
             int IntervalSnpCount_minThr=somaticParams.IntervalSnpCount_minThr;
@@ -937,21 +937,21 @@ void SomaticVarCaller::somaticFeatureFilter(const SomaticVarFilterParams &somati
             //filter out the somatic SNP
             (*somaticVarIter).second.isFilterOut = false;
             
-            // Check all filters conditions
+            //check all filters conditions
             bool stage1_filtered = false;
             bool messy_read_filtered = false;
             bool read_count_filtered = false;
 
             
-            //stage 1 filter
+            // TINC filter
             float norVAF = (*chrPosNorBase)[chr][(*somaticVarIter).first].VAF;
             float norDepth = (*chrPosNorBase)[chr][(*somaticVarIter).first].depth;
-
+            
             if (!(norVAF <= norVAF_maxThr && norDepth > norDepth_minThr)) {
                 stage1_filtered = true;
             }
 
-            //stage 2 filter
+            // read-level filter
             if((*somaticVarIter).second.Mixed_HP_readRatio >= messyReadRatioThreshold){
                 messy_read_filtered = true;
             }
@@ -959,7 +959,7 @@ void SomaticVarCaller::somaticFeatureFilter(const SomaticVarFilterParams &somati
                 read_count_filtered = true;
             }
             
-            // Haplotype consistency filter check
+            // haplotype origin filter
             bool haplotype_filtered = false;
 
             int somaticReadH1_1 = (*somaticVarIter).second.somaticReadHpCount[ReadHP::H1_1];
@@ -973,7 +973,7 @@ void SomaticVarCaller::somaticFeatureFilter(const SomaticVarFilterParams &somati
                 }
             }
             
-            // interval snp count filter check
+            // variant cluster filter
             bool zscore_filtered = false;
             if ((*somaticVarIter).second.CaseReadCount <= IntervalSnpCount_ReadCount_maxThr && 
                 (*somaticVarIter).second.base.VAF <= IntervalSnpCount_VAF_maxThr) {
@@ -1040,7 +1040,7 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, SomaticData> &soma
         if(altMean != 0) altMean /= readCount;
 
         if(somaticPosInfo.find(somaticPosIter->first) != somaticPosInfo.end()){
-            somaticPosInfo[somaticPosIter->first].MeanAltCountPerVarRead = altMean;
+            somaticPosInfo[somaticPosIter->first].meanAltCountPerVarRead = altMean;
         }else{
             std::cerr << "[ERROR](getDenseTumorSnpInterval) => somaticPosInfo not found: " << somaticPosIter->first << std::endl;
             exit(1);
@@ -1070,7 +1070,7 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, SomaticData> &soma
                 if (!isRecordStartPos) {
                     isRecordStartPos = true;
                     startPos = curPos;
-                    denseSnp.snpAltMean[curPos] = somaticPosIter->second.MeanAltCountPerVarRead;
+                    denseSnp.snpAltMean[curPos] = somaticPosIter->second.meanAltCountPerVarRead;
                     denseSnp.minDistance[curPos] = snpDistance;
                     denseSnp.snpCount++;
                 }
@@ -1081,7 +1081,7 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, SomaticData> &soma
                 }
 
                 //record the next position in the dense tumor interval
-                denseSnp.snpAltMean[nextPos] = nextIter->second.MeanAltCountPerVarRead;
+                denseSnp.snpAltMean[nextPos] = nextIter->second.meanAltCountPerVarRead;
                 denseSnp.minDistance[nextPos] = snpDistance;
 
                 denseSnp.snpCount++;
@@ -1298,11 +1298,11 @@ void SomaticVarCaller::findOtherSomaticSnpHP(const std::string &chr, std::map<in
         if((*somaticVarIter).second.isHighConSomaticSNP){
             int pos = (*somaticVarIter).first;
 
-            std::map<int, int> NucCount;
-            NucCount[Nitrogenous::A] = (*somaticVarIter).second.base.MPQ_A_count;
-            NucCount[Nitrogenous::C] = (*somaticVarIter).second.base.MPQ_C_count;
-            NucCount[Nitrogenous::T] = (*somaticVarIter).second.base.MPQ_T_count;
-            NucCount[Nitrogenous::G] = (*somaticVarIter).second.base.MPQ_G_count;
+            std::map<int, int> nucCount;
+            nucCount[Nitrogenous::A] = (*somaticVarIter).second.base.MPQ_A_count;
+            nucCount[Nitrogenous::C] = (*somaticVarIter).second.base.MPQ_C_count;
+            nucCount[Nitrogenous::T] = (*somaticVarIter).second.base.MPQ_T_count;
+            nucCount[Nitrogenous::G] = (*somaticVarIter).second.base.MPQ_G_count;
 
             int refAllele;
             int altAllele;
@@ -1315,15 +1315,15 @@ void SomaticVarCaller::findOtherSomaticSnpHP(const std::string &chr, std::map<in
                 exit(1);
             }
 
-            NucCount.erase(refAllele);
-            NucCount.erase(altAllele);
+            nucCount.erase(refAllele);
+            nucCount.erase(altAllele);
 
             int maxNuc = Nitrogenous::UNKOWN;
             int maxNucCount = 0;
 
             int minNuc = Nitrogenous::UNKOWN;
             int minNucCount = 0;
-            for(auto nuc : NucCount){
+            for(auto nuc : nucCount){
                 if(nuc.second > 1){
                     if(nuc.second > maxNucCount){
                         minNuc = maxNuc;
@@ -1507,25 +1507,25 @@ void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const
             int subtractDepth = tumDepth - norDepth;
 
 
-            std::string RefBase;
-            std::string AltBase;
+            std::string refBase;
+            std::string altBase;
                 
             if(chrMultiVariants[chr][(*somaticVarIter).first].isExists(TUMOR) == true){
-                RefBase = chrMultiVariants[chr][(*somaticVarIter).first].Variant[TUMOR].allele.Ref;
-                AltBase = chrMultiVariants[chr][(*somaticVarIter).first].Variant[TUMOR].allele.Alt;
+                refBase = chrMultiVariants[chr][(*somaticVarIter).first].Variant[TUMOR].allele.Ref;
+                altBase = chrMultiVariants[chr][(*somaticVarIter).first].Variant[TUMOR].allele.Alt;
             }else{
                 std::cerr << "[ERROR](write tag HP3 log file) => can't find the position : chr:" << chr << " pos: " << ((*somaticVarIter).first) + 1;
                 exit(1);
             }
 
-            if(RefBase == "" || AltBase == ""){
-                std::cerr << "[ERROR](write tag HP3 log file) => can't find RefBase or AltBase : chr:" << chr << " pos: " << ((*somaticVarIter).first) + 1 << " RefBase:" << RefBase << " AltBase:" << AltBase;
+            if(refBase == "" || altBase == ""){
+                std::cerr << "[ERROR](write tag HP3 log file) => can't find RefBase or AltBase : chr:" << chr << " pos: " << ((*somaticVarIter).first) + 1 << " RefBase:" << refBase << " AltBase:" << altBase;
                 exit(1);
             }
 
             //tmp
-            int tumMpqAltCount = (*somaticVarIter).second.base.getMpqBaseCount(AltBase);
-            int norAltCount = (*chrPosNorBase)[chr][(*somaticVarIter).first].getBaseCount(AltBase);
+            int tumMpqAltCount = (*somaticVarIter).second.base.getMpqBaseCount(altBase);
+            int norAltCount = (*chrPosNorBase)[chr][(*somaticVarIter).first].getBaseCount(altBase);
 
             //calculating tumor VAF
             float tumVAF = (*somaticVarIter).second.base.VAF;
@@ -1623,8 +1623,8 @@ void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const
             (*tagHP3Log)<< chr << " \t"  //1 
                         << HP3pos << "\t"  //2
                         << "." << "\t"  //3
-                        << RefBase << "\t" //4
-                        << AltBase << "\t" //5
+                        << refBase << "\t" //4
+                        << altBase << "\t" //5
                         << tumMpqAltCount << "\t" //6
                         << readCount << "\t\t"  //7
                         << norAltCount << "\t" //8
@@ -1675,7 +1675,7 @@ void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const
                         << somaticVarReadH2_1 << "\t" //53
                         << somaticVarReadH3 << "\t" //54
                         << untaggedReadCount << "\t" //55
-                        << (*somaticVarIter).second.MeanAltCountPerVarRead << "\t" //56
+                        << (*somaticVarIter).second.meanAltCountPerVarRead << "\t" //56
                         << zScore << "\t" //57
                         << (*somaticVarIter).second.intervalSnpCount << "\t" //58
                         << (*somaticVarIter).second.minDistance << "\t" //59
@@ -1697,8 +1697,8 @@ void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const
 }
 
 void SomaticVarCaller::writeOtherSomaticHpLog(const std::string logFileName, const std::vector<std::string> &chrVec, std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants){
-    std::ofstream *OtherHpSomaticVarLog=NULL;
-    OtherHpSomaticVarLog=new std::ofstream(logFileName);
+    std::ofstream *otherHpSomaticVarLog=NULL;
+    otherHpSomaticVarLog=new std::ofstream(logFileName);
 
     int totalOtherSomaticHpVar = 0;
     for(auto chr: chrVec){
@@ -1709,15 +1709,15 @@ void SomaticVarCaller::writeOtherSomaticHpLog(const std::string logFileName, con
         }
     }
 
-    if(!OtherHpSomaticVarLog->is_open()){
+    if(!otherHpSomaticVarLog->is_open()){
         std::cerr<< "Fail to open write file: " << logFileName << "\n";
         exit(1);
     }else{
-        (*OtherHpSomaticVarLog) << "################################\n";
-        (*OtherHpSomaticVarLog) << "# Other Somatic HP Variant Log #\n";
-        (*OtherHpSomaticVarLog) << "################################\n";
-        (*OtherHpSomaticVarLog) << "##Tatal other somatic HP variants:"  << totalOtherSomaticHpVar << "\n";
-        (*OtherHpSomaticVarLog) << "#CHROM\t"
+        (*otherHpSomaticVarLog) << "################################\n";
+        (*otherHpSomaticVarLog) << "# Other Somatic HP Variant Log #\n";
+        (*otherHpSomaticVarLog) << "################################\n";
+        (*otherHpSomaticVarLog) << "##Tatal other somatic HP variants:"  << totalOtherSomaticHpVar << "\n";
+        (*otherHpSomaticVarLog) << "#CHROM\t"
                                 << "POS\t"
                                 << "REF\t"
                                 << "ALT\t"
@@ -1740,7 +1740,7 @@ void SomaticVarCaller::writeOtherSomaticHpLog(const std::string logFileName, con
                 exit(1);
             }
 
-            (*OtherHpSomaticVarLog) << chr << "\t"
+            (*otherHpSomaticVarLog) << chr << "\t"
                                     << pos + 1 << "\t"
                                     << currentChrVar[pos].Variant[TUMOR].allele.Ref << "\t"
                                     << currentChrVar[pos].Variant[TUMOR].allele.Alt << "\t"
@@ -1752,9 +1752,9 @@ void SomaticVarCaller::writeOtherSomaticHpLog(const std::string logFileName, con
     
     
     }
-    (*OtherHpSomaticVarLog).close();
-    delete OtherHpSomaticVarLog;
-    OtherHpSomaticVarLog = nullptr;
+    (*otherHpSomaticVarLog).close();
+    delete otherHpSomaticVarLog;
+    otherHpSomaticVarLog = nullptr;
 }
 
 void SomaticVarCaller::writeDenseTumorSnpIntervalLog(const std::string logFileName, const std::vector<std::string> &chrVec){
