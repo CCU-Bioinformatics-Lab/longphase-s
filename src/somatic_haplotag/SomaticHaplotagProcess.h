@@ -100,7 +100,8 @@ class SomaticHaplotagChrProcessor: public GermlineHaplotagChrProcessor{
             double percentageThreshold,
             std::map<int, std::pair<int , int>>& somaticVarDeriveHP,
             std::map<int, int>& hpCount,
-            int &hpResult
+            int &hpResult,
+            const bam1_t &aln
         );
 
     public:

@@ -161,15 +161,15 @@ class PeakProcessor {
         };
 
         /**
-         * @brief Saddle point information
+         * @brief Secondary peak information
          */
-        struct SaddlePointInfo {
-            bool found;        ///< Whether saddle point is found
-            size_t index;      ///< Saddle point index
-            Peak peak;         ///< Saddle point peak
+        struct SecPeakInfo {
+            bool found;        ///< Whether secondary peak is found
+            size_t index;      ///< Secondary peak index
+            Peak peak;         ///< Secondary peak peak
             Peak next_peak;    ///< Next peak
             Peak pre_peak;     ///< Previous peak
-            SaddlePointInfo() : found(false), index(-1) ,peak() ,next_peak() ,pre_peak() {}
+            SecPeakInfo() : found(false), index(-1) ,peak() ,next_peak() ,pre_peak() {}
         };
 
         static constexpr double THRESHOLD_PERCENTAGE_LIMIT = 0.3;
@@ -178,7 +178,7 @@ class PeakProcessor {
         int mainPeakCount;             ///< Number of main peaks
 
         MainPeakInfo mainPeak;         ///< Main peak information
-        SaddlePointInfo saddlePoint;   ///< Saddle point information
+        SecPeakInfo secPeak;           ///< Secondary peak information
 
         Valley lowestValley;           ///< Lowest valley
         int threshold;                 ///< Threshold value
@@ -213,9 +213,9 @@ class PeakProcessor {
         bool findFirstPriorityMainPeak();
         
         /**
-         * @brief Find saddle point
+         * @brief Find secondary peak
          */
-        bool findSaddlePoint();
+        bool findSecondaryPeak();
         
         /**
          * @brief Find lowest valley between two peaks
@@ -225,7 +225,7 @@ class PeakProcessor {
         /**
          * @brief Set threshold by valley analysis
          */
-        void SetThresholdByValley(const std::vector<HistogramData>& histogram, const double &max_height);
+        void setThresholdByValley(const std::vector<HistogramData>& histogram, const double &max_height);
         
         /**
          * @brief Get peak with offset
@@ -303,12 +303,12 @@ class TumorPurityEstimator{
         /**
          * @brief Find peak valley threshold
          */
-        int findPeakValleythreshold(const std::vector<PurityData> &purityFeatureValueVec);
+        int findBimodalValleyThreshold(const std::vector<PurityData> &purityFeatureValueVec);
         
         /**
          * @brief Apply peak valley filter
          */
-        void peakValleyFilter(std::vector<PurityData> &purityFeatureValueVec, int &germlineReadHpCountThreshold);
+        void bimodalValleyFilter(std::vector<PurityData> &purityFeatureValueVec, int &germlineReadHpCountThreshold);
 
         /**
          * @brief Calculate box plot statistics for purity data
