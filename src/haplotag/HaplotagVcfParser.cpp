@@ -531,7 +531,7 @@ void VcfParser::writeProcess(std::string &input, VCF_Info &Info, std::map<std::s
                     auto varIt = posIt->second.Variant.find(TUMOR);
                     if (varIt != posIt->second.Variant.end()) {
                         // Only process SNPs for somatic variant calling
-                        if(varIt->second.variantType == VariantType::SNP){
+                        if(varIt->second.variantType == VariantType::SNP || varIt->second.variantType == VariantType::INSERTION || varIt->second.variantType == VariantType::DELETION){
                             // Update FILTER field based on somatic status
                             if (posIt->second.isSomaticVariant) {
                                 if (fields[6] != "PASS") {

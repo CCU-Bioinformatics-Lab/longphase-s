@@ -63,7 +63,7 @@ void SomaticHaplotagProcess::pipelineProcess()
     //decide which genome sample chrVec and chrLength belong to
     setChrVecAndChrLength();
     // [debug] calculate SNP counts
-    // displaySnpCounts();
+    displaySnpCounts();
     // update chromosome processing based on region
     setProcessingChromRegion();
 
@@ -97,6 +97,7 @@ void SomaticHaplotagProcess::pipelineProcess()
         // somaticBenchmark.displayBedRegionCount(*chrVec);
     }
 
+    // return;
     // tag read
     tagRead(sParams.basic, sParams.tumorBamFile, tagSample);
 
@@ -197,11 +198,21 @@ void SomaticHaplotagProcess::displaySnpCounts(){
     int tumor_snp_count = 0;
     int normal_snp_count = 0;
     int overlap_snp_count = 0;
+    int tumor_insert_count = 0;
+    int tumor_delete_count = 0;
     for(auto& chrIter : (*chrVec)){
         auto chrVarIter = (*chrMultiVariants)[chrIter].begin();
         while(chrVarIter != (*chrMultiVariants)[chrIter].end()){
             if((*chrVarIter).second.isExists(TUMOR)){
-                tumor_snp_count++;
+                if((*chrVarIter).second.Variant[TUMOR].variantType == VariantType::SNP){
+                    tumor_snp_count++;
+                }
+                if((*chrVarIter).second.Variant[TUMOR].variantType == VariantType::INSERTION){
+                    tumor_insert_count++;
+                }
+                if((*chrVarIter).second.Variant[TUMOR].variantType == VariantType::DELETION){
+                    tumor_delete_count++;
+                }
             }
             if((*chrVarIter).second.isExists(NORMAL)){
                 normal_snp_count++;
@@ -215,6 +226,8 @@ void SomaticHaplotagProcess::displaySnpCounts(){
     std::cerr << "Normal SNP count: " << normal_snp_count << std::endl;
     std::cerr << "Tumor SNP count: " << tumor_snp_count << std::endl;
     std::cerr << "Overlap SNP count: " << overlap_snp_count << std::endl;
+    std::cerr << "Tumor Insert count: " << tumor_insert_count << std::endl;
+    std::cerr << "Tumor Delete count: " << tumor_delete_count << std::endl;
 }
 
 void SomaticHaplotagProcess::postprocessForHaplotag(){
@@ -542,8 +555,8 @@ SomaticHaplotagCigarParser::~SomaticHaplotagCigarParser(){
 
 }
 
-void SomaticHaplotagCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base){
-    somaticJudger.judgeSomaticSnpHap(currentVariantIter, ctx.chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, nullptr);
+void SomaticHaplotagCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base, bool& isAlt, int& offset){
+    somaticJudger.judgeSomaticSnpHap(currentVariantIter, ctx.chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, nullptr, isAlt);
 
     //record the somatic snp derive by which germline hp in this read
     if(currentVariantIter->second.isSomaticVariant){

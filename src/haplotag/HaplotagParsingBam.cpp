@@ -478,6 +478,7 @@ void ChromosomeProcessor::processSingleChrom(
             processEmptyVariants();
         }
         else if(int(bamRAII.aln->core.pos) <= (*last).first){
+            //read start coordinate is less than or equal to the last variant coordinate
             processRead(*bamRAII.aln, *bamRAII.bamHdr, ref_string, currentVariants, firstVariantIter, ctx);
         }
         else{
@@ -587,7 +588,33 @@ void CigarParser::parsingCigar(
                         uint8_t *q = bam_get_seq(&ctx.aln);
                         char base_chr = seq_nt16_str[bam_seqi(q,query_pos + offset)];
                         std::string base(1, base_chr);
-                        processMatchOperation(length, cigar, i, aln_core_n_cigar, base);
+                        VariantType variantType = VariantType::NONE_VAR;
+                        if((*currentVariantIter).second.isExists(NORMAL)){
+                            variantType = (*currentVariantIter).second.Variant[NORMAL].variantType;
+                        }else if((*currentVariantIter).second.isExists(TUMOR)){
+                            variantType = (*currentVariantIter).second.Variant[TUMOR].variantType;
+                        }
+                        bool isAlt = false;
+                        if((*currentVariantIter).second.isExists(NORMAL)){
+                            if(variantType == VariantType::SNP){
+                                isAlt = base == (*currentVariantIter).second.Variant[NORMAL].allele.Alt;
+                            }else if(variantType == VariantType::INSERTION && i+1 < aln_core_n_cigar){
+                                isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 1;
+                            }else if(variantType == VariantType::DELETION && i+1 < aln_core_n_cigar){
+                                isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2;
+                            }    
+                        }else if((*currentVariantIter).second.isExists(TUMOR)){
+                            if(variantType == VariantType::SNP){
+                                isAlt = base == (*currentVariantIter).second.Variant[TUMOR].allele.Alt;
+                            }else if(variantType == VariantType::INSERTION && i+1 < aln_core_n_cigar){
+                                isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 1;
+                            }else if(variantType == VariantType::DELETION && i+1 < aln_core_n_cigar){
+                                isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2;
+                            }    
+
+                        }
+
+                        processMatchOperation(length, cigar, i, aln_core_n_cigar, base, isAlt, offset);                        
                     }
                     currentVariantIter++;
                 }
@@ -640,7 +667,7 @@ void CigarParser::parsingCigar(
  * 
  * Updates base counts and filtered depth based on mapping quality
  */
-void CigarParser::countBaseNucleotide(PosBase& posBase, std::string& base, const bam1_t& aln, const float& mpqThreshold){
+void CigarParser::countBaseNucleotide(PosBase& posBase, std::string& base, const bam1_t& aln, const float& mpqThreshold, bool isAlt){
     // mapping quality is higher than threshold
     if ( aln.core.qual >= mpqThreshold ){
         if(base == "A"){
@@ -654,6 +681,9 @@ void CigarParser::countBaseNucleotide(PosBase& posBase, std::string& base, const
         }else{
             posBase.MPQ_unknow++;
         }
+        if(isAlt){
+            posBase.MPQ_altCount++;
+        }
         posBase.filteredMpqDepth++;
     }
     if(base == "A"){
@@ -666,6 +696,9 @@ void CigarParser::countBaseNucleotide(PosBase& posBase, std::string& base, const
         posBase.T_count++;
     }else{
         posBase.unknow++;
+    }
+    if(isAlt){
+        posBase.altCount++;
     }
     posBase.depth++;  
 }

@@ -19,6 +19,18 @@ enum HaplotagOption
     CRAM
 };
 
+enum CIGAR_OP {
+    CIGAR_MATCH = 0,     // alignment match (can be a sequence match or mismatch)
+    CIGAR_INSERTION = 1, // insertion to the reference
+    CIGAR_DELETION = 2,  // deletion from the reference
+    CIGAR_SKIP = 3,      // skipped region from the reference
+    CIGAR_SOFT_CLIP = 4, // soft clipping
+    CIGAR_HARD_CLIP = 5, // hard clipping
+    CIGAR_N = 6,         // skipped region of unknown type
+    CIGAR_EQ = 7,        // sequence match
+    CIGAR_X = 8,         // sequence mismatch
+};
+
 enum SomaticHaplotagOption
 {
     TUM_SNP = 50,
@@ -30,6 +42,12 @@ enum SomaticHaplotagOption
     BENCHMARK_VCF,
     BENCHMARK_BED,
     BENCHMARK_LOG
+};
+
+enum Allele {
+    Allele_UNDEFINED = -1,
+    REF_ALLELE = 0,
+    ALT_ALLELE = 1
 };
 
 enum Genome
@@ -56,7 +74,7 @@ enum Nitrogenous
     T = 4,
 };
 
-enum VariantType
+enum class VariantType
 {
     NONE_VAR = 0,
     SNP = 1,
@@ -145,6 +163,8 @@ struct MultiGenomeVar{
 
 //record each type of base in specific position
 struct PosBase{
+
+    int altCount;
     int A_count;
     int C_count;
     int G_count;
@@ -153,6 +173,7 @@ struct PosBase{
     int depth;
     int delCount;
 
+    int MPQ_altCount;
     int MPQ_A_count;
     int MPQ_C_count;
     int MPQ_G_count;
@@ -173,8 +194,8 @@ struct PosBase{
     //snp position, read hp count
     std::map<int, int> ReadHpCount;
     
-    PosBase(): A_count(0), C_count(0), G_count(0), T_count(0), unknow(0), depth(0), delCount(0)
-             , MPQ_A_count(0), MPQ_C_count(0), MPQ_G_count(0), MPQ_T_count(0), MPQ_unknow(0), filteredMpqDepth(0) 
+    PosBase(): altCount(0), A_count(0), C_count(0), G_count(0), T_count(0), unknow(0), depth(0), delCount(0)
+             , MPQ_altCount(0), MPQ_A_count(0), MPQ_C_count(0), MPQ_G_count(0), MPQ_T_count(0), MPQ_unknow(0), filteredMpqDepth(0) 
              , VAF(0.0), nonDelVAF(0.0), filteredMpqVAF(0.0), lowMpqReadRatio(0.0), delRatio(0.0)
              , germlineHaplotypeImbalanceRatio(0.0), percentageOfGermlineHp(0.0)
              , ReadHpCount(std::map<int, int>()){}
@@ -186,6 +207,9 @@ struct PosBase{
         if (base == "G") return G_count;
         throw std::runtime_error("(getBaseCount)Invalid base: " + base);
     }
+    int getAltCount() const {
+        return altCount;
+    }
 
     int getMpqBaseCount(const std::string& base) const {
         if (base == "A") return MPQ_A_count;
@@ -193,6 +217,9 @@ struct PosBase{
         if (base == "C") return MPQ_C_count;
         if (base == "G") return MPQ_G_count;
         throw std::runtime_error("(getMpqBaseCount)Invalid base: " + base);
+    }
+    int getMpqAltCount() const {
+        return MPQ_altCount;
     }
 };
 
@@ -242,6 +269,7 @@ struct SomaticData{
 
     //readHp, count
     std::map<int, int> somaticReadHpCount;
+    std::array<std::vector<std::pair<int, char>>, 2> PosSomaticOffsetBase;//0: ref, 1: alt
 
     SomaticData(): totalCleanHP3Read(0), pure_H1_1_read(0), pure_H2_1_read(0), pure_H3_read(0), Mixed_HP_read(0), unTag(0)
              , CaseReadCount(0), pure_H1_1_readRatio(0.0), pure_H2_1_readRatio(0.0), pure_H3_readRatio(0.0), Mixed_HP_readRatio(0.0)
@@ -249,7 +277,7 @@ struct SomaticData{
              , isHighConSomaticSNP(false), somaticReadDeriveByHP(0), shannonEntropy(0.0), homopolymerLength(0)
              , statisticPurity(false), allelicImbalanceRatio(0.0), somaticHaplotypeImbalanceRatio(0.0)
              , meanAltCountPerVarRead(0.0), zScore(0.0), intervalSnpCount(0), minDistance(0), inDenseTumorInterval(false)
-             , isFilterOut(false), somaticReadHpCount(std::map<int, int>()){}
+             , isFilterOut(false), somaticReadHpCount(std::map<int, int>()), PosSomaticOffsetBase({std::vector<std::pair<int, char>>(), std::vector<std::pair<int, char>>()}){}
 };
 
 //record vcf information

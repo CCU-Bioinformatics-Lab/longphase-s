@@ -96,9 +96,9 @@ void HaplotagProcess::setChrVecAndChrLength(){
 }
 
 void HaplotagProcess::setProcessingChromRegion(){
-    if (!params.bamCfg.region.empty()) {
-        auto colonPos = params.bamCfg.region.find(":");
-        std::string regionChr;
+    if (!params.bamCfg.region.empty()) {//if the region is not empty, set the chromosome vector to the region
+        auto colonPos = params.bamCfg.region.find(":");//find the colon position
+        std::string regionChr;//the chromosome name
         if (colonPos != std::string::npos) {
             regionChr = params.bamCfg.region.substr(0, colonPos);
         }
@@ -136,7 +136,7 @@ void HaplotagProcess::tagRead(HaplotagParameters &params, std::string& tagBamFil
 
     ParsingBamControl control;
     control.mode = ParsingBamMode::SINGLE_THREAD;
-    control.writeOutputBam = true;
+    control.writeOutputBam = false;//////////
     control.mappingQualityFilter = true;
 
     BamParserContext ctx(tagBamFile, params.fastaFile, *chrVec, *chrLength, *chrMultiVariants, vcfSet, geneSample);
@@ -483,9 +483,10 @@ GermlineHaplotagCigarParser::~GermlineHaplotagCigarParser(){
 
 }
 
-void GermlineHaplotagCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base){
-    auto norVar = (*currentVariantIter).second.Variant[NORMAL];
-    judger.judgeSnpHap(ctx.chrName, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, *hpCount, *variantsHP, *norCountPS);
+void GermlineHaplotagCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base, bool& isAlt, int& offset){
+    auto norVar = (*currentVariantIter).second.Variant[NORMAL];//get the current normal variant
+    judger.judgeSnpHap(ctx.chrName, norVar, base, ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, *hpCount, *variantsHP, *norCountPS, isAlt);
+    //judge the haplotype of the current normal variant
 }
 
 void GermlineHaplotagCigarParser::processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel){

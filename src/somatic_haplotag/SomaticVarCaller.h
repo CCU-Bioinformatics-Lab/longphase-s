@@ -76,10 +76,15 @@ struct SomaticVarFilterParams
 
     // Interval SNP count filter threshold
     float IntervalSnpCount_VAF_maxThr;
+
     int IntervalSnpCount_ReadCount_maxThr;
     int IntervalSnpCount_minThr;
     float zScore_maxThr;
 
+    // DenseAlt filter threshold
+    float DenseAlt_condition1_thr;  // condition1 threshold (aa/targetAltCount >= threshold)
+    float DenseAlt_condition2_thr;  // condition2 threshold (aa/(ra+aa) >= threshold)
+    int DenseAlt_sameCount_minThr;  // minimum same count threshold
     SomaticVarFilterParams() 
         : tumorPurity(0.0)
         , norVAF_maxThr(0.0)
@@ -92,7 +97,15 @@ struct SomaticVarFilterParams
         , IntervalSnpCount_VAF_maxThr(0.0)
         , IntervalSnpCount_ReadCount_maxThr(0)
         , IntervalSnpCount_minThr(0)
-        , zScore_maxThr(0.0) {}
+        , zScore_maxThr(0.0)
+        , DenseAlt_condition1_thr(0.5)
+        , DenseAlt_condition2_thr(0.6)
+        , DenseAlt_sameCount_minThr(2) {}
+};
+
+struct VariantBases{
+    int targetCount;
+    std::map<int, int> offsetDiffRefCount; //offset, diff ref count
 };
 
 enum FilterTier{
@@ -139,6 +152,9 @@ struct ReadVarHpCount{
     int readLength;
     std::map<int, int> norCountPS;
     
+    // 儲存每條read在每個position的offsetBase資訊
+    std::map<int, std::vector<std::pair<int, char>>> posOffsetBaseMap;  // position -> offsetBase vector
+    
     ReadVarHpCount(): HP1(0), HP2(0), HP3(0), HP4(0), readIDcount(0), hpResult(0), startPos(0), endPos(0), readLength(0){}
 };
 
@@ -166,12 +182,12 @@ struct DenseSnpData{
  * including mean calculations, z-scores, and interval metadata
  */
 struct DenseSnpInterval{
-    std::map<int, double> snpAltMean;
-    std::map<int, double> snpZscore;
-    std::map<int, int> minDistance;
+    std::map<int, double> snpAltMean;//<snpPos, altMean>
+    std::map<int, double> snpZscore;//<snpPos, zScore>
+    std::map<int, int> minDistance;//<snpPos, minDistance>
     int snpCount;
-    double totalAltMean;
-    double StdDev;
+    double totalAltMean;//<totalAltMean>
+    double StdDev;//<StdDev>
     DenseSnpInterval(): snpCount(0), totalAltMean(0.0), StdDev(0.0){}
 
     /**
@@ -202,7 +218,7 @@ namespace tumor_normal_analysis{
      * @param baseInfo Base information structure to update
      * @param tumorAltBase Alternative base in tumor sample
      */
-    void calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase);
+    void calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase, VariantType varType);
 };
 
 namespace statisticsUtils{
@@ -259,7 +275,7 @@ class ExtractNorDataCigarParser : public CigarParser{
         GermlineHaplotagStrategy judger;
     protected:
 
-        void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base) override;
+        void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base, bool& isAlt, int& offset) override;
         void processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel) override;
 
     public:
@@ -371,10 +387,19 @@ class ExtractTumDataCigarParser : public CigarParser{
         std::map<int, int>& tumCountPS;
 
         const int& mappingQualityThr;
+        
+        // 暫存當前read在各位置的offsetBase資訊
+        std::map<int, std::vector<std::pair<int, char>>> currentReadOffsetBase;
     protected:
 
-        void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base) override;
+        void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base, bool& isAlt, int& offset) override;
         void processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel) override;
+        
+        // 取得當前read的offsetBase資訊
+        const std::map<int, std::vector<std::pair<int, char>>>& getCurrentReadOffsetBase() const { return currentReadOffsetBase; }
+        
+        // 清空當前read的offsetBase (在新read開始時呼叫)
+        void clearCurrentReadOffsetBase() { currentReadOffsetBase.clear(); }
 
     public:
         ExtractTumDataCigarParser(

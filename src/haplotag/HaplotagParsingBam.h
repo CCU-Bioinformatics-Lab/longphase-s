@@ -448,7 +448,7 @@ class CigarParser{
          * 
          * Virtual method for handling match operations
          */
-        virtual void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base){};
+        virtual void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base, bool& isAlt, int& offset){};
         
         /**
          * @brief Process insertion operation (I)
@@ -502,7 +502,7 @@ class CigarParser{
          * 
          * Updates base counts and filtered depth based on mapping quality
          */
-        void countBaseNucleotide(PosBase& posBase, std::string& base, const bam1_t& aln, const float& mpqThreshold);
+        void countBaseNucleotide(PosBase& posBase, std::string& base, const bam1_t& aln, const float& mpqThreshold, bool isAlt);
         
         /**
          * @brief Count deletion bases

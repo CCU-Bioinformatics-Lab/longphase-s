@@ -50,7 +50,7 @@ class SomaticHaplotagCigarParser: public CigarParser{
         SomaticHaplotagStrategy somaticJudger;
     protected:
 
-        void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base) override;
+        void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base, bool& isAlt, int& offset) override;
         void processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel) override;
     public:
         SomaticHaplotagCigarParser(
