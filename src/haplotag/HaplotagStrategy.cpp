@@ -34,7 +34,7 @@ void GermlineHaplotagStrategy::judgeSnpHap(
     int curPos = (*currentVariantIter).first;
 
     // currentVariant is SNP
-    if( norVar.variantType == VariantType::SNP ){
+    if( norVar.variantType == HaplotagVariantType::SNP ){
         // Detected that the base of the read is either REF or ALT. 
         if( (base == norVar.allele.Ref) || (base == norVar.allele.Alt) ){
 
@@ -62,7 +62,7 @@ void GermlineHaplotagStrategy::judgeSnpHap(
         }
     }
     // currentVariant is insertion
-    else if( norVar.variantType == VariantType::INSERTION && i+1 < aln_core_n_cigar){
+    else if( norVar.variantType == HaplotagVariantType::INSERTION && i+1 < aln_core_n_cigar){
         
         int hp1Length = norVar.HP1.length();
         int hp2Length = norVar.HP2.length();
@@ -94,7 +94,7 @@ void GermlineHaplotagStrategy::judgeSnpHap(
         countPS[norVar.PhasedSet]++;
     } 
     // currentVariant is deletion
-    else if( norVar.variantType == VariantType::DELETION && i+1 < aln_core_n_cigar) {
+    else if( norVar.variantType == HaplotagVariantType::DELETION && i+1 < aln_core_n_cigar) {
 
         int hp1Length = norVar.HP1.length();
         int hp2Length = norVar.HP2.length();
@@ -168,7 +168,7 @@ void GermlineHaplotagStrategy::judgeDeletionHap(
                 auto norVar = (*currentVariantIter).second.Variant[NORMAL];
                 
                 // SNP
-                if (norVar.variantType == VariantType::SNP) {
+                if (norVar.variantType == HaplotagVariantType::SNP) {
                     // get the next match
                     char base_chr = seq_nt16_str[bam_seqi(bam_get_seq(aln), query_pos)];
                     std::string base(1, base_chr);
@@ -185,7 +185,7 @@ void GermlineHaplotagStrategy::judgeDeletionHap(
                 }
                 
                 // the read deletion contain VCF's deletion
-                else if (norVar.variantType == VariantType::DELETION) {
+                else if (norVar.variantType == HaplotagVariantType::DELETION) {
 
                     int hp1Length = norVar.HP1.length();
                     int hp2Length = norVar.HP2.length();
