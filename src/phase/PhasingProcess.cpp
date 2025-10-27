@@ -35,6 +35,7 @@ PhasingProcess::PhasingProcess(PhasingParameters params)
     std::cerr<< "Mismatch Rate      : " << params.mismatchRate  << "\n";
     std::cerr<< "Variant Confidence : " << params.snpConfidence   << "\n";
     std::cerr<< "ReadTag Confidence : " << params.readConfidence  << "\n";
+    std::cerr<< "DeepSomatic Mode   : " << (params.deepsomaticOutput ? "True" : "False") << "\n";
     if (!params.svFile.empty()) {
         std::cerr<< "SV Windowsize      : " << params.svWindow << "\n";
         std::cerr<< "SV Threshold       : " << params.svThreshold << "\n";
@@ -42,6 +43,22 @@ PhasingProcess::PhasingProcess(PhasingParameters params)
     std::cerr<< "\n";
     
     std::time_t processBegin = time(NULL);
+    
+    // For deepsomatic output, preprocess VCF first
+    std::string originalSnpFile = params.snpFile;
+    if(params.deepsomaticOutput){
+        std::time_t begin = time(NULL);
+        std::cerr<< "preprocessing DeepSomatic VCF (filter GERMLINE, adjust GT by VAF) ... ";
+        
+        std::string preprocessedVcf = params.resultPrefix + "_preprocessed.vcf";
+        SnpParser::preprocessDeepsomaticVCF(params.snpFile, preprocessedVcf);
+        std::cerr<< difftime(time(NULL), begin) << "s\n";
+        
+        // Update params to use preprocessed VCF
+        params.snpFile = preprocessedVcf;
+        // Disable deepsomatic mode for actual parsing since we already preprocessed
+        params.deepsomaticOutput = false;
+    }
         
     // load SNP vcf file
     std::time_t begin = time(NULL);

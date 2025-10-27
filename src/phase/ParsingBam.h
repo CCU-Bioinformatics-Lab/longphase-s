@@ -19,6 +19,7 @@ struct RefAlt{
     bool is_reverse;
     bool is_modify;
     bool is_danger;
+    std::string filter;  // Store FILTER field for deepsomatic output
 };
 
 class FastaParser{
@@ -93,6 +94,8 @@ class SnpParser : public BaseVairantParser{
         bool findSNP(std::string chr, int posistion);
         
         void filterSNP(std::string chr, std::vector<ReadVariant> &readVariantVec, std::string &chr_reference);
+        
+        static void preprocessDeepsomaticVCF(std::string inputFile, std::string outputFile);
 };
 
 class SVParser : public BaseVairantParser{

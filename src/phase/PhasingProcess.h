@@ -32,7 +32,7 @@ struct PhasingParameters
     
     double edgeThreshold;
     double overlapThreshold;
-
+    bool deepsomaticOutput;
     int svWindow;
     double svThreshold; 
     

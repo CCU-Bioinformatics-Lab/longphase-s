@@ -20,8 +20,8 @@ FastaParser::FastaParser(std::string fastaFile,  std::vector<std::string> chrNam
     // init map
     for(std::vector<std::string>::iterator iter = chrName.begin() ; iter != chrName.end() ; iter++)
         chrString.insert(std::make_pair( (*iter) , ""));
-
-    // load reference index
+    
+        // load reference index
     faidx_t *fai = NULL;
     fai = fai_load(fastaFile.c_str());
     
@@ -348,6 +348,12 @@ SnpParser::SnpParser(PhasingParameters &in_params):commandLine(false){
             }
         }
     }
+
+    // Free allocated memory
+    if (gt) free(gt);
+    bcf_destroy(rec);
+    bcf_hdr_destroy(hdr);
+    bcf_close(inf);
 }
 
 SnpParser::~SnpParser(){
@@ -640,6 +646,110 @@ bool SnpParser::findSNP(std::string chr, int position){
     return true;
 }
 
+void SnpParser::preprocessDeepsomaticVCF(std::string inputFile, std::string outputFile){
+    std::ifstream inputVcf(inputFile);
+    std::ofstream outputVcf(outputFile);
+    
+    if(!inputVcf.is_open()){
+        std::cerr<< "Fail to open input VCF: " << inputFile << "\n";
+        exit(1);
+    }
+    if(!outputVcf.is_open()){
+        std::cerr<< "Fail to open output VCF: " << outputFile << "\n";
+        exit(1);
+    }
+    
+    const double threshold_het = 0.3;
+    const double threshold_hom = 0.7;
+    std::string line;
+    
+    while(std::getline(inputVcf, line)){
+        // Output header lines as-is
+        if(line.substr(0, 1) == "#"){
+            outputVcf << line << "\n";
+            continue;
+        }
+        
+        // Parse variant line
+        std::istringstream iss(line);
+        std::vector<std::string> fields((std::istream_iterator<std::string>(iss)), std::istream_iterator<std::string>());
+        
+        if(fields.size() < 10)
+            continue;
+        
+        // Check FILTER field (index 6)
+        std::string filter_field = fields[6];
+        if(filter_field.find("GERMLINE") == std::string::npos){
+            continue;  // Skip non-GERMLINE variants
+        }
+        
+        // Parse FORMAT and sample fields to get VAF
+        std::string format = fields[8];
+        std::string sample = fields[9];
+        
+        // Find VAF position in FORMAT
+        std::istringstream format_stream(format);
+        std::string format_item;
+        int vaf_index = -1;
+        int gt_index = -1;
+        int index = 0;
+        
+        while(std::getline(format_stream, format_item, ':')){
+            if(format_item == "VAF"){
+                vaf_index = index;
+            }
+            if(format_item == "GT"){
+                gt_index = index;
+            }
+            index++;
+        }
+        
+        // Parse sample values
+        std::istringstream sample_stream(sample);
+        std::string sample_value;
+        std::vector<std::string> sample_values;
+        while(std::getline(sample_stream, sample_value, ':')){
+            sample_values.push_back(sample_value);
+        }
+        
+        // Adjust GT based on VAF
+        if(vaf_index >= 0 && vaf_index < (int)sample_values.size() && 
+           gt_index >= 0 && gt_index < (int)sample_values.size()){
+            
+            double vaf = std::stod(sample_values[vaf_index]);
+            
+            // Adjust GT based on VAF thresholds but keep all GERMLINE variants
+            if(vaf < threshold_het){
+                // 0/0 - homozygous reference
+                sample_values[gt_index] = "0/0";
+            } else if(vaf >= threshold_het && vaf < threshold_hom){
+                // 0/1 - heterozygous
+                sample_values[gt_index] = "0/1";
+            } else {
+                // 1/1 - homozygous alternate
+                sample_values[gt_index] = "1/1";
+            }
+            
+            // Reconstruct sample field
+            fields[9] = "";
+            for(size_t i = 0; i < sample_values.size(); i++){
+                if(i > 0) fields[9] += ":";
+                fields[9] += sample_values[i];
+            }
+        }
+        
+        // Output the line
+        for(size_t i = 0; i < fields.size(); i++){
+            if(i > 0) outputVcf << "\t";
+            outputVcf << fields[i];
+        }
+        outputVcf << "\n";
+    }
+    
+    inputVcf.close();
+    outputVcf.close();
+}
+
 void SnpParser::filterSNP(std::string chr, std::vector<ReadVariant> &readVariantVec, std::string &chr_reference){
     
     // pos, <allele, <strand, True>
@@ -808,17 +918,17 @@ void SVParser::parserProcess(std::string &input){
             return;
         }
         
-        // get read INFO
-        int start = std::stoi(fields[1]);
-        std::string info = fields[7];
-        size_t svlenPos = info.find("SVLEN=");
-        if (svlenPos != std::string::npos)
-        {
-            svlenPos += 6;
-            size_t semiPos = info.find(';', svlenPos);
-            int svlen = std::stoi(info.substr(svlenPos, semiPos - svlenPos));
-            (*chrVariant)[chr][start][svlen] = true;
-        }
+            // get read INFO
+            int start = std::stoi(fields[1]);
+            std::string info = fields[7];
+            size_t svlenPos = info.find("SVLEN=");
+            if (svlenPos != std::string::npos)
+            {
+                svlenPos += 6;
+                size_t semiPos = info.find(';', svlenPos);
+                int svlen = std::stoi(info.substr(svlenPos, semiPos - svlenPos));
+                (*chrVariant)[chr][start][svlen] = true;
+            }
     }
 }
 

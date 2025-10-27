@@ -44,11 +44,15 @@ static const char *CORRECT_USAGE_MESSAGE =
 "   -m, --readConfidence=[0.5~1]           The confidence of a read being assigned to any haplotype. default:0.65\n"
 "   -n, --snpConfidence=[0.5~1]            The confidence of assigning two alleles of a SNP to different haplotypes. default:0.75\n"
 
+"deepsomatic arguments:\n"
+"   --deepsomatic_output                   Enable special processing for DeepSomatic output VCF.\n"
+"                                          Filter only GERMLINE variants and adjust GT based on VAF.\n"
+
 "\n";
 
 static const char* shortopts = "s:b:o:t:r:d:1:a:q:x:p:e:n:m:L:w:h:";
 
-enum { OPT_HELP = 1 , DOT_FILE, SV_FILE, MOD_FILE, IS_ONT, IS_PB, PHASE_INDEL, INDEL_QUALITY, VERSION};
+enum { OPT_HELP = 1 , DOT_FILE, SV_FILE, MOD_FILE, IS_ONT, IS_PB, PHASE_INDEL, INDEL_QUALITY,DEEPSOMATIC_OUTPUT, VERSION};
 
 static const struct option longopts[] = { 
     { "help",                 no_argument,        NULL, OPT_HELP },
@@ -58,6 +62,7 @@ static const struct option longopts[] = {
     { "version",              no_argument,        NULL, VERSION }, 
     { "indels",               no_argument,        NULL, PHASE_INDEL },   
     { "indelQuality",         required_argument,  NULL, INDEL_QUALITY },
+    { "deepsomatic_output",   no_argument,        NULL, DEEPSOMATIC_OUTPUT },   
     { "sv-file",              required_argument,  NULL, SV_FILE },  
     { "mod-file",             required_argument,  NULL, MOD_FILE },
     { "reference",            required_argument,  NULL, 'r' },
@@ -84,6 +89,7 @@ namespace opt
 {
     static int numThreads = 1;
     static int distance = 300000;
+    static bool deepsomaticOutput = false;
     static std::string snpFile="";
     static std::string svFile="";
     static std::string modFile="";
@@ -144,6 +150,7 @@ void PhasingOptions(int argc, char** argv)
         case MOD_FILE: arg >> opt::modFile; break; 
         case PHASE_INDEL: opt::phaseIndel=true; break; 
         case INDEL_QUALITY: arg >> opt::indelQuality; break;
+        case DEEPSOMATIC_OUTPUT: opt::deepsomaticOutput=true; break; 
         case DOT_FILE: opt::generateDot=true; break;
         case IS_ONT: opt::isONT=true; break;
         case IS_PB: opt::isPB=true; break;
@@ -351,10 +358,10 @@ int PhasingMain(int argc, char** argv, std::string in_version)
     
     ecParams.snpConfidence=opt::snpConfidence;
     ecParams.readConfidence=opt::readConfidence;
-    
+    ecParams.deepsomaticOutput=opt::deepsomaticOutput;
     ecParams.svWindow=opt::svWindow;
     ecParams.svThreshold=opt::svThreshold;
-
+    
     ecParams.version=in_version;
     ecParams.command=opt::command;
     
