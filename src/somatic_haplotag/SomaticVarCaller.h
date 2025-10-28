@@ -218,7 +218,7 @@ namespace tumor_normal_analysis{
      * @param tumorAltBase Alternative base in tumor sample
      * @param varType Variant type
      */
-    void calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase, VariantType varType);
+    void calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase, HaplotagVariantType::VariantType varType);
 };
 
 namespace statisticsUtils{

@@ -10,15 +10,15 @@
  * @param baseInfo Base information structure to update with calculated metrics
  * @param tumorAltBase Alternative base in tumor sample for VAF calculation
  */
-void tumor_normal_analysis::calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase, VariantType varType){
+void tumor_normal_analysis::calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase, HaplotagVariantType::VariantType varType){
     int &depth = baseInfo.depth;
     int filteredMpqDepth = baseInfo.filteredMpqDepth;
     int AltCount = 0;
     int filteredMpqAltCount = 0;
-    if(varType == VariantType::SNP){
+    if(varType == HaplotagVariantType::SNP){
         AltCount = baseInfo.getBaseCount(tumorAltBase);
         filteredMpqAltCount = baseInfo.getMpqBaseCount(tumorAltBase);
-    }else if(varType == VariantType::INSERTION || varType == VariantType::DELETION){
+    }else if(varType == HaplotagVariantType::INSERTION || varType == HaplotagVariantType::DELETION){
         AltCount = baseInfo.getAltCount();
         filteredMpqAltCount = baseInfo.getMpqAltCount();
     }
@@ -185,14 +185,14 @@ void ExtractNorDataChrProcessor::postProcess(
         auto curVar = currentVariants[(*currentPosIter).first].Variant[TUMOR];
 
         // current variant is SNP
-        if(curVar.variantType == VariantType::SNP){
+        if(curVar.variantType == HaplotagVariantType::SNP){
             std::string& tumAltBase = curVar.allele.Alt;
 
             // calculate the base information of the tumor SNP
             tumor_normal_analysis::calculateBaseCommonInfo(baseInfo, tumAltBase, curVar.variantType);
         }
         // TODO: Add INDEL processing logic here
-        else if(curVar.variantType == VariantType::INSERTION || curVar.variantType == VariantType::DELETION){
+        else if(curVar.variantType == HaplotagVariantType::INSERTION || curVar.variantType == HaplotagVariantType::DELETION){
             // INDEL processing needs special handling - not implemented yet
             // For now, skip INDEL processing to avoid crashes
         }
@@ -224,7 +224,7 @@ void ExtractNorDataCigarParser::processMatchOperation(int& length, uint32_t* cig
         auto curVar = (*currentVariantIter).second.Variant[TUMOR];
         
         // the variant is SNP
-        if(curVar.variantType == VariantType::SNP || curVar.variantType == VariantType::INSERTION || curVar.variantType == VariantType::DELETION){
+        if(curVar.variantType == HaplotagVariantType::SNP || curVar.variantType == HaplotagVariantType::INSERTION || curVar.variantType == HaplotagVariantType::DELETION){
             //record tumor SNP position
             tumVarPosVec.push_back(curPos);
 
@@ -232,7 +232,7 @@ void ExtractNorDataCigarParser::processMatchOperation(int& length, uint32_t* cig
             countBaseNucleotide(variantBase[curPos], base, ctx.aln, mappingQualityThr,isAlt);
         }
         // the indel(deletion) SNP position is the start position, and the deletion occurs at the next position
-        else if(curVar.variantType == VariantType::DELETION){
+        else if(curVar.variantType == HaplotagVariantType::DELETION){
             // the indel SNP start position is at the end of the deletion, and the next cigar operator is deletion
             if(curPos == (ref_pos + length - 1) && bam_cigar_op(cigar[i+1]) == 2 && i+1 < aln_core_n_cigar){
 
@@ -261,11 +261,11 @@ void ExtractNorDataCigarParser::processDeletionOperation(int& length, uint32_t* 
         tumVarPosVec.push_back(curPos);
 
         // the variant is SNP
-        if(curVar.variantType == VariantType::SNP){
+        if(curVar.variantType == HaplotagVariantType::SNP){
             countDeletionBase(variantBase[curPos]);
         }
         // the variant is deletion
-        else if(curVar.variantType == VariantType::DELETION){
+        else if(curVar.variantType == HaplotagVariantType::DELETION){
 
         }
     }
@@ -518,7 +518,7 @@ void ExtractTumDataChrProcessor::postProcess( const std::string &chr, std::map<i
         auto curVar = currentVariants[(*somaticVarIter).first].Variant[TUMOR];
 
         // current variant is SNP
-        if (curVar.variantType == VariantType::SNP || curVar.variantType == VariantType::INSERTION || curVar.variantType == VariantType::DELETION) {
+        if (curVar.variantType == HaplotagVariantType::SNP || curVar.variantType == HaplotagVariantType::INSERTION || curVar.variantType == HaplotagVariantType::DELETION) {
 
             std::string RefBase = curVar.allele.Ref;
             std::string AltBase = curVar.allele.Alt;
@@ -582,7 +582,7 @@ void ExtractTumDataChrProcessor::postProcess( const std::string &chr, std::map<i
             
         }
         // TODO: Add INDEL processing logic here
-        //else if(curVar.variantType == VariantType::INSERTION || curVar.variantType == VariantType::DELETION){
+        //else if(curVar.variantType == HaplotagVariantType::INSERTION || curVar.variantType == HaplotagVariantType::DELETION){
             // INDEL processing needs special handling - not implemented yet
             // For now, skip INDEL processing to avoid crashes
         //}
@@ -712,8 +712,8 @@ void ExtractTumDataCigarParser::processMatchOperation(int& length, uint32_t* cig
 
         auto curVar = (*currentVariantIter).second.Variant[TUMOR];
         
-        if(curVar.variantType == VariantType::SNP || curVar.variantType == VariantType::INSERTION || curVar.variantType == VariantType::DELETION){
-            if(curVar.variantType != VariantType::SNP || ((curVar.allele.Ref == base || curVar.allele.Alt == base)) ){
+        if(curVar.variantType == HaplotagVariantType::SNP || curVar.variantType == HaplotagVariantType::INSERTION || curVar.variantType == HaplotagVariantType::DELETION){
+            if(curVar.variantType != HaplotagVariantType::SNP || ((curVar.allele.Ref == base || curVar.allele.Alt == base)) ){
                 somaticPosInfo[(*currentVariantIter).first].alleleCount[isAlt] ++;
                 somaticPosInfo[(*currentVariantIter).first].PosSomaticOffsetBase[isAlt].insert(
                     somaticPosInfo[(*currentVariantIter).first].PosSomaticOffsetBase[isAlt].end(),
@@ -740,11 +740,11 @@ void ExtractTumDataCigarParser::processDeletionOperation(int& length, uint32_t* 
 
         int curPos = (*currentVariantIter).first;
 
-        if(curVar.variantType == VariantType::SNP){
+        if(curVar.variantType == HaplotagVariantType::SNP){
             countDeletionBase(somaticPosInfo[curPos].base);
         }
         // the indel SNP start position isn't at the end of the deletion
-        else if(curVar.variantType == VariantType::DELETION){
+        else if(curVar.variantType == HaplotagVariantType::DELETION){
 
         }
     }
@@ -1065,7 +1065,7 @@ void SomaticVarCaller::somaticFeatureFilter(const SomaticVarFilterParams &somati
         auto curVar = currentChrVariants[(*somaticVarIter).first].Variant[TUMOR];
 
         // current variant is SNP, insertion, or deletion
-        if (curVar.variantType == VariantType::SNP || curVar.variantType == VariantType::INSERTION || curVar.variantType == VariantType::DELETION) {
+        if (curVar.variantType == HaplotagVariantType::SNP || curVar.variantType == HaplotagVariantType::INSERTION || curVar.variantType == HaplotagVariantType::DELETION) {
             //TINC filter parameter
             float norVAF_maxThr = somaticParams.norVAF_maxThr;
             int norDepth_minThr = somaticParams.norDepth_minThr;
@@ -1744,11 +1744,11 @@ void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const
             }
 
             // Get variant type for proper alt count calculation
-            VariantType varType = chrMultiVariants[chr][(*somaticVarIter).first].Variant[TUMOR].variantType;
+            HaplotagVariantType::VariantType varType = chrMultiVariants[chr][(*somaticVarIter).first].Variant[TUMOR].variantType;
             
             // Use appropriate method based on variant type
             int tumMpqAltCount, norAltCount;
-            if(varType == VariantType::SNP && altBase.length() == 1){
+            if(varType == HaplotagVariantType::SNP && altBase.length() == 1){
                 tumMpqAltCount = (*somaticVarIter).second.base.getMpqBaseCount(altBase);
                 // Note: norAltCount uses getAltCount() because normal sample calculation 
                 // already uses getAltCount() in calculateBaseCommonInfo

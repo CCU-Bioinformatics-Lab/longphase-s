@@ -35,7 +35,7 @@ void GermlineHaplotagStrategy::judgeSnpHap(
     int curPos = (*currentVariantIter).first;
 
     // currentVariant is SNP
-    if( norVar.variantType == VariantType::SNP){
+    if( norVar.variantType == HaplotagVariantType::SNP){
         // Detected that the base of the read is either REF or ALT. 
         if( (base == norVar.allele.Ref) || (base == norVar.allele.Alt) ){//if the base of the read is either REF or ALT
 
@@ -63,7 +63,7 @@ void GermlineHaplotagStrategy::judgeSnpHap(
         }
     }
     // currentVariant is insertion
-    else if( norVar.variantType == VariantType::INSERTION && i+1 < aln_core_n_cigar){
+    else if( norVar.variantType == HaplotagVariantType::INSERTION && i+1 < aln_core_n_cigar){
 
         
         int hp1Length = norVar.HP1.length();
@@ -95,7 +95,7 @@ void GermlineHaplotagStrategy::judgeSnpHap(
         countPS[norVar.PhasedSet]++;
     } 
     // currentVariant is deletion
-    else if( norVar.variantType == VariantType::DELETION && i+1 < aln_core_n_cigar) {
+    else if( norVar.variantType == HaplotagVariantType::DELETION && i+1 < aln_core_n_cigar) {
 
 
         int hp1Length = norVar.HP1.length();
@@ -170,7 +170,7 @@ void GermlineHaplotagStrategy::judgeDeletionHap(
                 auto norVar = (*currentVariantIter).second.Variant[NORMAL];
                 
                 // SNP
-                if (norVar.variantType == VariantType::SNP) {
+                if (norVar.variantType == HaplotagVariantType::SNP) {
                     // get the next match
                     char base_chr = seq_nt16_str[bam_seqi(bam_get_seq(aln), query_pos)];
                     std::string base(1, base_chr);
@@ -187,7 +187,7 @@ void GermlineHaplotagStrategy::judgeDeletionHap(
                 }
                 
                 // the read deletion contain VCF's deletion
-                else if (norVar.variantType == VariantType::DELETION) {
+                else if (norVar.variantType == HaplotagVariantType::DELETION) {
 
                     int hp1Length = norVar.HP1.length();
                     int hp2Length = norVar.HP2.length();
@@ -322,7 +322,7 @@ void SomaticJudgeHapStrategy::judgeSomaticSnpHap(std::map<int, MultiGenomeVar>::
     if(curVar.isExists(NORMAL)){
         // the normal SNP GT is phased heterozgous SNP
         if((curVar.Variant[NORMAL].GT == GenomeType::PHASED_HETERO)){
-            if(curVar.Variant[NORMAL].variantType == VariantType::DELETION || curVar.Variant[NORMAL].variantType == VariantType::INSERTION){
+            if(curVar.Variant[NORMAL].variantType == HaplotagVariantType::DELETION || curVar.Variant[NORMAL].variantType == HaplotagVariantType::INSERTION){
                 if(isAlt){
                     base = curVar.Variant[NORMAL].allele.Alt;
                 }
@@ -336,15 +336,15 @@ void SomaticJudgeHapStrategy::judgeSomaticSnpHap(std::map<int, MultiGenomeVar>::
     }else if(curVar.isExists(TUMOR)){
         //the tumor SNP GT is phased heterozygous
         if(curVar.Variant[TUMOR].GT == GenomeType::PHASED_HETERO){
-            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base || curVar.Variant[TUMOR].variantType == VariantType::DELETION 
-                || curVar.Variant[TUMOR].variantType == VariantType::INSERTION){
+            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base || curVar.Variant[TUMOR].variantType == HaplotagVariantType::DELETION 
+                || curVar.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
                 if(!curVar.Variant[TUMOR].isExistPhasedSet()){
                     std::cerr<< curPos << "\t"
                              << curVar.Variant[TUMOR].allele.Ref << "\t"
                              << curVar.Variant[TUMOR].allele.Alt << "\n";
                     exit(EXIT_SUCCESS);
                 }else{
-                    if(curVar.Variant[TUMOR].variantType == VariantType::DELETION || curVar.Variant[TUMOR].variantType == VariantType::INSERTION){
+                    if(curVar.Variant[TUMOR].variantType == HaplotagVariantType::DELETION || curVar.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
                         if(isAlt){
                             base = curVar.Variant[TUMOR].allele.Alt;
                         }
@@ -357,9 +357,9 @@ void SomaticJudgeHapStrategy::judgeSomaticSnpHap(std::map<int, MultiGenomeVar>::
             }
         //the tumor SNP GT is unphased heterozygous
         }else if(curVar.Variant[TUMOR].GT == GenomeType::UNPHASED_HETERO){
-            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base || curVar.Variant[TUMOR].variantType == VariantType::DELETION 
-                || curVar.Variant[TUMOR].variantType == VariantType::INSERTION){
-                if(curVar.Variant[TUMOR].variantType == VariantType::DELETION || curVar.Variant[TUMOR].variantType == VariantType::INSERTION){
+            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base || curVar.Variant[TUMOR].variantType == HaplotagVariantType::DELETION 
+                || curVar.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
+                if(curVar.Variant[TUMOR].variantType == HaplotagVariantType::DELETION || curVar.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
                     if(isAlt){
                         base = curVar.Variant[TUMOR].allele.Alt;
                     }
@@ -372,9 +372,9 @@ void SomaticJudgeHapStrategy::judgeSomaticSnpHap(std::map<int, MultiGenomeVar>::
             }           
         //the tumor SNP GT is homozygous
         }else if(curVar.Variant[TUMOR].GT == GenomeType::UNPHASED_HOMO){
-            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base || curVar.Variant[TUMOR].variantType == VariantType::DELETION 
-                || curVar.Variant[TUMOR].variantType == VariantType::INSERTION){
-                if(curVar.Variant[TUMOR].variantType == VariantType::DELETION || curVar.Variant[TUMOR].variantType == VariantType::INSERTION){
+            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base || curVar.Variant[TUMOR].variantType == HaplotagVariantType::DELETION 
+                || curVar.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
+                if(curVar.Variant[TUMOR].variantType == HaplotagVariantType::DELETION || curVar.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
                     if(isAlt){
                         base = curVar.Variant[TUMOR].allele.Alt;
                     }

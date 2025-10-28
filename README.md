@@ -1,5 +1,5 @@
 # LongPhase-S
-LongPhase-S is a program for somatic haplotagging and tumor purity estimation from tumor-normal pair long-read sequencing data. It also supports germline variant phasing and haplotagging, and is based on [**LongPhase**](https://github.com/twolinin/longphase) (v1.7.3).
+LongPhase-S is a program for somatic haplotagging and tumor purity estimation from tumor-normal pair long-read sequencing data. It also supports germline variant phasing and haplotagging, and is based on [**LongPhase**](https://github.com/twolinin/longphase) (v2.0.0).
 
 Key Features:
 - Enhances somatic variant calling accuracy
@@ -79,7 +79,7 @@ This figure shows an example of tagged tumor BAM file visualized in IGV, demonst
 <!-- You are recommended to download a [linux 64bit binary release](https://github.com/twolinin/longphase/releases/download/v1.7.3/longphase_linux-x64.tar.xz) without compilation. 
 
 ```
-wget https://github.com/twolinin/longphase/releases/download/v1.7.3/longphase_linux-x64.tar.xz
+wget https://github.com/twolinin/longphase/releases/download/v2.0/longphase_linux-x64.tar.xz
 tar -xJf longphase_linux-x64.tar.xz
 ``` -->
 <!-- An executable file, longphase_linux-x64, can be executed directly. If 
@@ -173,6 +173,24 @@ longphase-s phase \
 ```
 - [The complete list of phase parameters](./docs/phase.md#the-complete-list-of-phase-parameters)
 - [Output of SNP and indel phasing](./docs/phase.md#output-of-snp-and-indel-phasing)
+
+
+#### DeepSomatic output support
+If your normal SNP VCF is produced by DeepSomatic, you can enable a built-in pre-processing step that
+keeps only GERMLINE variants and normalizes the GT field according to VAF before phasing. This is
+triggered by `--deepsomatic_output`.
+
+Example:
+```
+longphase-s phase \
+-s normal_snp_from_deepsomatic.vcf \
+-b alignment1.bam \
+-r reference.fasta \
+-t 8 \
+-o phased_prefix \
+--ont \
+--deepsomatic_output
+```
 
 
 ### Haplotagging command

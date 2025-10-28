@@ -588,7 +588,7 @@ void CigarParser::parsingCigar(
                         uint8_t *q = bam_get_seq(&ctx.aln);
                         char base_chr = seq_nt16_str[bam_seqi(q,query_pos + offset)];
                         std::string base(1, base_chr);
-                        VariantType variantType = VariantType::NONE_VAR;
+                        HaplotagVariantType::VariantType variantType = HaplotagVariantType::NONE_VAR;
                         if((*currentVariantIter).second.isExists(NORMAL)){
                             variantType = (*currentVariantIter).second.Variant[NORMAL].variantType;
                         }else if((*currentVariantIter).second.isExists(TUMOR)){
@@ -596,19 +596,19 @@ void CigarParser::parsingCigar(
                         }
                         bool isAlt = false;
                         if((*currentVariantIter).second.isExists(NORMAL)){
-                            if(variantType == VariantType::SNP){
+                            if(variantType == HaplotagVariantType::SNP){
                                 isAlt = base == (*currentVariantIter).second.Variant[NORMAL].allele.Alt;
-                            }else if(variantType == VariantType::INSERTION && i+1 < aln_core_n_cigar){
+                            }else if(variantType == HaplotagVariantType::INSERTION && i+1 < aln_core_n_cigar){
                                 isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 1;
-                            }else if(variantType == VariantType::DELETION && i+1 < aln_core_n_cigar){
+                            }else if(variantType == HaplotagVariantType::DELETION && i+1 < aln_core_n_cigar){
                                 isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2;
                             }    
                         }else if((*currentVariantIter).second.isExists(TUMOR)){
-                            if(variantType == VariantType::SNP){
+                            if(variantType == HaplotagVariantType::SNP){
                                 isAlt = base == (*currentVariantIter).second.Variant[TUMOR].allele.Alt;
-                            }else if(variantType == VariantType::INSERTION && i+1 < aln_core_n_cigar){
+                            }else if(variantType == HaplotagVariantType::INSERTION && i+1 < aln_core_n_cigar){
                                 isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 1;
-                            }else if(variantType == VariantType::DELETION && i+1 < aln_core_n_cigar){
+                            }else if(variantType == HaplotagVariantType::DELETION && i+1 < aln_core_n_cigar){
                                 isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2;
                             }    
 

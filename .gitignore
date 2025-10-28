@@ -41,3 +41,6 @@ jemalloc/*
 configure
 config.*
 autom4te.cache/
+
+# Ignore VS Code settings
+.vscode/

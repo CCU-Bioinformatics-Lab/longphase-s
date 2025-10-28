@@ -73,16 +73,16 @@ enum Nitrogenous
     G = 3,
     T = 4,
 };
-
-enum class VariantType
-{
-    NONE_VAR = 0,
-    SNP = 1,
-    INSERTION = 2,
-    DELETION = 3,
-    MNP = 4
-};
-
+namespace HaplotagVariantType{
+    enum VariantType
+    {
+        NONE_VAR = 0,
+        SNP = 1,
+        INSERTION = 2,
+        DELETION = 3,
+        MNP = 4
+    };
+}
 
 enum SnpHP
 {
@@ -118,7 +118,7 @@ struct VarData{
     std::string HP1;
     std::string HP2;
 
-    VariantType variantType;
+    HaplotagVariantType::VariantType variantType;
 
     GenomeType GT;
 
@@ -128,19 +128,19 @@ struct VarData{
 
     void setVariantType(){
         if(allele.Ref.length() == 1 && allele.Alt.length() == 1){
-            variantType = VariantType::SNP;
+            variantType = HaplotagVariantType::SNP;
         }else if(allele.Ref.length() == 1 && allele.Alt.length() > 1){
-            variantType = VariantType::INSERTION;
+            variantType = HaplotagVariantType::INSERTION;
         }else if(allele.Ref.length() > 1 && allele.Alt.length() == 1){
-            variantType = VariantType::DELETION;
+            variantType = HaplotagVariantType::DELETION;
         }else if((allele.Ref.length() > 1) && (allele.Ref.length() == allele.Alt.length())){
-            variantType = VariantType::MNP;
+            variantType = HaplotagVariantType::MNP;
         }else{
             throw std::runtime_error("(loadVariantType)Invalid allele: " + allele.Ref + " " + allele.Alt);
         }
     }
 
-    VarData(): PhasedSet(NONE_PHASED_SET), HP1(""), HP2(""), variantType(VariantType::NONE_VAR), GT(GenomeType::NONE_GT){}
+    VarData(): PhasedSet(NONE_PHASED_SET), HP1(""), HP2(""), variantType(HaplotagVariantType::NONE_VAR), GT(GenomeType::NONE_GT){}
 };
 
 struct MultiGenomeVar{

@@ -204,13 +204,13 @@ void SomaticHaplotagProcess::displaySnpCounts(){
         auto chrVarIter = (*chrMultiVariants)[chrIter].begin();
         while(chrVarIter != (*chrMultiVariants)[chrIter].end()){
             if((*chrVarIter).second.isExists(TUMOR)){
-                if((*chrVarIter).second.Variant[TUMOR].variantType == VariantType::SNP){
+                if((*chrVarIter).second.Variant[TUMOR].variantType == HaplotagVariantType::SNP){
                     tumor_snp_count++;
                 }
-                if((*chrVarIter).second.Variant[TUMOR].variantType == VariantType::INSERTION){
+                if((*chrVarIter).second.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
                     tumor_insert_count++;
                 }
-                if((*chrVarIter).second.Variant[TUMOR].variantType == VariantType::DELETION){
+                if((*chrVarIter).second.Variant[TUMOR].variantType == HaplotagVariantType::DELETION){
                     tumor_delete_count++;
                 }
             }
