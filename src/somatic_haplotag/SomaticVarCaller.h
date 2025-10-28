@@ -100,11 +100,10 @@ struct SomaticVarFilterParams
         , zScore_maxThr(0.0)
         , DenseAlt_condition1_thr(0.5)
         , DenseAlt_condition2_thr(0.6)
-        , DenseAlt_sameCount_minThr(2) {}
+        , DenseAlt_sameCount_minThr(3) {}
 };
 
 struct VariantBases{
-    int targetCount;
     std::map<int, int> offsetDiffRefCount; //offset, diff ref count
 };
 
@@ -152,8 +151,8 @@ struct ReadVarHpCount{
     int readLength;
     std::map<int, int> norCountPS;
     
-    // 儲存每條read在每個position的offsetBase資訊
-    std::map<int, std::vector<std::pair<int, char>>> posOffsetBaseMap;  // position -> offsetBase vector
+    // store position and baseHP pairs for each variant on this read
+    std::vector<std::pair<int, int>> posHpPairs; // <position(1-based), baseHP>
     
     ReadVarHpCount(): HP1(0), HP2(0), HP3(0), HP4(0), readIDcount(0), hpResult(0), startPos(0), endPos(0), readLength(0){}
 };
@@ -217,6 +216,7 @@ namespace tumor_normal_analysis{
      * Computes VAF, depth ratios, and haplotype imbalance metrics
      * @param baseInfo Base information structure to update
      * @param tumorAltBase Alternative base in tumor sample
+     * @param varType Variant type
      */
     void calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase, VariantType varType);
 };
@@ -568,6 +568,13 @@ class SomaticVarCaller{
         void writeSomaticVarCallingLog(const CallerContext &ctx, const SomaticVarFilterParams &somaticParams, const std::vector<std::string> &chrVec
                                      , std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
         
+        /**
+         * @brief Write detailed filter evaluation log per somatic position
+         * @param logFileName Output log file name
+         * @param chrVec Chromosome list
+         */
+        void writeSomaticFilterLog(const std::string logFileName, const std::vector<std::string> &chrVec);
+        
         
         /**
          * @brief Write dense tumor SNP interval log
@@ -575,6 +582,17 @@ class SomaticVarCaller{
          * @param chrVec Vector of chromosome names
          */
         void writeDenseTumorSnpIntervalLog(const std::string logFileName, const std::vector<std::string> &chrVec);
+
+        /**
+         * @brief 輸出每條 read 的HP結果與其覆蓋到的變異之 baseHP 清單
+         * @param logFileName 輸出檔名
+         * @param chrVec 染色體列表
+         */
+        void writeReadHpLog(const std::string logFileName, const std::vector<std::string> &chrVec);
+
+        // 其他詳細過濾記錄輸出（已存在於 cpp，補宣告）
+        void writeReadCountFilterLog(const std::string logFileName, const std::vector<std::string> &chrVec, const SomaticVarFilterParams &somaticParams);
+        void writeMessyReadFilterLog(const std::string logFileName, const std::vector<std::string> &chrVec, const SomaticVarFilterParams &somaticParams);
 
         /**
          * @brief Release allocated memory

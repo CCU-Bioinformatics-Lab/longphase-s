@@ -263,20 +263,33 @@ struct SomaticData{
     int intervalSnpCount;
     int minDistance;
     bool inDenseTumorInterval;
+
+    // dense alt filter information
+    int denseAltSameCount;
+    
+    // per-filter flags (somatic feature filter)
+    bool filteredByTINC;
+    bool filteredByMessyRead;
+    bool filteredByReadCount;
+    bool filteredByHapConsistency;
+    bool filteredByVariantCluster;
+    bool filteredByDenseAlt;
     
     // filter out by somatic feature filter
     bool isFilterOut;
-
+  
     //readHp, count
     std::map<int, int> somaticReadHpCount;
     std::array<std::vector<std::pair<int, char>>, 2> PosSomaticOffsetBase;//0: ref, 1: alt
-
+    std::array<int, 2> alleleCount;//0: ref, 1: alt
     SomaticData(): totalCleanHP3Read(0), pure_H1_1_read(0), pure_H2_1_read(0), pure_H3_read(0), Mixed_HP_read(0), unTag(0)
              , CaseReadCount(0), pure_H1_1_readRatio(0.0), pure_H2_1_readRatio(0.0), pure_H3_readRatio(0.0), Mixed_HP_readRatio(0.0)
              , base(), GTtype(""), somaticHp4Base(Nitrogenous::UNKOWN), somaticHp5Base(Nitrogenous::UNKOWN), somaticHp4BaseCount(0), somaticHp5BaseCount(0)
              , isHighConSomaticSNP(false), somaticReadDeriveByHP(0), shannonEntropy(0.0), homopolymerLength(0)
              , statisticPurity(false), allelicImbalanceRatio(0.0), somaticHaplotypeImbalanceRatio(0.0)
              , meanAltCountPerVarRead(0.0), zScore(0.0), intervalSnpCount(0), minDistance(0), inDenseTumorInterval(false)
+             , denseAltSameCount(0)
+             , filteredByTINC(false), filteredByMessyRead(false), filteredByReadCount(false), filteredByHapConsistency(false), filteredByVariantCluster(false), filteredByDenseAlt(false)
              , isFilterOut(false), somaticReadHpCount(std::map<int, int>()), PosSomaticOffsetBase({std::vector<std::pair<int, char>>(), std::vector<std::pair<int, char>>()}){}
 };
 

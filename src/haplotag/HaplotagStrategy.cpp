@@ -315,31 +315,21 @@ int GermlineHaplotagStrategy::judgeReadHap(
 void SomaticJudgeHapStrategy::judgeSomaticSnpHap(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, bool& isAlt){
     int curPos = (*currentVariantIter).first;
     auto& curVar = (*currentVariantIter).second;
-
     // normal & tumor SNP at the current position (base on normal phased SNPs)
     // both normal and tumor samples that do not exist in the high-confidence set
-    if(curVar.isExists(NORMAL) && curVar.isExists(TUMOR)){
-        // the tumor & normal SNP GT are phased heterozygous 
-        if((curVar.Variant[NORMAL].GT == GenomeType::PHASED_HETERO) && 
-            (curVar.Variant[TUMOR].GT == GenomeType::PHASED_HETERO)){ 
-            judgeNormalSnpHap(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
-
-        }
-        //the normal SNP GT is phased heterozgous & the tumor SNP GT is unphased heterozgous 
-        else if((curVar.Variant[NORMAL].GT == GenomeType::PHASED_HETERO) && 
-                (curVar.Variant[TUMOR].GT == GenomeType::UNPHASED_HETERO)){   
-            judgeNormalSnpHap(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
-
-        }
-        //the normal SNP GT is phased heterozgous & the tumor SNP GT is homozygous 
-        else if((curVar.Variant[NORMAL].GT == GenomeType::PHASED_HETERO) && 
-                (curVar.Variant[TUMOR].GT == GenomeType::UNPHASED_HOMO)){ 
-            judgeNormalSnpHap(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
-        }
+   
     // only normal SNP at the current position
-    }else if(curVar.isExists(NORMAL)){
+    if(curVar.isExists(NORMAL)){
         // the normal SNP GT is phased heterozgous SNP
         if((curVar.Variant[NORMAL].GT == GenomeType::PHASED_HETERO)){
+            if(curVar.Variant[NORMAL].variantType == VariantType::DELETION || curVar.Variant[NORMAL].variantType == VariantType::INSERTION){
+                if(isAlt){
+                    base = curVar.Variant[NORMAL].allele.Alt;
+                }
+                else{
+                    base = curVar.Variant[NORMAL].allele.Ref;
+                }
+            }
             judgeNormalSnpHap(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
         }
     // only tumor SNP at the current position

@@ -613,7 +613,6 @@ void CigarParser::parsingCigar(
                             }    
 
                         }
-
                         processMatchOperation(length, cigar, i, aln_core_n_cigar, base, isAlt, offset);                        
                     }
                     currentVariantIter++;

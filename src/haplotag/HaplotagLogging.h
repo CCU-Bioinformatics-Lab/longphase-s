@@ -145,6 +145,14 @@ class ReadHpDistriLog{
          * @param chrVec Vector of chromosome names to process
          */
         void removeNotDeriveByH1andH2pos(const std::vector<std::string> &chrVec);
+
+        /**
+         * @brief Write DenseAlt filter log
+         * @param logFileName Output file name
+         * @param chrVec Vector of chromosome names to process
+         * @param chrPosSomaticInfo Map of chromosome to position to somatic data
+         */
+        void writeDenseAltFilterLog(const std::string logFileName, const std::vector<std::string> &chrVec, const std::map<std::string, std::map<int, SomaticData>> &chrPosSomaticInfo);
 };
 
 /**
