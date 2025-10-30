@@ -176,14 +176,14 @@ longphase-s phase \
 
 
 #### DeepSomatic output support
-If your normal SNP VCF is produced by DeepSomatic, you can enable a built-in pre-processing step that
+If your SNP VCF is produced by DeepSomatic, you can enable a built-in pre-processing step that
 keeps only GERMLINE variants and normalizes the GT field according to VAF before phasing. This is
 triggered by `--deepsomatic_output`.
 
 Example:
 ```
 longphase-s phase \
--s normal_snp_from_deepsomatic.vcf \
+-s snp_from_deepsomatic.vcf \
 -b alignment1.bam \
 -r reference.fasta \
 -t 8 \
