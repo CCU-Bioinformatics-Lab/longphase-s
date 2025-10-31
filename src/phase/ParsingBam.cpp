@@ -3,6 +3,8 @@
 #include <string.h>
 #include <sstream>
 #include <cmath>
+#include <limits>
+#include <algorithm>
 
 
 // vcf parser modify from 
@@ -659,8 +661,7 @@ void SnpParser::preprocessDeepsomaticVCF(std::string inputFile, std::string outp
         exit(1);
     }
     
-    const double threshold_het = 0.3;
-    const double threshold_hom = 0.7;
+    
     std::string line;
     
     while(std::getline(inputVcf, line)){
@@ -712,29 +713,112 @@ void SnpParser::preprocessDeepsomaticVCF(std::string inputFile, std::string outp
             sample_values.push_back(sample_value);
         }
         
-        // Adjust GT based on VAF
-        if(vaf_index >= 0 && vaf_index < (int)sample_values.size() && 
-           gt_index >= 0 && gt_index < (int)sample_values.size()){
-            
-            double vaf = std::stod(sample_values[vaf_index]);
-            
-            // Adjust GT based on VAF thresholds but keep all GERMLINE variants
-            if(vaf < threshold_het){
-                // 0/0 - homozygous reference
-                sample_values[gt_index] = "0/0";
-            } else if(vaf >= threshold_het && vaf < threshold_hom){
-                // 0/1 - heterozygous
-                sample_values[gt_index] = "0/1";
-            } else {
-                // 1/1 - homozygous alternate
-                sample_values[gt_index] = "1/1";
+        // Adjust GT based on VAF/AD (multi-allelic aware)
+        if(gt_index >= 0 && gt_index < (int)sample_values.size()){
+            // Determine number of ALT alleles
+            int alt_count = 0;
+            if (!fields[4].empty() && fields[4] != ".") {
+                std::stringstream alt_ss(fields[4]);
+                std::string alt_tok;
+                while (std::getline(alt_ss, alt_tok, ',')) {
+                    if(!alt_tok.empty()) alt_count++;
+                }
             }
-            
-            // Reconstruct sample field
-            fields[9] = "";
-            for(size_t i = 0; i < sample_values.size(); i++){
-                if(i > 0) fields[9] += ":";
-                fields[9] += sample_values[i];
+            int allele_count = alt_count + 1; // include REF
+
+            // Locate AD index if present
+            int ad_index = -1;
+            {
+                std::istringstream fmt_scan(format);
+                std::string fitem; int idx = 0;
+                while(std::getline(fmt_scan, fitem, ':')){
+                    if(fitem == "AD") { ad_index = idx; }
+                    idx++;
+                }
+            }
+
+            // Build observed allele fractions: order [REF, ALT1, ALT2, ...]
+            std::vector<double> observedFractions;
+            observedFractions.reserve(std::max(allele_count, 1));
+            bool haveObserved = false;
+
+            // Prefer AD if available and well-formed
+            if(ad_index >= 0 && ad_index < (int)sample_values.size()){
+                std::vector<long long> ad_counts;
+                std::stringstream ad_ss(sample_values[ad_index]);
+                std::string tok;
+                while(std::getline(ad_ss, tok, ',')){
+                    if(tok == "." || tok.empty()) { ad_counts.push_back(0); }
+                    else {
+                        try { ad_counts.push_back(std::stoll(tok)); }
+                        catch(...) { ad_counts.push_back(0); }
+                    }
+                }
+                long long ad_sum = 0;
+                for(long long v : ad_counts) ad_sum += v;
+                if(ad_sum > 0 && (int)ad_counts.size() == allele_count){
+                    for(long long v : ad_counts) observedFractions.push_back((double)v / (double)ad_sum);
+                    haveObserved = true;
+                }
+            }
+
+            // Fallback to VAF if AD not usable
+            if(!haveObserved && vaf_index >= 0 && vaf_index < (int)sample_values.size()){
+                std::vector<double> alt_vafs;
+                std::stringstream vaf_ss(sample_values[vaf_index]);
+                std::string tok;
+                while(std::getline(vaf_ss, tok, ',')){
+                    if(tok == "." || tok.empty()) continue;
+                    try { alt_vafs.push_back(std::stod(tok)); }
+                    catch(...) { /* skip */ }
+                }
+                if(alt_count == (int)alt_vafs.size() && alt_count >= 1){
+                    double sum_alt = 0.0;
+                    for(double v : alt_vafs) sum_alt += v;
+                    double ref_frac = std::max(0.0, 1.0 - sum_alt);
+                    observedFractions.clear();
+                    observedFractions.push_back(ref_frac);
+                    for(double v : alt_vafs) observedFractions.push_back(v);
+                    haveObserved = true;
+                }
+            }
+
+            // If no observed fractions, skip adjustment
+            if(haveObserved && allele_count >= 1){
+                // Enumerate all diploid genotype combinations a<=b in [0..allele_count-1]
+                int best_a = 0, best_b = 0;
+                double best_cost = std::numeric_limits<double>::infinity();
+                for(int a = 0; a < allele_count; ++a){
+                    for(int b = a; b < allele_count; ++b){
+                        std::vector<double> expected(allele_count, 0.0);
+                        if(a == b){
+                            expected[a] = 1.0;
+                        } else {
+                            expected[a] = 0.5;
+                            expected[b] = 0.5;
+                        }
+                        // squared error across alleles
+                        double cost = 0.0;
+                        for(int i = 0; i < allele_count; ++i){
+                            double diff = observedFractions[i] - expected[i];
+                            cost += diff * diff;
+                        }
+                        if(cost < best_cost){
+                            best_cost = cost;
+                            best_a = a;
+                            best_b = b;
+                        }
+                    }
+                }
+                // Write GT like a/b (unphased)
+                sample_values[gt_index] = std::to_string(best_a) + "/" + std::to_string(best_b);
+
+                // Reconstruct sample field
+                fields[9] = "";
+                for(size_t i = 0; i < sample_values.size(); i++){
+                    if(i > 0) fields[9] += ":";
+                    fields[9] += sample_values[i];
+                }
             }
         }
         
