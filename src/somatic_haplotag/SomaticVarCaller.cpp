@@ -179,7 +179,7 @@ void ExtractNorDataChrProcessor::postProcess(
         auto curVar = currentVariants[(*currentPosIter).first].Variant[TUMOR];
 
         // current variant is SNP
-        if(curVar.variantType == VariantType::SNP){
+        if(curVar.variantType == HaplotagVariantType::SNP){
             std::string& tumAltBase = curVar.allele.Alt;
 
             // calculate the base information of the tumor SNP
@@ -213,7 +213,7 @@ void ExtractNorDataCigarParser::processMatchOperation(int& length, uint32_t* cig
         auto curVar = (*currentVariantIter).second.Variant[TUMOR];
         
         // the variant is SNP
-        if(curVar.variantType == VariantType::SNP){
+        if(curVar.variantType == HaplotagVariantType::SNP){
             //record tumor SNP position
             tumVarPosVec.push_back(curPos);
 
@@ -221,7 +221,7 @@ void ExtractNorDataCigarParser::processMatchOperation(int& length, uint32_t* cig
             countBaseNucleotide(variantBase[curPos], base, ctx.aln, mappingQualityThr);
         }
         // the indel(deletion) SNP position is the start position, and the deletion occurs at the next position
-        else if(curVar.variantType == VariantType::DELETION){
+        else if(curVar.variantType == HaplotagVariantType::DELETION){
             // the indel SNP start position is at the end of the deletion, and the next cigar operator is deletion
             if(curPos == (ref_pos + length - 1) && bam_cigar_op(cigar[i+1]) == 2 && i+1 < aln_core_n_cigar){
 
@@ -250,11 +250,11 @@ void ExtractNorDataCigarParser::processDeletionOperation(int& length, uint32_t* 
         tumVarPosVec.push_back(curPos);
 
         // the variant is SNP
-        if(curVar.variantType == VariantType::SNP){
+        if(curVar.variantType == HaplotagVariantType::SNP){
             countDeletionBase(variantBase[curPos]);
         }
         // the variant is deletion
-        else if(curVar.variantType == VariantType::DELETION){
+        else if(curVar.variantType == HaplotagVariantType::DELETION){
 
         }
     }
@@ -487,7 +487,7 @@ void ExtractTumDataChrProcessor::postProcess( const std::string &chr, std::map<i
         auto curVar = currentVariants[(*somaticVarIter).first].Variant[TUMOR];
 
         // current variant is SNP
-        if (curVar.variantType == VariantType::SNP) {
+        if (curVar.variantType == HaplotagVariantType::SNP) {
 
             std::string RefBase = curVar.allele.Ref;
             std::string AltBase = curVar.allele.Alt;
@@ -588,7 +588,7 @@ void ExtractTumDataCigarParser::processMatchOperation(int& length, uint32_t* cig
 
         auto curVar = (*currentVariantIter).second.Variant[TUMOR];
 
-        if(curVar.variantType == VariantType::SNP){
+        if(curVar.variantType == HaplotagVariantType::SNP){
             //counting current tumor SNP base and depth           
             countBaseNucleotide(somaticPosInfo[(*currentVariantIter).first].base, base, ctx.aln, mappingQualityThr);
         }
@@ -603,11 +603,11 @@ void ExtractTumDataCigarParser::processDeletionOperation(int& length, uint32_t* 
 
         int curPos = (*currentVariantIter).first;
 
-        if(curVar.variantType == VariantType::SNP){
+        if(curVar.variantType == HaplotagVariantType::SNP){
             countDeletionBase(somaticPosInfo[curPos].base);
         }
         // the indel SNP start position isn't at the end of the deletion
-        else if(curVar.variantType == VariantType::DELETION){
+        else if(curVar.variantType == HaplotagVariantType::DELETION){
 
         }
     }
@@ -913,7 +913,7 @@ void SomaticVarCaller::somaticFeatureFilter(const SomaticVarFilterParams &somati
         auto curVar = currentChrVariants[(*somaticVarIter).first].Variant[TUMOR];
 
         // current variant is SNP
-        if (curVar.variantType == VariantType::SNP) {
+        if (curVar.variantType == HaplotagVariantType::SNP) {
                 
             //TINC filter parameter
             float norVAF_maxThr = somaticParams.norVAF_maxThr;

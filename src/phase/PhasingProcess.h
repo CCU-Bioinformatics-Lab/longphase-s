@@ -18,18 +18,23 @@ struct PhasingParameters
     bool isONT;
     bool isPB;
     bool phaseIndel;
+    int indelQuality;  // Indel quality filter threshold, default is 0 (disabled)
     
     int connectAdjacent;
     int mappingQuality;
-
+    double mismatchRate;
+    
     int baseQuality;
     double edgeWeight;
-
+    
     double snpConfidence;
     double readConfidence;
     
     double edgeThreshold;
     double overlapThreshold;
+    bool deepsomaticOutput;
+    int svWindow;
+    double svThreshold; 
     
     std::string version;
     std::string command;

@@ -21,30 +21,38 @@ static const char *CORRECT_USAGE_MESSAGE =
 "   -t, --threads=Num                      number of thread. default:1\n"
 "   -o, --out-prefix=NAME                  prefix of phasing result. default: result\n"
 "   --indels                               phase small indel. default: False\n"
+"   --indelQuality=Num                     filter indels with QUAL less than threshold (only effective when --indels is enabled). default: 0\n"
 "   --dot                                  each contig/chromosome will generate dot file. \n\n"
 
 "parse alignment arguments:\n"
-"   -q, --mappingQuality=Num               filter alignment if mapping quality is lower than threshold. default:1\n\n"
+"   -q, --mappingQuality=Num               filter alignment if mapping quality is lower than threshold. default:1\n"
+"   -x, --mismatchRate=Num                 mark reads as false if mismatchRate of them are higher than threshold. default:3\n\n"
 
 "phasing graph arguments:\n"
 "   -p, --baseQuality=[0~90]               change edge's weight to --edgeWeight if base quality is lower than the threshold. default:12\n"
 "   -e, --edgeWeight=[0~1]                 if one of the bases connected by the edge has a quality lower than --baseQuality\n"
 "                                          its weight is reduced from the normal 1. default:0.1\n"
-"   -a, --connectAdjacent=Num              connect adjacent N SNPs. default:20\n"
+"   -a, --connectAdjacent=Num              connect adjacent N SNPs. default:35\n"
 "   -d, --distance=Num                     phasing two variant if distance less than threshold. default:300000\n"
 "   -1, --edgeThreshold=[0~1]              give up SNP-SNP phasing pair if the number of reads of the \n"
 "                                          two combinations are similar. default:0.7\n"
-"   -L, --overlapThreshold=[0~1]           filtering different alignments of the same read if there is overlap. default:0.2 \n"
+"   -L, --overlapThreshold=[0~1]           filtering different alignments of the same read if there is overlap. default:0.2\n"
+"   -w, --sv-window=NUM                    window size for evaluating surrounding CIGAR operations. default:20\n"
+"   -h, --sv-threshold=[0~1]               relative difference threshold for read to support a SV. default:0.10\n\n"
 
 "haplotag read correction arguments:\n"
 "   -m, --readConfidence=[0.5~1]           The confidence of a read being assigned to any haplotype. default:0.65\n"
 "   -n, --snpConfidence=[0.5~1]            The confidence of assigning two alleles of a SNP to different haplotypes. default:0.75\n"
 
+"deepsomatic arguments:\n"
+"   --deepsomatic_output                   Enable special processing for DeepSomatic output VCF.\n"
+"                                          Filter only GERMLINE variants and adjust GT based on VAF.\n"
+
 "\n";
 
-static const char* shortopts = "s:b:o:t:r:d:1:a:q:p:e:n:m:L:";
+static const char* shortopts = "s:b:o:t:r:d:1:a:q:x:p:e:n:m:L:w:h:";
 
-enum { OPT_HELP = 1 , DOT_FILE, SV_FILE, MOD_FILE, IS_ONT, IS_PB, PHASE_INDEL, VERSION};
+enum { OPT_HELP = 1 , DOT_FILE, SV_FILE, MOD_FILE, IS_ONT, IS_PB, PHASE_INDEL, INDEL_QUALITY,DEEPSOMATIC_OUTPUT, VERSION};
 
 static const struct option longopts[] = { 
     { "help",                 no_argument,        NULL, OPT_HELP },
@@ -53,6 +61,8 @@ static const struct option longopts[] = {
     { "pb",                   no_argument,        NULL, IS_PB }, 
     { "version",              no_argument,        NULL, VERSION }, 
     { "indels",               no_argument,        NULL, PHASE_INDEL },   
+    { "indelQuality",         required_argument,  NULL, INDEL_QUALITY },
+    { "deepsomatic_output",   no_argument,        NULL, DEEPSOMATIC_OUTPUT },   
     { "sv-file",              required_argument,  NULL, SV_FILE },  
     { "mod-file",             required_argument,  NULL, MOD_FILE },
     { "reference",            required_argument,  NULL, 'r' },
@@ -64,11 +74,14 @@ static const struct option longopts[] = {
     { "edgeThreshold",        required_argument,  NULL, '1' },
     { "connectAdjacent",      required_argument,  NULL, 'a' },
     { "mappingQuality",       required_argument,  NULL, 'q' },
+    { "mismatchRate",         required_argument,  NULL, 'x' },
     { "baseQuality",          required_argument,  NULL, 'p' },
     { "edgeWeight",           required_argument,  NULL, 'e' },
     { "snpConfidence",        required_argument,  NULL, 'n' },
     { "readConfidence",       required_argument,  NULL, 'm' },
     { "overlapThreshold",     required_argument,  NULL, 'L' },
+    { "svWindow",             required_argument,  NULL, 'w' },
+    { "svThreshold",          required_argument,  NULL, 'h' },
     { NULL, 0, NULL, 0 }
 };
 
@@ -76,6 +89,7 @@ namespace opt
 {
     static int numThreads = 1;
     static int distance = 300000;
+    static bool deepsomaticOutput = false;
     static std::string snpFile="";
     static std::string svFile="";
     static std::string modFile="";
@@ -86,19 +100,18 @@ namespace opt
     static bool isONT=false;
     static bool isPB=false;
     static bool phaseIndel=false;
-    
-    static int connectAdjacent = 20;
+    static int indelQuality = 0;  // Indel quality filter threshold, default is 0 (disabled)
+    static int connectAdjacent = 35;
     static int mappingQuality = 1;
-
+    static double mismatchRate = 3;
     static int baseQuality = 12;
     static double edgeWeight = 0.1 ;
-
     static double snpConfidence  = 0.75;
     static double readConfidence = 0.65;
-    
     static double edgeThreshold = 0.7;
     static double overlapThreshold = 0.2;
-
+    static int svWindow = 20;
+    static double svThreshold = 0.1;
     static std::string command;
 }
 
@@ -120,10 +133,13 @@ void PhasingOptions(int argc, char** argv)
         case '1': arg >> opt::edgeThreshold; break; 
         case 'a': arg >> opt::connectAdjacent; break;
         case 'q': arg >> opt::mappingQuality; break;
+        case 'x': arg >> opt::mismatchRate; break;
         case 'p': arg >> opt::baseQuality; break;
         case 'e': arg >> opt::edgeWeight; break;
         case 'n': arg >> opt::snpConfidence; break;
         case 'm': arg >> opt::readConfidence; break;
+        case 'w': arg >> opt::svWindow; break;
+        case 'h': arg >> opt::svThreshold; break;
         case 'L': arg >> opt::overlapThreshold; break;
         case 'b': {
             std::string bamFile;
@@ -133,6 +149,8 @@ void PhasingOptions(int argc, char** argv)
         case SV_FILE:  arg >> opt::svFile; break; 
         case MOD_FILE: arg >> opt::modFile; break; 
         case PHASE_INDEL: opt::phaseIndel=true; break; 
+        case INDEL_QUALITY: arg >> opt::indelQuality; break;
+        case DEEPSOMATIC_OUTPUT: opt::deepsomaticOutput=true; break; 
         case DOT_FILE: opt::generateDot=true; break;
         case IS_ONT: opt::isONT=true; break;
         case IS_PB: opt::isPB=true; break;
@@ -219,6 +237,27 @@ void PhasingOptions(int argc, char** argv)
                   << "\n please check -m, --mappingQuality=Num\n";
         die = true;
     }
+    
+    if ( opt::mismatchRate < 0 ){
+        std::cerr << SUBPROGRAM " invalid mismatchRate. value: " 
+                  << opt::mismatchRate 
+                  << "\n please check -x, --mismatchRate=Num\n";
+        die = true;
+    }
+    
+    if ( opt::baseQuality < 0 ){
+        std::cerr << SUBPROGRAM " invalid baseQuality. value: "
+                  << opt::baseQuality
+                  << "\n please check -m, --mappingQuality=[0~90]\n";
+        die = true;
+    }
+
+    if ( opt::edgeWeight < 0 ){
+        std::cerr << SUBPROGRAM " invalid edgeWeight. value: "
+                  << opt::edgeWeight
+                  << "\n please check -e, --edgeWeight=[0~1]\n";
+        die = true;
+    }
 
     if ( opt::baseQuality < 0 ){
         std::cerr << SUBPROGRAM " invalid baseQuality. value: "
@@ -262,6 +301,22 @@ void PhasingOptions(int argc, char** argv)
         die = true;
     }
 
+    if( opt::svFile != ""){
+        if ( opt::svWindow < 0 ){
+            std::cerr << SUBPROGRAM " invalid svWindow. value: " 
+                    << opt::svWindow
+                    << "\n please check -w, --sv-window=NUM\n";
+            die = true;
+        }
+        
+        if ( opt::svThreshold < 0 || opt::svThreshold > 1 ){
+            std::cerr << SUBPROGRAM " invalid svThreshold. value: " 
+                    << opt::svThreshold
+                    << "\n please check -h, --sv-threshold=[0~1]\n";
+            die = true;
+        }
+    }
+    
     if (die)
     {
         std::cerr << "\n" << CORRECT_USAGE_MESSAGE;
@@ -289,10 +344,12 @@ int PhasingMain(int argc, char** argv, std::string in_version)
     ecParams.isONT=opt::isONT;
     ecParams.isPB=opt::isPB;
     ecParams.phaseIndel=opt::phaseIndel;
+    ecParams.indelQuality=opt::indelQuality;
     
     ecParams.connectAdjacent=opt::connectAdjacent;
     ecParams.mappingQuality=opt::mappingQuality;
-
+    ecParams.mismatchRate=opt::mismatchRate;
+    
     ecParams.baseQuality=opt::baseQuality;
     ecParams.edgeWeight=opt::edgeWeight;
 
@@ -301,6 +358,9 @@ int PhasingMain(int argc, char** argv, std::string in_version)
     
     ecParams.snpConfidence=opt::snpConfidence;
     ecParams.readConfidence=opt::readConfidence;
+    ecParams.deepsomaticOutput=opt::deepsomaticOutput;
+    ecParams.svWindow=opt::svWindow;
+    ecParams.svThreshold=opt::svThreshold;
     
     ecParams.version=in_version;
     ecParams.command=opt::command;
