@@ -1,5 +1,5 @@
 FROM ubuntu:20.04
-LABEL maintainer="https://github.com/ming-en-ho/longphase-s"
+LABEL maintainer="https://github.com/CCU-Bioinformatics-Lab/longphase-s"
 LABEL version="1.0.0"
 
 RUN apt-get update && \
@@ -7,7 +7,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* 
 
 WORKDIR /opt/longphase-s
-RUN git clone https://github.com/ming-en-ho/longphase-s.git /opt/longphase-s && \
+RUN git clone https://github.com/CCU-Bioinformatics-Lab/longphase-s.git /opt/longphase-s && \
     autoreconf -i && \
     ./configure && \
     make -j 4 && \

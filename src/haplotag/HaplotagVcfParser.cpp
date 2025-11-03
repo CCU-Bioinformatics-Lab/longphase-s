@@ -336,9 +336,38 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
 
                 VarData varData;
                 varData.allele.Ref = fields[3];
-                varData.allele.Alt = fields[4];
+
+                // handle multi-allelic ALT by GT: only support allele index 0/1
+                // if ALT contains comma and GT refers to higher index (e.g., '2'), skip
+                std::string altField = fields[4];
+                bool hasCommaAlt = (altField.find(",") != std::string::npos);
+                // determine whether GT uses allele '1' or higher
+                bool gtHasTwo = (fields[9].find('/' ) != std::string::npos && (fields[9][modifu_start] == '2' || fields[9][modifu_start+2] == '2'))
+                             || (fields[9].find('|' ) != std::string::npos && (fields[9][modifu_start] == '2' || fields[9][modifu_start+2] == '2'))
+                             || (fields[9].find('2' ) != std::string::npos);
+
+                if(hasCommaAlt){
+                    if(gtHasTwo){
+                        // unsupported higher-index ALT -> skip this record
+                        return;
+                    }
+                    // pick the first ALT (index 1) for 0/1 or 1/1 cases
+                    varData.allele.Alt = altField.substr(0, altField.find(","));
+                }else{
+                    varData.allele.Alt = altField;
+                }
+
                 varData.GT = GenomeType::PHASED_HETERO;
                 varData.setVariantType();
+                // skip tumor INDELs longer than 100bp
+                if(Info.sample == TUMOR){
+                    if(varData.variantType == HaplotagVariantType::INSERTION || varData.variantType == HaplotagVariantType::DELETION){
+                        int indelLen = std::abs((int)varData.allele.Alt.length() - (int)varData.allele.Ref.length());
+                        if(indelLen > 100){
+                            return;
+                        }
+                    }
+                }
                 
                 // Handle PS value (integer or string)
                 if(integerPS){
@@ -437,17 +466,30 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                 }
             }
         }
-        // record unphased tumor SNPs
-        else if((tagSample == Genome::TUMOR)){
+        // record unphased tumor SNPs (only when parsing tumor VCF)
+        else if(Info.sample == Genome::TUMOR){
             //homozygous SNPs
             if( fields[9][modifu_start] == '1' && fields[9][modifu_start+1] == '/' && fields[9][modifu_start+2] == '1' ){
                 if(parseSnpFile){
 
                     VarData varData;
                     varData.allele.Ref = fields[3];
-                    varData.allele.Alt = fields[4];
+                    // handle multi-allelic ALT: use first ALT for 1/1; if more alleles exist but GT>1, skip
+                    if(fields[4].find(",") != std::string::npos){
+                        // 1/1 implies first ALT allele
+                        varData.allele.Alt = fields[4].substr(0, fields[4].find(","));
+                    }else{
+                        varData.allele.Alt = fields[4];
+                    }
                     varData.GT = GenomeType::UNPHASED_HOMO;
                     varData.setVariantType();
+                    // skip tumor INDELs longer than 100bp
+                    if(varData.variantType == HaplotagVariantType::INSERTION || varData.variantType == HaplotagVariantType::DELETION){
+                        int indelLen = std::abs((int)varData.allele.Alt.length() - (int)varData.allele.Ref.length());
+                        if(indelLen > 100){
+                            return;
+                        }
+                    }
 
                     if(Info.sample == NORMAL){
                         chrMultiVariants[chr][pos].Variant[NORMAL] = varData;
@@ -461,10 +503,22 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
 
                     VarData varData;
                     varData.allele.Ref = fields[3];
-                    varData.allele.Alt = fields[4];
+                    // for 0/1 pick first ALT; if multi-allelic with higher index present, skip
+                    if(fields[4].find(",") != std::string::npos){
+                        varData.allele.Alt = fields[4].substr(0, fields[4].find(","));
+                    }else{
+                        varData.allele.Alt = fields[4];
+                    }
 
                     varData.GT = GenomeType::UNPHASED_HETERO;
                     varData.setVariantType();
+                    // skip tumor INDELs longer than 100bp
+                    if(varData.variantType == HaplotagVariantType::INSERTION || varData.variantType == HaplotagVariantType::DELETION){
+                        int indelLen = std::abs((int)varData.allele.Alt.length() - (int)varData.allele.Ref.length());
+                        if(indelLen > 100){
+                            return;
+                        }
+                    }
 
                     if(Info.sample == NORMAL){
                         chrMultiVariants[chr][pos].Variant[NORMAL] = varData;
