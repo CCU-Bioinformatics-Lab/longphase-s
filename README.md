@@ -89,10 +89,10 @@ installed. If you require setting up a virtual environment, we also
 provide a [Dockerfile](https://github.com/ming-en-ho/longphase-
 s/blob/somatic-develop/Dockerfile). -->
 
-Clone and compile using the following commands, and make sure that the environment has zlib installed. If you require setting up a virtual environment, we also provide a [Dockerfile](https://github.com/ming-en-ho/longphase-s/blob/somatic-develop/Dockerfile).
+Clone and compile using the following commands, and make sure that the environment has zlib installed. If you require setting up a virtual environment, we also provide a [Dockerfile](https://github.com/CCU-Bioinformatics-Lab/longphase-s/blob/somatic-develop/Dockerfile).
 
 ```
-git clone https://github.com/ming-en-ho/longphase-s.git
+git clone https://github.com/CCU-Bioinformatics-Lab/longphase-s.git
 cd longphase-s
 autoreconf -i
 ./configure
