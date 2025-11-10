@@ -8,7 +8,7 @@ constexpr const char *CORRECT_USAGE_MESSAGE =
 "required arguments:\n"
 "      -s, --snp-file=NAME             input phased normal sample SNP VCF file.\n"
 "      -b, --bam-file=NAME             input normal sample BAM file.\n"
-"      --tumor-snp-file=NAME           input tumor sample SNP VCF file.\n"
+"      --tumor-snv-file=NAME           input tumor sample SNV VCF file.\n"
 "      --tumor-bam-file=NAME           input tumor sample BAM file.\n"
 "      -r, --reference=NAME            reference FASTA.\n\n"
 "optional arguments:\n"
@@ -28,7 +28,7 @@ void PurityEstimOptDefiner::defineOptions(ArgumentManager& manager) {
     HaplotagOptionDefiner::defineOptions(manager);
 
     // somatic haplotag-specific options
-    manager.addOption({"tumor-snp-file", required_argument, NULL, TUM_SNP});
+    manager.addOption({"tumor-snv-file", required_argument, NULL, TUM_SNP});
     manager.addOption({"tumor-bam-file", required_argument, NULL, TUM_BAM});
 }
 
@@ -49,7 +49,7 @@ bool ParamsHandler<PurityEstimParameters>::loadArgument(PurityEstimParameters& p
         //load somatic haplotag options
         switch (opt)
         {
-            case SomaticHaplotagOption::TUM_SNP: arg >> params.tumorSnpFile; break;
+            case SomaticHaplotagOption::TUM_SNP: arg >> params.tumorSnvFile; break;
             case SomaticHaplotagOption::TUM_BAM: arg >> params.tumorBamFile; break;
             default: isLoaded = false; 
             break;
@@ -62,7 +62,7 @@ bool ParamsHandler<PurityEstimParameters>::validateFiles(PurityEstimParameters& 
     // validate base haplotag files
     bool isValid = ParamsHandler<HaplotagParameters>::validateFiles(params.basic, programName);
     // validate somatic haplotag files
-    isValid &= FileValidator::validateRequiredFile(params.tumorSnpFile, "tumor SNP file", programName);
+    isValid &= FileValidator::validateRequiredFile(params.tumorSnvFile, "tumor SNV file", programName);
     isValid &= FileValidator::validateRequiredFile(params.tumorBamFile, "tumor BAM file", programName);
     return isValid;
 }

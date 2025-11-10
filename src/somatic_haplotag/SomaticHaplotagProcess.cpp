@@ -18,7 +18,7 @@ void SomaticHaplotagProcess::printParamsMessage(){
     std::cerr<< "\n";
     std::cerr<< "[Input Files]\n";
     std::cerr<< "phased normal SNP file       : " << sParams.basic.snpFile << "\n";
-    std::cerr<< "tumor SNP file               : " << sParams.tumorSnpFile << "\n";
+    std::cerr<< "tumor SNV file               : " << sParams.tumorSnvFile << "\n";
     std::cerr<< "normal BAM file              : " << sParams.basic.bamFile << "\n";
     std::cerr<< "tumor BAM file               : " << sParams.tumorBamFile << "\n";
     std::cerr<< "reference file               : " << sParams.basic.fastaFile << "\n";
@@ -69,7 +69,7 @@ void SomaticHaplotagProcess::pipelineProcess()
 
     //somatic variant calling
     CallerContext ctx(sParams.basic.bamFile, sParams.tumorBamFile, 
-                    sParams.basic.snpFile, sParams.tumorSnpFile, 
+                    sParams.basic.snpFile, sParams.tumorSnvFile, 
                     sParams.basic.fastaFile);
 
     SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(sParams.callerCfg, sParams.basic.bamCfg, *chrVec);
@@ -83,7 +83,7 @@ void SomaticHaplotagProcess::pipelineProcess()
         std::time_t begin = time(NULL);
         vcfParser.setCommandLine(sParams.basic.bamCfg.command);
         vcfParser.setVersion(sParams.basic.bamCfg.version);
-        vcfParser.writingResultVCF(sParams.tumorSnpFile, vcfSet[Genome::TUMOR], *chrMultiVariants, sParams.basic.bamCfg.resultPrefix);
+        vcfParser.writingResultVCF(sParams.tumorSnvFile, vcfSet[Genome::TUMOR], *chrMultiVariants, sParams.basic.bamCfg.resultPrefix);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
     }
 
@@ -113,11 +113,11 @@ void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
     HaplotagProcess::parseVariantFiles(vcfParser);
 
     //load tumor snp vcf
-    if(sParams.tumorSnpFile != ""){
+    if(sParams.tumorSnvFile != ""){
         std::time_t begin = time(NULL);
-        std::cerr<< "parsing tumor SNP VCF ... ";
+        std::cerr<< "parsing tumor SNV VCF ... ";
         vcfParser.setParseSnpFile(true);
-        vcfParser.parsingVCF(sParams.tumorSnpFile, vcfSet[Genome::TUMOR], *chrMultiVariants);
+        vcfParser.parsingVCF(sParams.tumorSnvFile, vcfSet[Genome::TUMOR], *chrMultiVariants);
         vcfParser.reset();
         std::cerr<< difftime(time(NULL), begin) << "s\n";
     }
@@ -568,7 +568,7 @@ void SomaticHaplotagCigarParser::processDeletionOperation(int& length, uint32_t*
 
 void SomaticTagLog::addParamsMessage(){
     *tagReadLog << "##normalSnpFile:" << sParams.basic.snpFile << "\n"
-                << "##tumorSnpFile:" << sParams.tumorSnpFile << "\n"
+                << "##tumorSnvFile:" << sParams.tumorSnvFile << "\n"
                 << "##svFile:" << sParams.basic.svFile << "\n"
                 << "##tumorBamFile:" << sParams.tumorBamFile << "\n"
                 << "##bamFile:" << sParams.basic.bamFile << "\n"

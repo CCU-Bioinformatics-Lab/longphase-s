@@ -1375,7 +1375,7 @@ void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const
                  << "#   Somatic Variants Calling Log   #\n"
                  << "####################################\n";
     (*tagHP3Log) << "##normalSnpFile:"       << ctx.normalSnpFile                    << "\n"
-                 << "##tumorSnpFile:"        << ctx.tumorSnpFile                     << "\n" 
+                 << "##tumorSnvFile:"        << ctx.tumorSnvFile                     << "\n" 
                  << "##bamFile:"             << ctx.normalBamFile                    << "\n"
                  << "##tumorBamFile:"        << ctx.tumorBamFile                     << "\n" 
                  << "##resultPrefix:"        << bamCfg.resultPrefix        << "\n"

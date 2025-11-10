@@ -17,7 +17,7 @@ Usage:  haplotag [OPTION] ... READSFILE
       --help                          display this help and exit.
 
 require arguments:
-      -s, --snp-file=NAME             input SNP vcf file.
+      -s, --snv-file=NAME             input SNP vcf file.
       -b, --bam-file=NAME             input bam file.
       -r, --reference=NAME            reference fasta.
 optional arguments:

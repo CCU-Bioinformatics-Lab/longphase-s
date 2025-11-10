@@ -14,7 +14,7 @@ void PurityEstimProcess::printParamsMessage() {
     std::cerr<< "\n";
     std::cerr<< "[Input Files]\n";
     std::cerr<< "phased normal SNP file       : " << params.basic.snpFile << "\n";
-    std::cerr<< "tumor SNP file               : " << params.tumorSnpFile << "\n";
+    std::cerr<< "tumor SNV file               : " << params.tumorSnvFile << "\n";
     std::cerr<< "normal BAM file              : " << params.basic.bamFile << "\n";
     std::cerr<< "tumor BAM file               : " << params.tumorBamFile << "\n";
     std::cerr<< "reference file               : " << params.basic.fastaFile << "\n\n";
@@ -36,11 +36,11 @@ void PurityEstimProcess::parseVariantFiles(VcfParser& vcfParser) {
     HaplotagProcess::parseVariantFiles(vcfParser);
 
     //load tumor snp vcf
-    if(params.tumorSnpFile != ""){
+    if(params.tumorSnvFile != ""){
         std::time_t begin = time(NULL);
-        std::cerr<< "parsing tumor SNP VCF ... ";
+        std::cerr<< "parsing tumor SNV VCF ... ";
         vcfParser.setParseSnpFile(true);
-        vcfParser.parsingVCF(params.tumorSnpFile, vcfSet[Genome::TUMOR], *chrMultiVariants);
+        vcfParser.parsingVCF(params.tumorSnvFile, vcfSet[Genome::TUMOR], *chrMultiVariants);
         vcfParser.reset();
         std::cerr<< difftime(time(NULL), begin) << "s\n";
     }

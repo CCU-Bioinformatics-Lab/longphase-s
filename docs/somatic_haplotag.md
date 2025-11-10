@@ -20,7 +20,7 @@ In addition, the haplotype block of each read is stored in the PS tag (only for 
 longphase-s somatic_haplotag \
 -s phased_normal_snp.vcf \
 -b normal.bam \
---tumor-snp-file tumor_snp.vcf \
+--tumor-snv-file tumor_snv.vcf \
 --tumor-bam-file tumor.bam \
 -r reference.fasta \
 -t 8 \
@@ -61,7 +61,7 @@ Usage:  somatic_haplotag [OPTION] ... READSFILE
 required arguments:
       -s, --snp-file=NAME             input normal sample SNP VCF file.
       -b, --bam-file=NAME             input normal sample BAM file.
-      --tumor-snp-file=NAME           input tumor sample SNP VCF file.
+      --tumor-snv-file=NAME           input tumor sample SNV VCF file.
       --tumor-bam-file=NAME           input tumor sample BAM file for somatic haplotag.
       -r, --reference=NAME            reference FASTA.
 
@@ -126,7 +126,7 @@ All other information in the VCF file remains unchanged from the input tumor VCF
 
 ```
 ##longphase_s_version=1.0.0
-##commandline=longphase_s somatic_haplotag -s phased_normal.vcf -b normal.bam --tumor-snp-file 
+##commandline=longphase_s somatic_haplotag -s phased_normal.vcf -b normal.bam --tumor-snv-file 
 tumor.vcf --tumor-bam-file tumor.bam -r GRCh38_no_alt_analysis_set.fasta -t 64 -o tagged_tumor_bam --tagSupplementary -q 20 --output-somatic-vcf
 #CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO    FORMAT  SAMPLE
 ```

@@ -115,7 +115,7 @@ In addition, the haplotype block of each read is stored in the PS tag (only for 
 longphase-s somatic_haplotag \
 -s phased_normal_snp.vcf \
 -b normal.bam \
---tumor-snp-file tumor_snp.vcf \
+--tumor-snv-file tumor_snv.vcf \
 --tumor-bam-file tumor.bam \
 -r reference.fasta \
 -t 8 \
@@ -147,7 +147,7 @@ This command using tumor-normal pair BAM and VCF files, along with haplotype inf
 longphase-s estimate_purity \
 -s phased_normal_snp.vcf \
 -b normal.bam \
---tumor-snp-file tumor_snp.vcf \
+--tumor-snv-file tumor_snv.vcf \
 --tumor-bam-file tumor.bam \
 -r reference.fasta \
 -t 8 \
