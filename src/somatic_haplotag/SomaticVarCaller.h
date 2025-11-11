@@ -19,10 +19,10 @@ struct CallerContext
     std::string normalBamFile;
     std::string tumorBamFile;
     std::string normalSnpFile;
-    std::string tumorSnpFile;
+    std::string tumorSnvFile;
     std::string fastaFile;
-    CallerContext(std::string normalBamFile, std::string tumorBamFile, std::string normalSnpFile, std::string tumorSnpFile, std::string fastaFile)
-    :normalBamFile(normalBamFile), tumorBamFile(tumorBamFile), normalSnpFile(normalSnpFile), tumorSnpFile(tumorSnpFile), fastaFile(fastaFile){}
+    CallerContext(std::string normalBamFile, std::string tumorBamFile, std::string normalSnpFile, std::string tumorSnvFile, std::string fastaFile)
+    :normalBamFile(normalBamFile), tumorBamFile(tumorBamFile), normalSnpFile(normalSnpFile), tumorSnvFile(tumorSnvFile), fastaFile(fastaFile){}
 };
 
 /**

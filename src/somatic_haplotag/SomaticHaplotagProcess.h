@@ -13,7 +13,7 @@ struct SomaticHaplotagParameters
 {
     HaplotagParameters basic;
     // Somatic haplotag parameters
-    std::string tumorSnpFile;   
+    std::string tumorSnvFile;   
     std::string tumorBamFile;  
 
     // somatic benchmark parameters

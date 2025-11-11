@@ -9,7 +9,7 @@ struct PurityEstimParameters
 {
     HaplotagParameters basic;
     std::string tumorBamFile;
-    std::string tumorSnpFile;
+    std::string tumorSnvFile;
 };
 
 class PurityEstimProcess : public HaplotagProcess {
