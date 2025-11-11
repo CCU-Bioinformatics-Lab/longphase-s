@@ -29,16 +29,17 @@ void GermlineHaplotagStrategy::judgeSnpHap(
     std::map<int, MultiGenomeVar>::iterator &currentVariantIter,
     std::map<int, int>& hpCount,
     std::map<int, int>& variantsHP,
-    std::map<int, int>& countPS
+    std::map<int, int>& countPS,
+    bool& isAlt
 ){
     int curPos = (*currentVariantIter).first;
 
     // currentVariant is SNP
-    if( norVar.variantType == HaplotagVariantType::SNP ){
+    if( norVar.variantType == HaplotagVariantType::SNP){
         // Detected that the base of the read is either REF or ALT. 
-        if( (base == norVar.allele.Ref) || (base == norVar.allele.Alt) ){
+        if( (base == norVar.allele.Ref) || (base == norVar.allele.Alt) ){//if the base of the read is either REF or ALT
 
-
+            //std::cout << "base: " << base << " norVar.allele.Ref: " << norVar.allele.Ref << " norVar.allele.Alt: " << norVar.allele.Alt << std::endl;
             if(!norVar.isExistPhasedSet()){
                 std::cerr << "[ERROR] (judgeSnpHap) => can't find the position:" 
                           << " chr: " << chrName << "\t"
@@ -63,10 +64,10 @@ void GermlineHaplotagStrategy::judgeSnpHap(
     }
     // currentVariant is insertion
     else if( norVar.variantType == HaplotagVariantType::INSERTION && i+1 < aln_core_n_cigar){
+
         
         int hp1Length = norVar.HP1.length();
         int hp2Length = norVar.HP2.length();
-        
         if ( ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 1 ) {
             // hp1 occur insertion
             if( hp1Length != 1 && hp2Length == 1 ){
@@ -95,6 +96,7 @@ void GermlineHaplotagStrategy::judgeSnpHap(
     } 
     // currentVariant is deletion
     else if( norVar.variantType == HaplotagVariantType::DELETION && i+1 < aln_core_n_cigar) {
+
 
         int hp1Length = norVar.HP1.length();
         int hp2Length = norVar.HP2.length();
@@ -310,58 +312,76 @@ int GermlineHaplotagStrategy::judgeReadHap(
  * 
  * Determines haplotype assignment for SNPs in somatic samples
  */
-void SomaticJudgeHapStrategy::judgeSomaticSnpHap(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec){
+void SomaticJudgeHapStrategy::judgeSomaticSnpHap(std::map<int, MultiGenomeVar>::iterator &currentVariantIter, std::string chrName, std::string base, std::map<int, int> &hpCount, std::map<int, int> &norCountPS, std::map<int, int> &tumCountPS, std::map<int, int> *variantsHP, std::vector<int> *tumorAllelePosVec, bool& isAlt){
     int curPos = (*currentVariantIter).first;
     auto& curVar = (*currentVariantIter).second;
-
     // normal & tumor SNP at the current position (base on normal phased SNPs)
     // both normal and tumor samples that do not exist in the high-confidence set
-    if(curVar.isExists(NORMAL) && curVar.isExists(TUMOR)){
-        // the tumor & normal SNP GT are phased heterozygous 
-        if((curVar.Variant[NORMAL].GT == GenomeType::PHASED_HETERO) && 
-            (curVar.Variant[TUMOR].GT == GenomeType::PHASED_HETERO)){ 
-            judgeNormalSnpHap(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
-
-        }
-        //the normal SNP GT is phased heterozgous & the tumor SNP GT is unphased heterozgous 
-        else if((curVar.Variant[NORMAL].GT == GenomeType::PHASED_HETERO) && 
-                (curVar.Variant[TUMOR].GT == GenomeType::UNPHASED_HETERO)){   
-            judgeNormalSnpHap(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
-
-        }
-        //the normal SNP GT is phased heterozgous & the tumor SNP GT is homozygous 
-        else if((curVar.Variant[NORMAL].GT == GenomeType::PHASED_HETERO) && 
-                (curVar.Variant[TUMOR].GT == GenomeType::UNPHASED_HOMO)){ 
-            judgeNormalSnpHap(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
-        }
+   
     // only normal SNP at the current position
-    }else if(curVar.isExists(NORMAL)){
+    if(curVar.isExists(NORMAL)){
         // the normal SNP GT is phased heterozgous SNP
         if((curVar.Variant[NORMAL].GT == GenomeType::PHASED_HETERO)){
+            if(curVar.Variant[NORMAL].variantType == HaplotagVariantType::DELETION || curVar.Variant[NORMAL].variantType == HaplotagVariantType::INSERTION){
+                if(isAlt){
+                    base = curVar.Variant[NORMAL].allele.Alt;
+                }
+                else{
+                    base = curVar.Variant[NORMAL].allele.Ref;
+                }
+            }
             judgeNormalSnpHap(chrName, curPos, curVar, base, hpCount, norCountPS, variantsHP);
         }
     // only tumor SNP at the current position
     }else if(curVar.isExists(TUMOR)){
         //the tumor SNP GT is phased heterozygous
         if(curVar.Variant[TUMOR].GT == GenomeType::PHASED_HETERO){
-            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
+            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base || curVar.Variant[TUMOR].variantType == HaplotagVariantType::DELETION 
+                || curVar.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
                 if(!curVar.Variant[TUMOR].isExistPhasedSet()){
                     std::cerr<< curPos << "\t"
                              << curVar.Variant[TUMOR].allele.Ref << "\t"
                              << curVar.Variant[TUMOR].allele.Alt << "\n";
                     exit(EXIT_SUCCESS);
                 }else{
+                    if(curVar.Variant[TUMOR].variantType == HaplotagVariantType::DELETION || curVar.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
+                        if(isAlt){
+                            base = curVar.Variant[TUMOR].allele.Alt;
+                        }
+                        else{
+                            base = curVar.Variant[TUMOR].allele.Ref;
+                        }
+                    }
                     judgeTumorOnlySnpHap(chrName, curPos, curVar, base, hpCount, &tumCountPS, variantsHP, tumorAllelePosVec);
                 }
             }
         //the tumor SNP GT is unphased heterozygous
         }else if(curVar.Variant[TUMOR].GT == GenomeType::UNPHASED_HETERO){
-            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
+            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base || curVar.Variant[TUMOR].variantType == HaplotagVariantType::DELETION 
+                || curVar.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
+                if(curVar.Variant[TUMOR].variantType == HaplotagVariantType::DELETION || curVar.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
+                    if(isAlt){
+                        base = curVar.Variant[TUMOR].allele.Alt;
+                    }
+                    else{
+                        base = curVar.Variant[TUMOR].allele.Ref;
+                    }
+                }
+                // //std::cout <<curVar.Variant[TUMOR].variantType<< "curPos: " << curPos << " alt: " << curVar.Variant[TUMOR].allele.Alt << " ref: " << curVar.Variant[TUMOR].allele.Ref << " base: " << base << std::endl;
                 judgeTumorOnlySnpHap(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec);
             }           
         //the tumor SNP GT is homozygous
         }else if(curVar.Variant[TUMOR].GT == GenomeType::UNPHASED_HOMO){
-            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base){
+            if(curVar.Variant[TUMOR].allele.Ref == base || curVar.Variant[TUMOR].allele.Alt == base || curVar.Variant[TUMOR].variantType == HaplotagVariantType::DELETION 
+                || curVar.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
+                if(curVar.Variant[TUMOR].variantType == HaplotagVariantType::DELETION || curVar.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
+                    if(isAlt){
+                        base = curVar.Variant[TUMOR].allele.Alt;
+                    }
+                    else{
+                        base = curVar.Variant[TUMOR].allele.Ref;
+                    }
+                }
                 judgeTumorOnlySnpHap(chrName, curPos, curVar, base, hpCount, nullptr, variantsHP, tumorAllelePosVec);
             }
         }
@@ -600,14 +620,14 @@ void ExtractSomaticDataStragtegy::judgeTumorOnlySnpHap(const std::string &chrNam
         std::cerr << "[ERROR] (SomaticDetectJudgeHP) => tumorAllelePosVec pointer cannot be nullptr"<< std::endl;
         exit(1);
     }
-
+    
     std::string& TumorRefBase = curVar.Variant[TUMOR].allele.Ref;
     std::string& TumorAltBase = curVar.Variant[TUMOR].allele.Alt; 
     
     if(base == TumorAltBase){
         hpCount[3]++;
         if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::SOMATIC_H3;
-
+        //std::cout << "curPos: " << curPos << " base: " << base << " TumorAltBase: " << TumorAltBase << std::endl;
         //record postions that tagged as HP3 for calculating the confidence of somatic positions
         (*tumorAllelePosVec).push_back(curPos);
     }else if(base != TumorRefBase && base != TumorAltBase){
@@ -634,8 +654,9 @@ void SomaticHaplotagStrategy::judgeTumorOnlySnpHap(const std::string &chrName, i
 
     if(curVar.isSomaticVariant){
         std::string& TumorAltBase = curVar.Variant[TUMOR].allele.Alt; 
-
+        //std::cout << "curPos: " << curPos << " base: " << base << " TumorAltBase: " << TumorAltBase << std::endl;
         if(base == TumorAltBase){
+            
             hpCount[3]++;
             if(variantsHP != nullptr) (*variantsHP)[curPos] = SnpHP::SOMATIC_H3;
         }

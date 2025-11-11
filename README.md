@@ -89,10 +89,10 @@ installed. If you require setting up a virtual environment, we also
 provide a [Dockerfile](https://github.com/ming-en-ho/longphase-
 s/blob/somatic-develop/Dockerfile). -->
 
-Clone and compile using the following commands, and make sure that the environment has zlib installed. If you require setting up a virtual environment, we also provide a [Dockerfile](https://github.com/ming-en-ho/longphase-s/blob/somatic-develop/Dockerfile).
+Clone and compile using the following commands, and make sure that the environment has zlib installed. If you require setting up a virtual environment, we also provide a [Dockerfile](https://github.com/CCU-Bioinformatics-Lab/longphase-s/blob/somatic-develop/Dockerfile).
 
 ```
-git clone https://github.com/ming-en-ho/longphase-s.git
+git clone https://github.com/CCU-Bioinformatics-Lab/longphase-s.git
 cd longphase-s
 autoreconf -i
 ./configure
@@ -115,7 +115,7 @@ In addition, the haplotype block of each read is stored in the PS tag (only for 
 longphase-s somatic_haplotag \
 -s phased_normal_snp.vcf \
 -b normal.bam \
---tumor-snp-file tumor_snp.vcf \
+--tumor-snv-file tumor_snv.vcf \
 --tumor-bam-file tumor.bam \
 -r reference.fasta \
 -t 8 \
@@ -147,7 +147,7 @@ This command using tumor-normal pair BAM and VCF files, along with haplotype inf
 longphase-s estimate_purity \
 -s phased_normal_snp.vcf \
 -b normal.bam \
---tumor-snp-file tumor_snp.vcf \
+--tumor-snv-file tumor_snv.vcf \
 --tumor-bam-file tumor.bam \
 -r reference.fasta \
 -t 8 \

@@ -483,3 +483,49 @@ void ReadHpDistriLog::removeNotDeriveByH1andH2pos(const std::vector<std::string>
         }
     }
 }
+
+/**
+ * @brief Write DenseAlt filter log
+ * @param logFileName Output file name
+ * @param chrVec Vector of chromosome names to process
+ * @param chrPosSomaticInfo Map of chromosome to position to somatic data
+ */
+void ReadHpDistriLog::writeDenseAltFilterLog(const std::string logFileName, const std::vector<std::string> &chrVec, const std::map<std::string, std::map<int, SomaticData>> &chrPosSomaticInfo){
+    std::ofstream *denseAltFilterLog=NULL;
+    denseAltFilterLog=new std::ofstream(logFileName);
+
+    if(!denseAltFilterLog->is_open()){
+        std::cerr<< "Fail to open write file: " << logFileName << "\n";
+        exit(1);
+    }else{
+        (*denseAltFilterLog) << "###################################################\n";
+        (*denseAltFilterLog) << "# DenseAlt filter log #\n";
+        (*denseAltFilterLog) << "###################################################\n";
+    }
+    // Write header for DenseAlt filter log
+    (*denseAltFilterLog) << "Chr\t"
+                        << "Pos\t"
+                        << "DenseAltSameCount\n";
+
+    // Process each chromosome and variant position
+    for(auto chr: chrVec){
+        // Check if this chromosome has somatic data
+        auto chrSomaticIter = chrPosSomaticInfo.find(chr);
+        if(chrSomaticIter != chrPosSomaticInfo.end()){
+            // Iterate through each position in this chromosome
+            for(auto posSomaticIter = chrSomaticIter->second.begin(); posSomaticIter != chrSomaticIter->second.end(); posSomaticIter++){
+                int pos = posSomaticIter->first;
+                const SomaticData& somaticData = posSomaticIter->second;
+                
+                // Write chromosome, position, and denseAltSameCount to log
+                (*denseAltFilterLog) << chr << "\t"
+                                    << pos << "\t"
+                                    << somaticData.denseAltSameCount << "\n";
+            }
+        }
+    }
+
+    (*denseAltFilterLog).close();
+    delete denseAltFilterLog;
+    denseAltFilterLog = nullptr;
+}

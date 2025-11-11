@@ -23,7 +23,8 @@ class GermlineHaplotagStrategy{
             std::map<int, MultiGenomeVar>::iterator& currentVariantIter,
             std::map<int, int>& hpCount,
             std::map<int, int>& variantsHP,
-            std::map<int, int>& countPS
+            std::map<int, int>& countPS,
+            bool& isAlt
         );
 
         void judgeDeletionHap(
@@ -96,7 +97,8 @@ class SomaticJudgeHapStrategy{
             std::map<int, int> &norCountPS,
             std::map<int, int> &tumCountPS,
             std::map<int, int> *variantsHP,
-            std::vector<int> *tumorAllelePosVec
+            std::vector<int> *tumorAllelePosVec,
+            bool& isAlt
         );
 
 

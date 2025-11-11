@@ -18,7 +18,7 @@ void SomaticHaplotagProcess::printParamsMessage(){
     std::cerr<< "\n";
     std::cerr<< "[Input Files]\n";
     std::cerr<< "phased normal SNP file       : " << sParams.basic.snpFile << "\n";
-    std::cerr<< "tumor SNP file               : " << sParams.tumorSnpFile << "\n";
+    std::cerr<< "tumor SNP file               : " << sParams.tumorSnvFile << "\n";
     std::cerr<< "normal BAM file              : " << sParams.basic.bamFile << "\n";
     std::cerr<< "tumor BAM file               : " << sParams.tumorBamFile << "\n";
     std::cerr<< "reference file               : " << sParams.basic.fastaFile << "\n";
@@ -63,13 +63,13 @@ void SomaticHaplotagProcess::pipelineProcess()
     //decide which genome sample chrVec and chrLength belong to
     setChrVecAndChrLength();
     // [debug] calculate SNP counts
-    // displaySnpCounts();
+    displaySnpCounts();
     // update chromosome processing based on region
     setProcessingChromRegion();
 
     //somatic variant calling
     CallerContext ctx(sParams.basic.bamFile, sParams.tumorBamFile, 
-                    sParams.basic.snpFile, sParams.tumorSnpFile, 
+                    sParams.basic.snpFile, sParams.tumorSnvFile, 
                     sParams.basic.fastaFile);
 
     SomaticVarCaller *somaticVarCaller = new SomaticVarCaller(sParams.callerCfg, sParams.basic.bamCfg, *chrVec);
@@ -83,7 +83,7 @@ void SomaticHaplotagProcess::pipelineProcess()
         std::time_t begin = time(NULL);
         vcfParser.setCommandLine(sParams.basic.bamCfg.command);
         vcfParser.setVersion(sParams.basic.bamCfg.version);
-        vcfParser.writingResultVCF(sParams.tumorSnpFile, vcfSet[Genome::TUMOR], *chrMultiVariants, sParams.basic.bamCfg.resultPrefix);
+        vcfParser.writingResultVCF(sParams.tumorSnvFile, vcfSet[Genome::TUMOR], *chrMultiVariants, sParams.basic.bamCfg.resultPrefix);
         std::cerr<< difftime(time(NULL), begin) << "s\n";
     }
 
@@ -96,6 +96,7 @@ void SomaticHaplotagProcess::pipelineProcess()
         // [debug] display variants in bed region count
         // somaticBenchmark.displayBedRegionCount(*chrVec);
     }
+
 
     // tag read
     tagRead(sParams.basic, sParams.tumorBamFile, tagSample);
@@ -113,11 +114,11 @@ void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
     HaplotagProcess::parseVariantFiles(vcfParser);
 
     //load tumor snp vcf
-    if(sParams.tumorSnpFile != ""){
+    if(sParams.tumorSnvFile != ""){
         std::time_t begin = time(NULL);
         std::cerr<< "parsing tumor SNP VCF ... ";
         vcfParser.setParseSnpFile(true);
-        vcfParser.parsingVCF(sParams.tumorSnpFile, vcfSet[Genome::TUMOR], *chrMultiVariants);
+        vcfParser.parsingVCF(sParams.tumorSnvFile, vcfSet[Genome::TUMOR], *chrMultiVariants);
         vcfParser.reset();
         std::cerr<< difftime(time(NULL), begin) << "s\n";
     }
@@ -197,11 +198,21 @@ void SomaticHaplotagProcess::displaySnpCounts(){
     int tumor_snp_count = 0;
     int normal_snp_count = 0;
     int overlap_snp_count = 0;
+    int tumor_insert_count = 0;
+    int tumor_delete_count = 0;
     for(auto& chrIter : (*chrVec)){
         auto chrVarIter = (*chrMultiVariants)[chrIter].begin();
         while(chrVarIter != (*chrMultiVariants)[chrIter].end()){
             if((*chrVarIter).second.isExists(TUMOR)){
-                tumor_snp_count++;
+                if((*chrVarIter).second.Variant[TUMOR].variantType == HaplotagVariantType::SNP){
+                    tumor_snp_count++;
+                }
+                if((*chrVarIter).second.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
+                    tumor_insert_count++;
+                }
+                if((*chrVarIter).second.Variant[TUMOR].variantType == HaplotagVariantType::DELETION){
+                    tumor_delete_count++;
+                }
             }
             if((*chrVarIter).second.isExists(NORMAL)){
                 normal_snp_count++;
@@ -215,6 +226,8 @@ void SomaticHaplotagProcess::displaySnpCounts(){
     std::cerr << "Normal SNP count: " << normal_snp_count << std::endl;
     std::cerr << "Tumor SNP count: " << tumor_snp_count << std::endl;
     std::cerr << "Overlap SNP count: " << overlap_snp_count << std::endl;
+    std::cerr << "Tumor Insert count: " << tumor_insert_count << std::endl;
+    std::cerr << "Tumor Delete count: " << tumor_delete_count << std::endl;
 }
 
 void SomaticHaplotagProcess::postprocessForHaplotag(){
@@ -542,8 +555,8 @@ SomaticHaplotagCigarParser::~SomaticHaplotagCigarParser(){
 
 }
 
-void SomaticHaplotagCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base){
-    somaticJudger.judgeSomaticSnpHap(currentVariantIter, ctx.chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, nullptr);
+void SomaticHaplotagCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base, bool& isAlt, int& offset){
+    somaticJudger.judgeSomaticSnpHap(currentVariantIter, ctx.chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, nullptr, isAlt);
 
     //record the somatic snp derive by which germline hp in this read
     if(currentVariantIter->second.isSomaticVariant){
@@ -568,7 +581,7 @@ void SomaticHaplotagCigarParser::processDeletionOperation(int& length, uint32_t*
 
 void SomaticTagLog::addParamsMessage(){
     *tagReadLog << "##normalSnpFile:" << sParams.basic.snpFile << "\n"
-                << "##tumorSnpFile:" << sParams.tumorSnpFile << "\n"
+                << "##tumorSnvFile:" << sParams.tumorSnvFile << "\n"
                 << "##svFile:" << sParams.basic.svFile << "\n"
                 << "##tumorBamFile:" << sParams.tumorBamFile << "\n"
                 << "##bamFile:" << sParams.basic.bamFile << "\n"

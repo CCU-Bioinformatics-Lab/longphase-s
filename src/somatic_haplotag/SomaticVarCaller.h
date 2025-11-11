@@ -19,10 +19,10 @@ struct CallerContext
     std::string normalBamFile;
     std::string tumorBamFile;
     std::string normalSnpFile;
-    std::string tumorSnpFile;
+    std::string tumorSnvFile;
     std::string fastaFile;
-    CallerContext(std::string normalBamFile, std::string tumorBamFile, std::string normalSnpFile, std::string tumorSnpFile, std::string fastaFile)
-    :normalBamFile(normalBamFile), tumorBamFile(tumorBamFile), normalSnpFile(normalSnpFile), tumorSnpFile(tumorSnpFile), fastaFile(fastaFile){}
+    CallerContext(std::string normalBamFile, std::string tumorBamFile, std::string normalSnpFile, std::string tumorSnvFile, std::string fastaFile)
+    :normalBamFile(normalBamFile), tumorBamFile(tumorBamFile), normalSnpFile(normalSnpFile), tumorSnvFile(tumorSnvFile), fastaFile(fastaFile){}
 };
 
 /**
@@ -76,10 +76,15 @@ struct SomaticVarFilterParams
 
     // Interval SNP count filter threshold
     float IntervalSnpCount_VAF_maxThr;
+
     int IntervalSnpCount_ReadCount_maxThr;
     int IntervalSnpCount_minThr;
     float zScore_maxThr;
 
+    // DenseAlt filter threshold
+    float DenseAlt_condition1_thr;  // condition1 threshold (aa/targetAltCount >= threshold)
+    float DenseAlt_condition2_thr;  // condition2 threshold (aa/(ra+aa) >= threshold)
+    int DenseAlt_sameCount_minThr;  // minimum same count threshold
     SomaticVarFilterParams() 
         : tumorPurity(0.0)
         , norVAF_maxThr(0.0)
@@ -92,7 +97,14 @@ struct SomaticVarFilterParams
         , IntervalSnpCount_VAF_maxThr(0.0)
         , IntervalSnpCount_ReadCount_maxThr(0)
         , IntervalSnpCount_minThr(0)
-        , zScore_maxThr(0.0) {}
+        , zScore_maxThr(0.0)
+        , DenseAlt_condition1_thr(0.5)
+        , DenseAlt_condition2_thr(0.6)
+        , DenseAlt_sameCount_minThr(3) {}
+};
+
+struct VariantBases{
+    std::map<int, int> offsetDiffRefCount; //offset, diff ref count
 };
 
 enum FilterTier{
@@ -139,6 +151,9 @@ struct ReadVarHpCount{
     int readLength;
     std::map<int, int> norCountPS;
     
+    // store position and baseHP pairs for each variant on this read
+    std::vector<std::pair<int, int>> posHpPairs; // <position(1-based), baseHP>
+    
     ReadVarHpCount(): HP1(0), HP2(0), HP3(0), HP4(0), readIDcount(0), hpResult(0), startPos(0), endPos(0), readLength(0){}
 };
 
@@ -166,12 +181,12 @@ struct DenseSnpData{
  * including mean calculations, z-scores, and interval metadata
  */
 struct DenseSnpInterval{
-    std::map<int, double> snpAltMean;
-    std::map<int, double> snpZscore;
-    std::map<int, int> minDistance;
+    std::map<int, double> snpAltMean;//<snpPos, altMean>
+    std::map<int, double> snpZscore;//<snpPos, zScore>
+    std::map<int, int> minDistance;//<snpPos, minDistance>
     int snpCount;
-    double totalAltMean;
-    double StdDev;
+    double totalAltMean;//<totalAltMean>
+    double StdDev;//<StdDev>
     DenseSnpInterval(): snpCount(0), totalAltMean(0.0), StdDev(0.0){}
 
     /**
@@ -201,8 +216,9 @@ namespace tumor_normal_analysis{
      * Computes VAF, depth ratios, and haplotype imbalance metrics
      * @param baseInfo Base information structure to update
      * @param tumorAltBase Alternative base in tumor sample
+     * @param varType Variant type
      */
-    void calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase);
+    void calculateBaseCommonInfo(PosBase& baseInfo, std::string& tumorAltBase, HaplotagVariantType::VariantType varType);
 };
 
 namespace statisticsUtils{
@@ -259,7 +275,7 @@ class ExtractNorDataCigarParser : public CigarParser{
         GermlineHaplotagStrategy judger;
     protected:
 
-        void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base) override;
+        void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base, bool& isAlt, int& offset) override;
         void processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel) override;
 
     public:
@@ -371,10 +387,19 @@ class ExtractTumDataCigarParser : public CigarParser{
         std::map<int, int>& tumCountPS;
 
         const int& mappingQualityThr;
+        
+        // 暫存當前read在各位置的offsetBase資訊
+        std::map<int, std::vector<std::pair<int, char>>> currentReadOffsetBase;
     protected:
 
-        void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base) override;
+        void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base, bool& isAlt, int& offset) override;
         void processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel) override;
+        
+        // 取得當前read的offsetBase資訊
+        const std::map<int, std::vector<std::pair<int, char>>>& getCurrentReadOffsetBase() const { return currentReadOffsetBase; }
+        
+        // 清空當前read的offsetBase (在新read開始時呼叫)
+        void clearCurrentReadOffsetBase() { currentReadOffsetBase.clear(); }
 
     public:
         ExtractTumDataCigarParser(
@@ -543,6 +568,13 @@ class SomaticVarCaller{
         void writeSomaticVarCallingLog(const CallerContext &ctx, const SomaticVarFilterParams &somaticParams, const std::vector<std::string> &chrVec
                                      , std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants);
         
+        /**
+         * @brief Write detailed filter evaluation log per somatic position
+         * @param logFileName Output log file name
+         * @param chrVec Chromosome list
+         */
+        void writeSomaticFilterLog(const std::string logFileName, const std::vector<std::string> &chrVec);
+        
         
         /**
          * @brief Write dense tumor SNP interval log
@@ -550,6 +582,17 @@ class SomaticVarCaller{
          * @param chrVec Vector of chromosome names
          */
         void writeDenseTumorSnpIntervalLog(const std::string logFileName, const std::vector<std::string> &chrVec);
+
+        /**
+         * @brief 輸出每條 read 的HP結果與其覆蓋到的變異之 baseHP 清單
+         * @param logFileName 輸出檔名
+         * @param chrVec 染色體列表
+         */
+        void writeReadHpLog(const std::string logFileName, const std::vector<std::string> &chrVec);
+
+        // 其他詳細過濾記錄輸出（已存在於 cpp，補宣告）
+        void writeReadCountFilterLog(const std::string logFileName, const std::vector<std::string> &chrVec, const SomaticVarFilterParams &somaticParams);
+        void writeMessyReadFilterLog(const std::string logFileName, const std::vector<std::string> &chrVec, const SomaticVarFilterParams &somaticParams);
 
         /**
          * @brief Release allocated memory
