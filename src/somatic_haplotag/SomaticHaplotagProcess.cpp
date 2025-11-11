@@ -97,6 +97,7 @@ void SomaticHaplotagProcess::pipelineProcess()
         // somaticBenchmark.displayBedRegionCount(*chrVec);
     }
 
+
     // tag read
     tagRead(sParams.basic, sParams.tumorBamFile, tagSample);
 
