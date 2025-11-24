@@ -48,7 +48,7 @@ run_pepper_margin_deepvariant call_variant \
 # for ONT R10.4 Q20 reads: --ont_r10_q20
 # for PacBio-HiFi reads: --hifi
 ```
-### Generate somatic SNP VCF file
+### Generate somatic SNV VCF file
 e.g. [DeepSomatic](https://github.com/google/deepsomatic) or [ClairS](https://github.com/HKU-BAL/ClairS) pipeline.
 #### ClairS
 ```
