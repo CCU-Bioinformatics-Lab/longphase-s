@@ -569,7 +569,7 @@ void CigarParser::parsingCigar(
         uint32_t* cigar = bam_get_cigar(&ctx.aln);
         int cigar_op = bam_cigar_op(cigar[i]);
         int length = bam_cigar_oplen(cigar[i]);
-
+        std::string readid = bam_get_qname(&ctx.aln);
         // iterator next variant
         while (currentVariantIter != ctx.currentVariants.end() && (*currentVariantIter).first < ref_pos) {
             currentVariantIter++;
@@ -595,26 +595,15 @@ void CigarParser::parsingCigar(
                             variantType = (*currentVariantIter).second.Variant[TUMOR].variantType;
                         }
                         bool isAlt = false;
-                        if((*currentVariantIter).second.isExists(NORMAL)){
-                            if(variantType == HaplotagVariantType::SNP){
-                                isAlt = base == (*currentVariantIter).second.Variant[NORMAL].allele.Alt;
-                            }else if(variantType == HaplotagVariantType::INSERTION && i+1 < aln_core_n_cigar){
-                                isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 1;
-                            }else if(variantType == HaplotagVariantType::DELETION && i+1 < aln_core_n_cigar){
-                                isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2;
-                            }    
-                        }else if((*currentVariantIter).second.isExists(TUMOR)){
-                            if(variantType == HaplotagVariantType::SNP){
-                                isAlt = base == (*currentVariantIter).second.Variant[TUMOR].allele.Alt;
-                            }else if(variantType == HaplotagVariantType::INSERTION && i+1 < aln_core_n_cigar){
-                                isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 1;
-                            }else if(variantType == HaplotagVariantType::DELETION && i+1 < aln_core_n_cigar){
-                                isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2;
-                            }    
 
-                        }
+                        // [TODO] Check if the variant is both exist in normal and tumor
+                        if((*currentVariantIter).second.isExists(NORMAL)){
+                            isAlt = IsAltIndel(ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, base, variantType, NORMAL);
+                        }else if((*currentVariantIter).second.isExists(TUMOR)){
+                            isAlt = IsAltIndel(ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, base, variantType, TUMOR);
+                        }    
                         processMatchOperation(length, cigar, i, aln_core_n_cigar, base, isAlt, offset);                        
-                    }
+                        }
                     currentVariantIter++;
                 }
                 query_pos += length;
@@ -657,6 +646,30 @@ void CigarParser::parsingCigar(
     }
 }
 
+
+bool CigarParser::IsAltIndel(
+    int& ref_pos, 
+    int& length, 
+    int& i, 
+    int& aln_core_n_cigar, 
+    uint32_t* cigar,
+    std::map<int, MultiGenomeVar>::iterator& currentVariantIter, 
+    std::string& base, 
+    HaplotagVariantType::VariantType variantType,
+    Genome sample
+){
+    bool isAlt = false;
+    if(variantType == HaplotagVariantType::SNP){
+        isAlt = base == (*currentVariantIter).second.Variant[sample].allele.Alt;
+    }else if(variantType == HaplotagVariantType::INSERTION && i+1 < aln_core_n_cigar){
+        isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 1;
+    }else if(variantType == HaplotagVariantType::DELETION && i+1 < aln_core_n_cigar){
+        isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2;
+    }
+    return isAlt;
+}
+
+
 /**
  * @brief Counts base nucleotides and applies mapping quality filtering
  * @param posBase Position base information structure
@@ -666,7 +679,7 @@ void CigarParser::parsingCigar(
  * 
  * Updates base counts and filtered depth based on mapping quality
  */
-void CigarParser::countBaseNucleotide(PosBase& posBase, std::string& base, const bam1_t& aln, const float& mpqThreshold, bool isAlt){
+void CigarParser::countBaseNucleotide(PosBase& posBase, std::string& base, const bam1_t& aln, const float& mpqThreshold, bool isAlt, HaplotagVariantType::VariantType variantType){
     // mapping quality is higher than threshold
     if ( aln.core.qual >= mpqThreshold ){
         if(base == "A"){
@@ -697,6 +710,9 @@ void CigarParser::countBaseNucleotide(PosBase& posBase, std::string& base, const
         posBase.unknow++;
     }
     if(isAlt){
+        if(variantType == HaplotagVariantType::DELETION){
+            posBase.delCount++;
+        }
         posBase.altCount++;
     }
     posBase.depth++;  

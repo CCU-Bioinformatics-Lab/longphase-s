@@ -187,7 +187,7 @@ namespace base_analysis{
 
     inline double calculatePercentageOfGermlineHp(int& totalGermlineReadCount, int& depth) {
         return (depth == 0 || totalGermlineReadCount == 0) ? 0.0 : (double)totalGermlineReadCount / (double)depth;
-    }   
+    }
 }
 
 #endif

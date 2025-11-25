@@ -2,6 +2,7 @@
 #define HAPLOTAG_PARSING_BAM_H
 
 #include "HaplotagType.h"
+#include "HaplotagStrategy.h"
 #include <htslib/sam.h>
 #include <htslib/faidx.h>
 #include <htslib/khash.h>
@@ -502,7 +503,7 @@ class CigarParser{
          * 
          * Updates base counts and filtered depth based on mapping quality
          */
-        void countBaseNucleotide(PosBase& posBase, std::string& base, const bam1_t& aln, const float& mpqThreshold, bool isAlt);
+        void countBaseNucleotide(PosBase& posBase, std::string& base, const bam1_t& aln, const float& mpqThreshold, bool isAlt, HaplotagVariantType::VariantType variantType);
         
         /**
          * @brief Count deletion bases
@@ -511,6 +512,18 @@ class CigarParser{
          * Updates deletion count and total depth
          */
         void countDeletionBase(PosBase& posBase);
+
+        bool IsAltIndel(
+            int& ref_pos, 
+            int& length, 
+            int& i, 
+            int& aln_core_n_cigar, 
+            uint32_t* cigar,
+            std::map<int, MultiGenomeVar>::iterator& currentVariantIter, 
+            std::string& base, 
+            HaplotagVariantType::VariantType variantType,
+            Genome sample
+        );
 
     public:
         /**
