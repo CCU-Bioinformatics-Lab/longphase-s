@@ -80,6 +80,7 @@ ExtractNorDataBamParser::ExtractNorDataBamParser(
 : HaplotagBamParser(config, control), chrPosNorBase(chrPosNorBase){}
 
 ExtractNorDataBamParser::~ExtractNorDataBamParser(){
+
 };
 
 void ExtractNorDataBamParser::displayPosInfo(std::string chr, int pos){
@@ -93,6 +94,12 @@ void ExtractNorDataBamParser::displayPosInfo(std::string chr, int pos){
         std::cout << " C_count : " << VarBase.C_count << std::endl;
         std::cout << " G_count : " << VarBase.G_count << std::endl;
         std::cout << " T_count : " << VarBase.T_count << std::endl;
+        std::cout << " MPQ A_count : " << VarBase.MPQ_A_count << std::endl;
+        std::cout << " MPQ C_count : " << VarBase.MPQ_C_count << std::endl;
+        std::cout << " MPQ G_count : " << VarBase.MPQ_G_count << std::endl;
+        std::cout << " MPQ T_count : " << VarBase.MPQ_T_count << std::endl;
+        std::cout << " alt count : " << VarBase.altCount << std::endl;
+        std::cout << " MPQ alt count : " << VarBase.MPQ_altCount << std::endl;
         std::cout << " depth :   " << VarBase.depth << std::endl;
         std::cout << " unknow :  " << VarBase.unknow << std::endl;
         std::cout << " deletion count :  " << VarBase.delCount << std::endl;
@@ -139,7 +146,6 @@ void ExtractNorDataChrProcessor::processRead(
     int ref_pos = aln.core.pos;
     // position relative to read
     int query_pos = 0;
-
     /// Create a CIGAR parser using polymorphism design
     // Use extractNorDataCigarParser to process CIGAR strings for normal samples    
     CigarParserContext cigarCtx(aln, bamHdr, ctx.chrName, ctx.params, firstVariantIter, currentVariants, ref_string);
@@ -191,10 +197,12 @@ void ExtractNorDataChrProcessor::postProcess(
             // calculate the base information of the tumor SNP
             tumor_normal_analysis::calculateBaseCommonInfo(baseInfo, tumAltBase, curVar.variantType);
         }
-        // TODO: Add INDEL processing logic here
+        // INDEL processing
         else if(curVar.variantType == HaplotagVariantType::INSERTION || curVar.variantType == HaplotagVariantType::DELETION){
-            // INDEL processing needs special handling - not implemented yet
-            // For now, skip INDEL processing to avoid crashes
+            // For INDEL, tumorAltBase parameter is not used (calculateBaseCommonInfo uses getAltCount() instead)
+            // Pass empty string as placeholder
+            std::string emptyAltBase = "";
+            tumor_normal_analysis::calculateBaseCommonInfo(baseInfo, emptyAltBase, curVar.variantType);
         }
         
         currentPosIter++;
@@ -229,7 +237,10 @@ void ExtractNorDataCigarParser::processMatchOperation(int& length, uint32_t* cig
             tumVarPosVec.push_back(curPos);
 
             //counting current tumor SNP base and depth           
-            countBaseNucleotide(variantBase[curPos], base, ctx.aln, mappingQualityThr,isAlt);
+            countBaseNucleotide(variantBase[curPos], base, ctx.aln, mappingQualityThr,isAlt,curVar.variantType);
+
+            // Debug output after counting
+
         }
         // the indel(deletion) SNP position is the start position, and the deletion occurs at the next position
         else if(curVar.variantType == HaplotagVariantType::DELETION){
@@ -266,7 +277,8 @@ void ExtractNorDataCigarParser::processDeletionOperation(int& length, uint32_t* 
         }
         // the variant is deletion
         else if(curVar.variantType == HaplotagVariantType::DELETION){
-
+            variantBase[curPos].altCount++;
+            countDeletionBase(variantBase[curPos]);
         }
     }
 
@@ -720,14 +732,9 @@ void ExtractTumDataCigarParser::processMatchOperation(int& length, uint32_t* cig
                     offsetBase.begin(),
                     offsetBase.end()
                 );
-                // std::cout << "readId: " << bam_get_qname(&ctx.aln) << " varPos: " << (*currentVariantIter).first << " offsetBase: " << offsetBase.size() << std::endl;
-                // for(const auto& ob : offsetBase){
-                //     std::cout << "{" << ob.first << "," << ob.second << "} ";
-                // }
-                // std::cout << std::endl;
             }       
             //counting current tumor SNP base and depth
-            countBaseNucleotide(somaticPosInfo[(*currentVariantIter).first].base, base, ctx.aln, mappingQualityThr,isAlt);
+            countBaseNucleotide(somaticPosInfo[(*currentVariantIter).first].base, base, ctx.aln, mappingQualityThr,isAlt,curVar.variantType);
         }
     }
 }
@@ -745,7 +752,8 @@ void ExtractTumDataCigarParser::processDeletionOperation(int& length, uint32_t* 
         }
         // the indel SNP start position isn't at the end of the deletion
         else if(curVar.variantType == HaplotagVariantType::DELETION){
-
+            somaticPosInfo[curPos].base.altCount++;
+            countDeletionBase(somaticPosInfo[curPos].base);
         }
     }
 }
@@ -1357,43 +1365,43 @@ void SomaticVarCaller::getDenseTumorSnpInterval(std::map<int, SomaticData> &soma
  */
 void SomaticVarCaller::calibrateReadHP(const std::string &chr, std::map<int, SomaticData> &somaticPosInfo, std::map<std::string, ReadVarHpCount> &readHpResultSet, std::map<int, std::map<std::string, int>> &tumorPosReadCorrBaseHP){
         // Calibrate read HP to remove low confidence H3/H4 SNP
-        std::map<int, SomaticData>::iterator somaticVarIter = somaticPosInfo.begin();
-        while( somaticVarIter != somaticPosInfo.end()){
-            if(!(*somaticVarIter).second.isHighConSomaticSNP){
-                int pos = (*somaticVarIter).first;
+    std::map<int, SomaticData>::iterator somaticVarIter = somaticPosInfo.begin();
+    while( somaticVarIter != somaticPosInfo.end()){
+        if(!(*somaticVarIter).second.isHighConSomaticSNP){
+            int pos = (*somaticVarIter).first;
 
-                // Only reads with HP3 SNPs will be calibrated
-                if(tumorPosReadCorrBaseHP.find(pos) != tumorPosReadCorrBaseHP.end()){
+            // Only reads with HP3 SNPs will be calibrated
+            if(tumorPosReadCorrBaseHP.find(pos) != tumorPosReadCorrBaseHP.end()){
 
-                    for(auto readIdBaseHP : tumorPosReadCorrBaseHP[pos]){
-                        std::string readID = readIdBaseHP.first;
-                        int baseHP = readIdBaseHP.second;
+                for(auto readIdBaseHP : tumorPosReadCorrBaseHP[pos]){
+                    std::string readID = readIdBaseHP.first;
+                    int baseHP = readIdBaseHP.second;
 
-                        switch (baseHP) {
-                            case SnpHP::GERMLINE_H1:
-                                break;
-                            case SnpHP::GERMLINE_H2:
-                                break;
-                            case SnpHP::SOMATIC_H3:
-                                readHpResultSet[readID].HP3--; break;
-                            default:
+                    switch (baseHP) {
+                        case SnpHP::GERMLINE_H1:
+                            break;
+                        case SnpHP::GERMLINE_H2:
+                            break;
+                        case SnpHP::SOMATIC_H3:
+                            readHpResultSet[readID].HP3--; break;
+                        default:
             break;
-    }
-
-                        if(readHpResultSet[readID].HP3 < 0){
-                            std::cerr << "[ERROR](calibrate read HP) => read HP3 or HP4 SNP count < 0 :" << std::endl;
-                            std::cerr << "readID: "<< readID << " chr: "<< chr << " pos: " << pos+1<< std::endl;
-                            std::cerr << "HP3: "<< readHpResultSet[readID].HP3 << std::endl;
-                            exit(1);
-                        }
-                    }
-                }else{
-                    std::cerr << "[ERROR](calibrate read HP) => can't find pos in tumorPosReadCorrBaseHP : chr: "<< chr << " pos: " << pos+1 <<std::endl;
-                    exit(1);
-                }
-            }
-            somaticVarIter++;
         }
+
+                    if(readHpResultSet[readID].HP3 < 0){
+                        std::cerr << "[ERROR](calibrate read HP) => read HP3 or HP4 SNP count < 0 :" << std::endl;
+                        std::cerr << "readID: "<< readID << " chr: "<< chr << " pos: " << pos+1<< std::endl;
+                        std::cerr << "HP3: "<< readHpResultSet[readID].HP3 << std::endl;
+                        exit(1);
+                    }
+                }
+            }else{
+                std::cerr << "[ERROR](calibrate read HP) => can't find pos in tumorPosReadCorrBaseHP : chr: "<< chr << " pos: " << pos+1 <<std::endl;
+                exit(1);
+            }
+        }
+        somaticVarIter++;
+    }
 }
 
 /**
@@ -1743,20 +1751,11 @@ void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const
                 exit(1);
             }
 
-            // Get variant type for proper alt count calculation
-            HaplotagVariantType::VariantType varType = chrMultiVariants[chr][(*somaticVarIter).first].Variant[TUMOR].variantType;
             
             // Use appropriate method based on variant type
-            int tumMpqAltCount, norAltCount;
-            if(varType == HaplotagVariantType::SNP && altBase.length() == 1){
-                tumMpqAltCount = (*somaticVarIter).second.base.getMpqBaseCount(altBase);
-                // Note: norAltCount uses getAltCount() because normal sample calculation 
-                // already uses getAltCount() in calculateBaseCommonInfo
-                norAltCount = (*chrPosNorBase)[chr][(*somaticVarIter).first].getAltCount();
-            } else {
-                tumMpqAltCount = (*somaticVarIter).second.base.getMpqAltCount();
-                norAltCount = (*chrPosNorBase)[chr][(*somaticVarIter).first].getAltCount();
-            }
+            int tumAltCount, norAltCount;
+            tumAltCount = (*somaticVarIter).second.base.getAltCount();
+            norAltCount = (*chrPosNorBase)[chr][(*somaticVarIter).first].getAltCount();
 
             //calculating tumor VAF
             float tumVAF = (*somaticVarIter).second.base.VAF;
@@ -1856,7 +1855,7 @@ void SomaticVarCaller::writeSomaticVarCallingLog(const CallerContext &ctx, const
                         << "." << "\t"  //3
                         << refBase << "\t" //4
                         << altBase << "\t" //5
-                        << tumMpqAltCount << "\t" //6
+                        << tumAltCount << "\t" //6
                         << readCount << "\t\t"  //7
                         << norAltCount << "\t" //8
                         << pure_H1_1_read << "\t" //9
