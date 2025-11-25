@@ -235,7 +235,7 @@ For somatic haplotagging and tumor purity estimation commands, the preprocessing
 
 ---
 ## Citation
-Ming-En Ho, Zhenxian Zheng, Ruibang Luo, Huai-Hsiang Chiang, [LongPhase-S: purity estimation and variant recalibration with somatic haplotying for long-read sequencing](https://www.biorxiv.org/content/10.1101/2025.11.20.689492v1), bioRxiv, 2025.
+Ming-En Ho, Zhenxian Zheng, Ruibang Luo, Huai-Hsiang Chiang, Yao-Ting Huang, [LongPhase-S: purity estimation and variant recalibration with somatic haplotying for long-read sequencing](https://www.biorxiv.org/content/10.1101/2025.11.20.689492v1), bioRxiv, 2025.
 
 ---
 ## Contact
