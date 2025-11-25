@@ -3,6 +3,7 @@
 - [SNP and indel co-phasing](#snp-and-indel-co-phasing)
 - [SNP and SV co-phasing](#snp-and-sv-co-phasing)
 - [SNP and modification co-phasing](#snp-and-modification-co-phasing)
+- [DeepSomatic output support](#deepsomatic-output-support)
 - [The complete list of phase parameters](#the-complete-list-of-phase-parameters)
 - [Output of SNP and indel phasing](#output-of-snp-and-indel-phasing)
 - [Output files of SNP and SV co-phasing](#output-files-of-snp-and-sv-co-phasing)
@@ -55,6 +56,34 @@ longphase-s phase \
 -t 8 \
 -o phased_prefix \
 --ont # or --pb for PacBio Hifi
+```
+
+### DeepSomatic output support
+If your SNV VCF is produced by DeepSomatic, you can enable a built-in pre-processing step that
+keeps only GERMLINE variants and normalizes the GT field according to VAF before phasing. This is
+triggered by `--deepsomatic_output`.
+
+The program will extract variants with `GERMLINE` in the FILTER field from the DeepSomatic output VCF. An example of DeepSomatic output format:
+
+```
+#CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO    FORMAT  cell-lineTumor
+chr1    10007   .       T       G       0       RefCall .       GT:GQ:DP:AD:VAF:PL      0/0:29:83:66,15:0.180723:0,29,60
+chr1    17385   .       G       A       4.7     GERMLINE        .       GT:GQ:DP:AD:VAF:PL      0/0:5:115:64,51:0.443478:2,0,27
+chr1    68119   .       G       C       32.9    PASS    .       GT:GQ:DP:AD:VAF:PL      1/1:30:43:0,42:0.976744:32,32,0
+chr1    119653  .       CA      C       4.6     GERMLINE        .       GT:GQ:DP:AD:VAF:PL      0/0:5:55:27,28:0.509091:2,0,30
+```
+
+Example command:
+```
+longphase-s phase \
+-s deepsomatic_output.vcf \
+-b alignment1.bam \
+-r reference.fasta \
+-t 8 \
+-o phased_prefix \
+--indels \
+--ont \
+--deepsomatic_output
 ```
 
 ### The complete list of phase parameters

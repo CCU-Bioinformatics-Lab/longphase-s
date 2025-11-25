@@ -388,17 +388,17 @@ class ExtractTumDataCigarParser : public CigarParser{
 
         const int& mappingQualityThr;
         
-        // 暫存當前read在各位置的offsetBase資訊
+        //store the offsetBase of the current read
         std::map<int, std::vector<std::pair<int, char>>> currentReadOffsetBase;
     protected:
 
         void processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base, bool& isAlt, int& offset) override;
         void processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel) override;
         
-        // 取得當前read的offsetBase資訊
+        //get the offsetBase of the current read
         const std::map<int, std::vector<std::pair<int, char>>>& getCurrentReadOffsetBase() const { return currentReadOffsetBase; }
         
-        // 清空當前read的offsetBase (在新read開始時呼叫)
+        //clear the offsetBase of the current read
         void clearCurrentReadOffsetBase() { currentReadOffsetBase.clear(); }
 
     public:
