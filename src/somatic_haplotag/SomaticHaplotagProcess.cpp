@@ -1,8 +1,10 @@
 #include "SomaticHaplotagProcess.h"
 
+#include <algorithm>
+
 
 SomaticHaplotagProcess::SomaticHaplotagProcess(SomaticHaplotagParameters &params)
-    : HaplotagProcess(params.basic),sParams(params), somaticBenchmark(params.benchmarkVcf, params.benchmarkBedFile, params.basic.bamCfg.qualityThreshold)
+    : HaplotagProcess(params.basic),sParams(params), somaticBenchmark(params.benchmarkVcf, params.benchmarkBedFile, params.basic.bamCfg.qualityThreshold), totalTwoSiteSomaticPS(0)
 {
     hpBeforeInheritance = new ReadHpDistriLog();
     hpAfterInheritance = new ReadHpDistriLog();
@@ -41,6 +43,7 @@ void SomaticHaplotagProcess::printParamsMessage(){
     std::cerr<< "percentage threshold         : " << sParams.basic.bamCfg.percentageThreshold << "\n";
     std::cerr<< "write log file               : " << (sParams.basic.bamCfg.writeReadLog ? "enabled" : "disabled") << "\n";
     std::cerr<< "tag supplementary            : " << (sParams.basic.bamCfg.tagSupplementary ? "enabled" : "disabled") << "\n";
+    std::cerr<< "enable two-site split        : " << (sParams.enableTwoSiteSplit ? "enabled" : "disabled") << "\n";
     std::cerr<< "\n";
     std::cerr<< "[Somatic Variant Calling Params] " << "\n";
     std::cerr<< "mapping quality              : " << sParams.basic.bamCfg.qualityThreshold << "\n";
@@ -77,6 +80,13 @@ void SomaticHaplotagProcess::pipelineProcess()
     somaticVarCaller->getSomaticFlag(*chrVec, *chrMultiVariants);
     delete somaticVarCaller;
 
+    if(sParams.enableTwoSiteSplit){
+        buildTwoSiteSomaticPS();
+    }else{
+        chrTwoSiteSomaticPS.clear();
+        totalTwoSiteSomaticPS = 0;
+    }
+
     // write somatic calling vcf
     if(sParams.writeSomaticCallingVcf){
         std::cerr<< "writing somatic variants to vcf file ... ";
@@ -107,6 +117,70 @@ void SomaticHaplotagProcess::pipelineProcess()
 
     return;
 };
+
+void SomaticHaplotagProcess::buildTwoSiteSomaticPS(){
+    std::cerr << "building two-site somatic PS map ... ";
+    std::time_t begin = time(NULL);
+
+    chrTwoSiteSomaticPS.clear();
+    totalTwoSiteSomaticPS = 0;
+
+    for(const auto& chrName : *chrVec){
+        std::map<int, std::vector<int>> psSomaticSnpPos;
+
+        auto chrVarIter = (*chrMultiVariants)[chrName].begin();
+        while(chrVarIter != (*chrMultiVariants)[chrName].end()){
+            int pos = chrVarIter->first;
+            MultiGenomeVar& varData = chrVarIter->second;
+
+            if(
+                varData.isSomaticVariant &&
+                varData.isExists(TUMOR) &&
+                varData.Variant[TUMOR].variantType == HaplotagVariantType::SNP &&
+                varData.Variant[TUMOR].allele.Ref.size() == 1 &&
+                varData.Variant[TUMOR].allele.Alt.size() == 1
+            ){
+                int normalPS = VarData::NONE_PHASED_SET;
+
+                if(
+                    varData.isExists(NORMAL) &&
+                    varData.Variant[NORMAL].GT == GenomeType::PHASED_HETERO &&
+                    varData.Variant[NORMAL].isExistPhasedSet()
+                ){
+                    normalPS = varData.Variant[NORMAL].PhasedSet;
+                }
+                else if(varData.Variant[TUMOR].isExistPhasedSet()){
+                    normalPS = varData.Variant[TUMOR].PhasedSet;
+                }
+
+                if(normalPS != VarData::NONE_PHASED_SET){
+                    psSomaticSnpPos[normalPS].push_back(pos);
+                }
+            }
+            chrVarIter++;
+        }
+
+        for(auto& psEntry : psSomaticSnpPos){
+            int ps = psEntry.first;
+            std::vector<int>& positions = psEntry.second;
+
+            if(positions.size() != 2){
+                continue;
+            }
+
+            std::sort(positions.begin(), positions.end());
+            chrTwoSiteSomaticPS[chrName][ps] = TwoSiteSomaticPS{
+                .ps = ps,
+                .siteA = positions[0],
+                .siteB = positions[1]
+            };
+            totalTwoSiteSomaticPS++;
+        }
+    }
+
+    std::cerr << difftime(time(NULL), begin) << "s";
+    std::cerr << " (eligible PS: " << totalTwoSiteSomaticPS << ")\n";
+}
 
 void SomaticHaplotagProcess::parseVariantFiles(VcfParser& vcfParser){
     // normal SNP, SV, MOD vcf file
@@ -258,11 +332,13 @@ SomaticHaplotagBamParser::SomaticHaplotagBamParser(
     SomaticReadBenchmark& somaticBenchmark,
     ReadHpDistriLog& hpBeforeInheritance,
     ReadHpDistriLog& hpAfterInheritance,
+    const std::map<std::string, std::map<int, TwoSiteSomaticPS>>& chrTwoSiteSomaticPS,
     const SomaticHaplotagParameters& sParams
 ):GermlineHaplotagBamParser(config, control, readStats, sParams.basic),
     somaticBenchmark(somaticBenchmark),
     hpBeforeInheritance(hpBeforeInheritance),
     hpAfterInheritance(hpAfterInheritance),
+    chrTwoSiteSomaticPS(chrTwoSiteSomaticPS),
     sParams(sParams)
 {
 
@@ -280,9 +356,13 @@ SomaticHaplotagChrProcessor::SomaticHaplotagChrProcessor(
     SomaticReadBenchmark& somaticBenchmark,
     ReadHpDistriLog& hpBeforeInheritance,
     ReadHpDistriLog& hpAfterInheritance,
-    const std::string &chr
+    const std::string &chr,
+    bool enableTwoSiteSplit,
+    const std::map<int, TwoSiteSomaticPS>* twoSiteSomaticPS
 ):GermlineHaplotagChrProcessor(writeOutputBam, mappingQualityFilter, readStats, tagResult),
-    somaticReadCounter(nullptr)
+    somaticReadCounter(nullptr),
+    enableTwoSiteSplit(enableTwoSiteSplit),
+    twoSiteSomaticPS(twoSiteSomaticPS)
 {
 
     bool enableBenckmark = somaticBenchmark.isEnabled();
@@ -330,6 +410,7 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
 
     //record variants on this read
     std::map<int, int> variantsHP;
+    std::map<int, int> somaticReadAlleleState;
 
     // poition, <BaseHP,deriveByHp>
     std::map<int, std::pair<int , int>> somaticVarDeriveHP;
@@ -346,7 +427,7 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
     // Create a CIGAR parser using polymorphism design
     // Use GermlineHaplotagCigarParser to process CIGAR strings for normal samples
     CigarParserContext cigarCtx(aln, bamHdr, chrName, params, firstVariantIter, currentChrVariants, ref_string);   
-    CigarParser* cigarParser = new SomaticHaplotagCigarParser(cigarCtx, ref_pos, query_pos, tumCountPS, somaticVarDeriveHP, *somaticReadCounter);
+    CigarParser* cigarParser = new SomaticHaplotagCigarParser(cigarCtx, ref_pos, query_pos, tumCountPS, somaticVarDeriveHP, somaticReadAlleleState, *somaticReadCounter);
     cigarParser->parsingCigar(hpCount, variantsHP, norCountPS);
     delete cigarParser;
     //In the current version, only normal SVs are considered, without inclusion of tumor samples
@@ -372,7 +453,10 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
         // Inherit haplotype information for H3 reads based on somatic variant derived haplotype
         hpResult = inheritHaplotype(deriveByHpSimilarity, params.percentageThreshold, somaticVarDeriveHP, hpCount, hpResult, aln);
     }
- 
+    int hpResultAfterInheritance = hpResult;
+    if(enableTwoSiteSplit){
+        hpResult = resolveTwoSiteSplitLabel(hpResultAfterInheritance, norCountPS, somaticReadAlleleState, aln);
+    }
 
     if(!somaticVarDeriveHP.empty()){
         for(auto somaticVarIter : somaticVarDeriveHP){
@@ -526,6 +610,99 @@ int SomaticHaplotagChrProcessor::inheritHaplotype(
     return hpResult;
 }
 
+PairAlleleState SomaticHaplotagChrProcessor::resolvePairAlleleState(
+    const TwoSiteSomaticPS& twoSite,
+    const std::map<int, int>& somaticReadAlleleState,
+    int& alleleA,
+    int& alleleB
+) const {
+    alleleA = READ_ALLELE_UNK;
+    alleleB = READ_ALLELE_UNK;
+
+    bool coverA = false;
+    bool coverB = false;
+
+    auto alleleAIter = somaticReadAlleleState.find(twoSite.siteA);
+    if(alleleAIter != somaticReadAlleleState.end()){
+        coverA = true;
+        alleleA = alleleAIter->second;
+    }
+
+    auto alleleBIter = somaticReadAlleleState.find(twoSite.siteB);
+    if(alleleBIter != somaticReadAlleleState.end()){
+        coverB = true;
+        alleleB = alleleBIter->second;
+    }
+
+    if(!coverA || !coverB){
+        return PairAlleleState::PARTIAL;
+    }
+
+    if(alleleA == READ_ALLELE_UNK || alleleB == READ_ALLELE_UNK){
+        return PairAlleleState::PAIR_UNKNOWN;
+    }
+
+    if(alleleA == READ_ALLELE_ALT && alleleB == READ_ALLELE_REF){
+        return PairAlleleState::ALT_REF;
+    }
+
+    if(alleleA == READ_ALLELE_REF && alleleB == READ_ALLELE_ALT){
+        return PairAlleleState::REF_ALT;
+    }
+
+    if(alleleA == READ_ALLELE_ALT && alleleB == READ_ALLELE_ALT){
+        return PairAlleleState::ALT_ALT;
+    }
+
+    if(alleleA == READ_ALLELE_REF && alleleB == READ_ALLELE_REF){
+        return PairAlleleState::REF_REF;
+    }
+
+    return PairAlleleState::PAIR_UNKNOWN;
+}
+
+int SomaticHaplotagChrProcessor::resolveTwoSiteSplitLabel(
+    int rawHpResult,
+    const std::map<int, int>& norCountPS,
+    const std::map<int, int>& somaticReadAlleleState,
+    const bam1_t& aln
+){
+    (void)aln;
+    if(rawHpResult != ReadHP::H1_1 && rawHpResult != ReadHP::H2_1){
+        return rawHpResult;
+    }
+
+    if(twoSiteSomaticPS == nullptr || twoSiteSomaticPS->empty()){
+        return rawHpResult;
+    }
+
+    if(norCountPS.size() != 1){
+        return rawHpResult;
+    }
+
+    int readPS = norCountPS.begin()->first;
+    auto twoSiteIter = twoSiteSomaticPS->find(readPS);
+    if(twoSiteIter == twoSiteSomaticPS->end()){
+        return rawHpResult;
+    }
+
+    const TwoSiteSomaticPS& twoSite = twoSiteIter->second;
+    int alleleA = READ_ALLELE_UNK;
+    int alleleB = READ_ALLELE_UNK;
+    PairAlleleState pairState = resolvePairAlleleState(twoSite, somaticReadAlleleState, alleleA, alleleB);
+
+    int finalHpResult = rawHpResult;
+    if(pairState == PairAlleleState::REF_ALT){
+        if(rawHpResult == ReadHP::H1_1){
+            finalHpResult = ReadHP::H1_2;
+        }else if(rawHpResult == ReadHP::H2_1){
+            finalHpResult = ReadHP::H2_2;
+        }
+    }
+
+    return finalHpResult;
+}
+
 void SomaticHaplotagChrProcessor::addAuxiliaryTags(bam1_t *aln, int& haplotype, int& pqValue, int& psValue){
     std::string haplotype_str = "";
     haplotype_str = ReadHapUtil::readHapIntToString(haplotype);
@@ -541,10 +718,12 @@ SomaticHaplotagCigarParser::SomaticHaplotagCigarParser(
     int& query_pos,
     std::map<int, int>& tumCountPS,
     std::map<int, std::pair<int, int>>& somaticVarDeriveHP,
+    std::map<int, int>& somaticReadAlleleState,
     SomaticReadVerifier& somaticReadCounter
 ):CigarParser(ctx, ref_pos, query_pos),
     tumCountPS(tumCountPS),
     somaticVarDeriveHP(somaticVarDeriveHP),
+    somaticReadAlleleState(somaticReadAlleleState),
     somaticReadCounter(somaticReadCounter)
 {
 
@@ -568,6 +747,7 @@ void SomaticHaplotagCigarParser::processMatchOperation(int& length, uint32_t* ci
             }
         }
         somaticVarDeriveHP[(*currentVariantIter).first] = std::make_pair(BaseHp, deriveByHp);
+        somaticReadAlleleState[(*currentVariantIter).first] = resolveSomaticReadAllele(currentVariantIter->second, base);
 
     } 
     
@@ -576,6 +756,31 @@ void SomaticHaplotagCigarParser::processMatchOperation(int& length, uint32_t* ci
 
 void SomaticHaplotagCigarParser::processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel){
     somaticReadCounter.recordDelReadCount(ctx.chrName, currentVariantIter);
+}
+
+int SomaticHaplotagCigarParser::resolveSomaticReadAllele(MultiGenomeVar& currentVar, const std::string& base) const{
+    if(!currentVar.isExists(TUMOR)){
+        return READ_ALLELE_UNK;
+    }
+
+    const VarData& tumorVar = currentVar.Variant.at(TUMOR);
+    if(
+        tumorVar.variantType != HaplotagVariantType::SNP ||
+        tumorVar.allele.Ref.size() != 1 ||
+        tumorVar.allele.Alt.size() != 1
+    ){
+        return READ_ALLELE_UNK;
+    }
+
+    if(base == tumorVar.allele.Ref){
+        return READ_ALLELE_REF;
+    }
+
+    if(base == tumorVar.allele.Alt){
+        return READ_ALLELE_ALT;
+    }
+
+    return READ_ALLELE_UNK;
 }
 
 void SomaticTagLog::addParamsMessage(){
@@ -590,7 +795,8 @@ void SomaticTagLog::addParamsMessage(){
                 << "##qualityThreshold:" << sParams.basic.bamCfg.qualityThreshold << "\n"
                 << "##somaticCallingThreshold:" << sParams.basic.bamCfg.qualityThreshold << "\n"
                 << "##percentageThreshold:" << sParams.basic.bamCfg.percentageThreshold << "\n"
-                << "##tagSupplementary:" << sParams.basic.bamCfg.tagSupplementary << "\n";
+                << "##tagSupplementary:" << sParams.basic.bamCfg.tagSupplementary << "\n"
+                << "##enableTwoSiteSplit:" << sParams.enableTwoSiteSplit << "\n";
 }
 
 void SomaticTagLog::writeBasicColumns(){
