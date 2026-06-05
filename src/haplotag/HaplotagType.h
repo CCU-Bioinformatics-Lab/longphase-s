@@ -35,6 +35,7 @@ enum SomaticHaplotagOption
 {
     TUM_SNP = 50,
     TUM_BAM,
+    ENABLE_TWO_SITE_SPLIT,
     DISABLE_FILTER,
     TUMOR_PURITY,
     OUTPUT_SOMATIC_VCF,

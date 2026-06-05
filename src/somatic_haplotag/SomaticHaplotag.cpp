@@ -13,6 +13,7 @@ constexpr const char *CORRECT_USAGE_MESSAGE =
 "      -r, --reference=NAME            reference FASTA.\n\n"
 "optional arguments:\n"
 "      --tagSupplementary              tag supplementary alignment. default:false\n"
+"      --enable-two-site-split         enable two-site split relabeling for REF_ALT pairs. default:false\n"
 "      -q, --qualityThreshold=Num      not tag alignment if the mapping quality less than threshold. default:1\n"
 "      -p, --percentageThreshold=Num   the alignment will be tagged according to the haplotype corresponding to most alleles.\n"
 "                                      if the alignment has no obvious corresponding haplotype, it will not be tagged. default:0.6\n"
@@ -44,6 +45,7 @@ void SomaticHaplotagOptionDefiner::defineOptions(ArgumentManager& manager) {
     // somatic haplotag-specific options
     manager.addOption({"tumor-snv-file", required_argument, NULL, TUM_SNP});
     manager.addOption({"tumor-bam-file", required_argument, NULL, TUM_BAM});
+    manager.addOption({"enable-two-site-split", no_argument, NULL, ENABLE_TWO_SITE_SPLIT});
     
     manager.addOption({"disableFilter", no_argument, NULL, DISABLE_FILTER});
     manager.addOption({"tumor-purity", required_argument, NULL, TUMOR_PURITY});
@@ -65,6 +67,7 @@ void ParamsHandler<SomaticHaplotagParameters>::initialize(SomaticHaplotagParamet
     params.writeSomaticCallingVcf = false;
     params.callerCfg.writeCallingLog = false;
     params.writeBenchmarkLog = false;
+    params.enableTwoSiteSplit = false;
     params.metricsSuffix = "_somatic_haplotag.metrics";
 }
 
@@ -80,6 +83,7 @@ bool ParamsHandler<SomaticHaplotagParameters>::loadArgument(SomaticHaplotagParam
         {
             case SomaticHaplotagOption::TUM_SNP: arg >> params.tumorSnvFile; break;
             case SomaticHaplotagOption::TUM_BAM: arg >> params.tumorBamFile; break;
+            case SomaticHaplotagOption::ENABLE_TWO_SITE_SPLIT: params.enableTwoSiteSplit = true; break;
             case SomaticHaplotagOption::BENCHMARK_VCF: arg >> params.benchmarkVcf; break;
             case SomaticHaplotagOption::BENCHMARK_BED: arg >> params.benchmarkBedFile; break;
             case SomaticHaplotagOption::BENCHMARK_LOG: params.writeBenchmarkLog = true; break;

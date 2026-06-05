@@ -4,7 +4,8 @@
  * @brief Record read haplotype assignment for a specific position
  * 
  * Updates haplotype counters and performs validation for somatic variants.
- * For somatic H3 variants, validates that read haplotypes are valid (H1_1, H2_1, or H3).
+ * For somatic H3 variants, validates that read haplotypes are valid
+ * (H1_1, H1_2, H2_1, H2_2, or H3).
  * 
  * @param pos Variant position (0-based)
  * @param hpResult Assigned haplotype for the read
@@ -16,7 +17,9 @@ void chrReadHpResult::recordReadHp(int &pos, int &hpResult, int &BaseHP){
     if(hpResult != ReadHP::unTag){
         if(BaseHP == SnpHP::SOMATIC_H3){
             // Validate read haplotype for somatic H3 variants
-            if(hpResult != ReadHP::H1_1 && hpResult != ReadHP::H2_1 && hpResult != ReadHP::H3){
+            if(hpResult != ReadHP::H1_1 && hpResult != ReadHP::H1_2 &&
+               hpResult != ReadHP::H2_1 && hpResult != ReadHP::H2_2 &&
+               hpResult != ReadHP::H3){
                 std::cerr << "[ERROR](recordReadHp) => error read hp : BaseHP: " <<BaseHP << " readHP: " << hpResult << " pos: " << pos+1 << std::endl; 
                 exit(1);
             }

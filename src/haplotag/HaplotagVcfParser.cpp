@@ -300,37 +300,69 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
             modifu_start++;
         }
 
-        // phased hetero GT
-        if( (fields[9][modifu_start] != fields[9][modifu_start+2]) && fields[9][modifu_start+1] == '|' ){
-            // find PS flag
-            colon_pos = 0;
-            int ps_pos = fields[8].find("PS");
-            for(int i =0 ; i< ps_pos ; i++){
-                if(fields[8][i]==':')
-                    colon_pos++;
+        auto getFormatFieldValue = [&](const std::string& key, std::string& value)->bool{
+            int field_pos = fields[8].find(key);
+            if(field_pos == std::string::npos){
+                return false;
             }
 
-            // find PS value start
-            current_colon = 0;
-            int ps_start = 0;
-            for(unsigned int i =0; i < fields[9].length() ; i++){
-                if( current_colon >= colon_pos )
-                    break;
-                if(fields[9][i]==':')
-                    current_colon++;  
-                ps_start++;
+            int field_colon_pos = 0;
+            for(int i = 0; i < field_pos; i++){
+                if(fields[8][i] == ':'){
+                    field_colon_pos++;
+                }
             }
-            
-            std::string psValue;
-            // get PS value
-            if( fields[9].find(":",ps_start+1) != std::string::npos ){
-                int ps_end_pos = fields[9].find(":",ps_start+1);
-                psValue = fields[9].substr(ps_start, ps_end_pos - ps_start);
+
+            int sample_colon_count = 0;
+            int value_start = 0;
+            for(unsigned int i = 0; i < fields[9].length(); i++){
+                if(sample_colon_count >= field_colon_pos){
+                    break;
+                }
+                if(fields[9][i] == ':'){
+                    sample_colon_count++;
+                }
+                value_start++;
+            }
+
+            if(value_start >= (int)fields[9].length()){
+                return false;
+            }
+
+            if(fields[9][value_start] == '.'){
+                return false;
+            }
+
+            if(fields[9].find(":", value_start + 1) != std::string::npos){
+                int value_end = fields[9].find(":", value_start + 1);
+                value = fields[9].substr(value_start, value_end - value_start);
             }
             else{
-                psValue = fields[9].substr(ps_start, fields[9].length() - ps_start);
+                value = fields[9].substr(value_start, fields[9].length() - value_start);
             }
-            
+            return true;
+        };
+
+        auto assignPhasedSetIfPresent = [&](VarData& varData){
+            std::string psValue;
+            if(!getFormatFieldValue("PS", psValue)){
+                return;
+            }
+
+            if(integerPS){
+                varData.PhasedSet = std::stoi(psValue);
+            }
+            else{
+                std::map<std::string, int>::iterator psIter = psIndex.find(psValue);
+                if(psIter == psIndex.end()){
+                    psIndex[psValue] = psIndex.size();
+                }
+                varData.PhasedSet = psIndex[psValue];
+            }
+        };
+
+        // phased hetero GT
+        if( (fields[9][modifu_start] != fields[9][modifu_start+2]) && fields[9][modifu_start+1] == '|' ){
             // snp file
             if( parseSnpFile ){
 
@@ -369,19 +401,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                     }
                 }
                 
-                // Handle PS value (integer or string)
-                if(integerPS){
-                    varData.PhasedSet = std::stoi(psValue);
-                }
-                else{
-                    // Map string PS values to integer indices
-                    std::map<std::string, int>::iterator psIter = psIndex.find(psValue);
-                    
-                    if( psIter == psIndex.end() ){
-                        psIndex[psValue] = psIndex.size();
-                    }
-                    varData.PhasedSet = psIndex[psValue];
-                }
+                assignPhasedSetIfPresent(varData);
                 
                 // record haplotype allele
                 if( fields[9][modifu_start] == '0' && fields[9][modifu_start+2] == '1' ){
@@ -490,6 +510,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                             return;
                         }
                     }
+                    assignPhasedSetIfPresent(varData);
 
                     if(Info.sample == NORMAL){
                         chrMultiVariants[chr][pos].Variant[NORMAL] = varData;
@@ -519,6 +540,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
                             return;
                         }
                     }
+                    assignPhasedSetIfPresent(varData);
 
                     if(Info.sample == NORMAL){
                         chrMultiVariants[chr][pos].Variant[NORMAL] = varData;
