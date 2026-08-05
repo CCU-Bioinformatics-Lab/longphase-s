@@ -93,6 +93,71 @@ struct BamParserContext{
     {}
 };
 
+struct TumorDelShiftInfo{
+    std::string readid ;
+    std::string cigarstring;
+    int shiftLength;
+    int delLengthTumor;
+    int CIGAR_Del_Length;
+    int lengthDiff;
+    
+    TumorDelShiftInfo(std::string readid, std::string cigarstring, int shiftLength, int delLengthTumor, int CIGAR_Del_Length, int lengthDiff):
+    readid(readid),
+    cigarstring(cigarstring),
+    shiftLength(shiftLength),
+    delLengthTumor(delLengthTumor),
+    CIGAR_Del_Length(CIGAR_Del_Length),
+    lengthDiff(lengthDiff)
+    {}
+};
+
+struct NormalDelInfo{
+    std::string readid;
+    std::string cigarstring;
+    int CIGAR_Del_Length;
+    int normalDelPos; 
+    
+    NormalDelInfo(std::string readid, std::string cigarstring, int CIGAR_Del_Length, int normalDelPos):
+    readid(readid),
+    cigarstring(cigarstring),
+    CIGAR_Del_Length(CIGAR_Del_Length),
+    normalDelPos(normalDelPos)
+    {}
+};
+
+// Insertion CIGAR context recorded around tumor INS variant positions on tumor reads
+// CIGAR string covers a +/- 10bp reference window centered on the variant position
+struct TumorInsInfo{
+    std::string readid;
+    std::string cigarstring;
+    int insLengthTumor;       // INS length declared by tumor VCF (Alt.length() - 1)
+    int CIGAR_Ins_Length;     // INS length observed in this read's CIGAR
+    int lengthDiff;           // |insLengthTumor - CIGAR_Ins_Length|
+
+    TumorInsInfo(std::string readid, std::string cigarstring, int insLengthTumor, int CIGAR_Ins_Length, int lengthDiff):
+    readid(readid),
+    cigarstring(cigarstring),
+    insLengthTumor(insLengthTumor),
+    CIGAR_Ins_Length(CIGAR_Ins_Length),
+    lengthDiff(lengthDiff)
+    {}
+};
+
+// Insertion CIGAR context recorded around tumor INS variant positions on normal reads
+struct NormalInsInfo{
+    std::string readid;
+    std::string cigarstring;
+    int CIGAR_Ins_Length;     // INS length observed in this read's CIGAR (0 if no I op present)
+    int normalInsPos;         // read-level offset where the I op begins (query coord)
+
+    NormalInsInfo(std::string readid, std::string cigarstring, int CIGAR_Ins_Length, int normalInsPos):
+    readid(readid),
+    cigarstring(cigarstring),
+    CIGAR_Ins_Length(CIGAR_Ins_Length),
+    normalInsPos(normalInsPos)
+    {}
+};
+
 /**
  * @brief Context structure for chromosome processing
  * 
@@ -104,7 +169,10 @@ struct ChrProcContext{
     const ParsingBamConfig &params; 
     const Genome genomeSample;
     std::map<Genome, VCF_Info> &vcfSet; 
-
+    std::map<int, std::vector<TumorDelShiftInfo>> tumorDelShiftInfo;
+    std::map<int, std::vector<NormalDelInfo>> normalDelInfo;
+    std::map<int, std::vector<TumorInsInfo>> tumorInsInfo;
+    std::map<int, std::vector<NormalInsInfo>> normalInsInfo;
     ChrProcContext(
         const std::string &chrName,
         const int& chrLength,
@@ -117,7 +185,12 @@ struct ChrProcContext{
     params(params),
     genomeSample(genomeSample),
     vcfSet(vcfSet)
-    {}
+    {
+        tumorDelShiftInfo = std::map<int, std::vector<TumorDelShiftInfo>>();
+        normalDelInfo = std::map<int, std::vector<NormalDelInfo>>();
+        tumorInsInfo = std::map<int, std::vector<TumorInsInfo>>();
+        normalInsInfo = std::map<int, std::vector<NormalInsInfo>>();
+    }
 };
 
 /**
@@ -133,6 +206,11 @@ struct CigarParserContext{
     std::map<int, MultiGenomeVar>::iterator& firstVariantIter;
     std::map<int, MultiGenomeVar>& currentVariants;
     const std::string& ref_string;
+    const Genome genomeSample;
+    std::map<int, std::vector<TumorDelShiftInfo>>& tumorDelShiftInfo;
+    std::map<int, std::vector<NormalDelInfo>>& normalDelInfo;
+    std::map<int, std::vector<TumorInsInfo>>& tumorInsInfo;
+    std::map<int, std::vector<NormalInsInfo>>& normalInsInfo;
     
     CigarParserContext(
         const bam1_t& aln,
@@ -141,7 +219,12 @@ struct CigarParserContext{
         const ParsingBamConfig& params,
         std::map<int, MultiGenomeVar>::iterator& firstVariantIter,
         std::map<int, MultiGenomeVar>& currentVariants,
-        const std::string& ref_string
+        const std::string& ref_string,
+        const Genome genomeSample,
+        std::map<int, std::vector<TumorDelShiftInfo>>& tumorDelShiftInfo,
+        std::map<int, std::vector<NormalDelInfo>>& normalDelInfo,
+        std::map<int, std::vector<TumorInsInfo>>& tumorInsInfo,
+        std::map<int, std::vector<NormalInsInfo>>& normalInsInfo
     ):
     aln(aln),
     bamHdr(bamHdr),
@@ -149,7 +232,12 @@ struct CigarParserContext{
     params(params),
     firstVariantIter(firstVariantIter),
     currentVariants(currentVariants),
-    ref_string(ref_string)
+    ref_string(ref_string),
+    genomeSample(genomeSample),
+    tumorDelShiftInfo(tumorDelShiftInfo),
+    normalDelInfo(normalDelInfo),
+    tumorInsInfo(tumorInsInfo),
+    normalInsInfo(normalInsInfo)
     {}
 };
 
@@ -524,6 +612,13 @@ class CigarParser{
             HaplotagVariantType::VariantType variantType,
             Genome sample
         );
+
+        std::string buildSimplifiedCigarString(uint32_t* cigar, int startIdx, int aln_core_n_cigar, int refLengthLimit, int firstOpPartialLen = 0);
+
+        // Build a simplified CIGAR string covering a fixed +/- flank reference window
+        // around variantPos. I ops at the window boundary (i.e. between two M ops) are kept.
+        // S/H/P/N are skipped from output.
+        std::string buildFlankingCigarString(uint32_t* cigar, int aln_core_n_cigar, int alnStartRefPos, int variantPos, int leftFlank, int rightFlank);
 
     public:
         /**

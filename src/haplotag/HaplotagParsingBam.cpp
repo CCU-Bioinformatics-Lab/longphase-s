@@ -603,7 +603,7 @@ void CigarParser::parsingCigar(
                             isAlt = IsAltIndel(ref_pos, length, i, aln_core_n_cigar, cigar, currentVariantIter, base, variantType, TUMOR);
                         }    
                         processMatchOperation(length, cigar, i, aln_core_n_cigar, base, isAlt, offset);                        
-                        }
+                    }
                     currentVariantIter++;
                 }
                 query_pos += length;
@@ -619,6 +619,57 @@ void CigarParser::parsingCigar(
                 // only execute at the first phased normal snp
                 bool alreadyJudgeDel = false;
                 while( currentVariantIter != ctx.currentVariants.end() && (*currentVariantIter).first < ref_pos + length){
+                    // INS variant whose pos is consumed by a D op: record CIGAR flanking
+                    // (read carries D where INS was expected; not counted as ALT)
+                    if((*currentVariantIter).second.isExists(TUMOR) &&
+                       (*currentVariantIter).second.Variant[TUMOR].variantType == HaplotagVariantType::INSERTION){
+                        int variantPos = (*currentVariantIter).first;
+                        const int FLANK_BP = 10;
+                        int insLengthTumor = static_cast<int>((*currentVariantIter).second.Variant[TUMOR].allele.Alt.length()) - 1;
+                        int currentInsLength = 0;
+                        int lengthDiff = abs(insLengthTumor - currentInsLength);
+
+                        std::string insRegionCigar = buildFlankingCigarString(
+                            cigar, aln_core_n_cigar, ctx.aln.core.pos, variantPos, FLANK_BP, FLANK_BP);
+
+                        if(ctx.genomeSample == TUMOR){
+                            ctx.tumorInsInfo[variantPos].push_back(
+                                TumorInsInfo(bam_get_qname(&ctx.aln), insRegionCigar,
+                                             insLengthTumor, currentInsLength, lengthDiff));
+                        } else if(ctx.genomeSample == NORMAL){
+                            // D doesn't consume read; query_pos is at the read base just before the D
+                            int normalInsPos = query_pos;
+                            ctx.normalInsInfo[variantPos].push_back(
+                                NormalInsInfo(bam_get_qname(&ctx.aln), insRegionCigar,
+                                              currentInsLength, normalInsPos));
+                        }
+                    }
+                    // Check deletion length difference when processing tumor BAM
+                    if(ctx.genomeSample == TUMOR){
+                        // Check if this variant is a DELETION
+                        if((*currentVariantIter).second.isExists(TUMOR) && 
+                           (*currentVariantIter).second.Variant[TUMOR].variantType == HaplotagVariantType::DELETION){
+                            int delLengthTumor = static_cast<int>((*currentVariantIter).second.Variant[TUMOR].allele.Ref.length());
+                            int currentDelLength = length; // CIGAR deletion length
+                            int lengthDiff = abs(delLengthTumor - currentDelLength);
+                            int shiftLength = (*currentVariantIter).first - ref_pos + 1;
+                            // Build simplified CIGAR string for the deletion region (start from current D operation)
+                            std::string delRegionCigar = buildSimplifiedCigarString(cigar, i, aln_core_n_cigar, delLengthTumor);
+                            if(lengthDiff < 100){
+                                ctx.tumorDelShiftInfo[(*currentVariantIter).first].push_back(TumorDelShiftInfo(bam_get_qname(&ctx.aln), delRegionCigar,shiftLength, delLengthTumor, currentDelLength, lengthDiff));
+                                // std::cerr << "[DELETION_LENGTH_DIFF] Read"  <<  ctx.tumorDelShiftInfo[(*currentVariantIter).first].back().readid 
+                                // << " Pos: " << (*currentVariantIter).first 
+                                // << " Sample: " << TUMOR
+                                // << " Sample_Del_Length: " << delLengthTumor 
+                                // << " Shift_Length: " << ctx.tumorDelShiftInfo[(*currentVariantIter).first].back().shiftLength
+                                // << " TUMOR_Del_Length: " << ctx.tumorDelShiftInfo[(*currentVariantIter).first].back().delLengthTumor
+                                // << " CIGAR_Del_Length: " << ctx.tumorDelShiftInfo[(*currentVariantIter).first].back().CIGAR_Del_Length 
+                                // << " CIGAR_string: " << ctx.tumorDelShiftInfo[(*currentVariantIter).first].back().cigarstring
+                                // << " Diff: " << ctx.tumorDelShiftInfo[(*currentVariantIter).first].back().lengthDiff << std::endl;
+                            }
+                            
+                        }
+                    }
                     processDeletionOperation(length, cigar, i, aln_core_n_cigar, alreadyJudgeDel);
                     currentVariantIter++;
                 }
@@ -646,6 +697,134 @@ void CigarParser::parsingCigar(
     }
 }
 
+std::string CigarParser::buildSimplifiedCigarString(uint32_t* cigar, int startIdx, int aln_core_n_cigar, int refLengthLimit, int firstOpPartialLen){
+    std::string delRegionCigar;
+    static const char CIGAR_OPS[] = "MIDNSHP=X";
+    int refConsumed = 0;
+    char lastOp = '\0';
+    int lastOpLen = 0;
+    bool stopAfterThisOp = false;  // Flag to stop after current operation (for D exceeding region)
+    
+    for(int j = startIdx; j < aln_core_n_cigar && refConsumed < refLengthLimit && !stopAfterThisOp; j++){
+        int opLen = bam_cigar_oplen(cigar[j]);
+        int op = bam_cigar_op(cigar[j]);
+        // Convert = (7) and X (8) to M
+        char opChar = (op == 7 || op == 8) ? 'M' : CIGAR_OPS[op];
+        
+        // Check if this operation consumes reference (M, D, N, =, X)
+        bool consumesRef = (op == 0 || op == 2 || op == 3 || op == 7 || op == 8);
+        // Check if this is a D operation
+        bool isDeletion = (op == 2);
+        
+        // For the first operation, use partial length if specified (but not for D)
+        if(j == startIdx && firstOpPartialLen > 0 && consumesRef && !isDeletion){
+            opLen = firstOpPartialLen;
+        }
+        
+        // Calculate effective length within the deletion region
+        int effectiveLen = opLen;
+        int refToConsume = opLen;  // Amount to add to refConsumed
+        if(consumesRef){
+            int remaining = refLengthLimit - refConsumed;
+            if(opLen > remaining && remaining > 0){
+                if(isDeletion){
+                    // D: keep full length for output, record D and stop
+                    effectiveLen = opLen;
+                    refToConsume = remaining;
+                    stopAfterThisOp = true;  // Stop after recording this D
+                } else {
+                    // M: truncate both
+                    effectiveLen = remaining;
+                    refToConsume = remaining;
+                }
+            } else if(remaining <= 0){
+                // No more room in region
+                break;
+            }
+            refConsumed += refToConsume;
+        }
+        
+        // Skip if effective length is 0
+        if(effectiveLen <= 0) continue;
+        
+        // Merge consecutive same operations
+        if(opChar == lastOp){
+            lastOpLen += effectiveLen;
+        } else {
+            if(lastOp != '\0'){
+                delRegionCigar += std::to_string(lastOpLen) + lastOp;
+            }
+            lastOp = opChar;
+            lastOpLen = effectiveLen;
+        }
+    }
+    // Append the last operation
+    if(lastOp != '\0'){
+        delRegionCigar += std::to_string(lastOpLen) + lastOp;
+    }
+    return delRegionCigar;
+}
+
+std::string CigarParser::buildFlankingCigarString(uint32_t* cigar, int aln_core_n_cigar, int alnStartRefPos, int variantPos, int leftFlank, int rightFlank){
+    static const char CIGAR_OPS[] = "MIDNSHP=X";
+    // Inclusive reference window [regionStart, regionEnd] anchored on variantPos
+    // leftFlank covers up to and including variantPos; rightFlank covers strictly to the right
+    int regionStart = variantPos - leftFlank + 1;
+    int regionEnd   = variantPos + rightFlank;
+
+    int currentRefPos = alnStartRefPos;
+    std::string result;
+    char lastOp = '\0';
+    int lastOpLen = 0;
+
+    auto flushLastOp = [&](){
+        if(lastOp != '\0'){
+            result += std::to_string(lastOpLen) + lastOp;
+            lastOp = '\0';
+            lastOpLen = 0;
+        }
+    };
+    auto appendOp = [&](char opChar, int len){
+        if(len <= 0) return;
+        if(opChar == lastOp){
+            lastOpLen += len;
+        } else {
+            flushLastOp();
+            lastOp = opChar;
+            lastOpLen = len;
+        }
+    };
+
+    for(int j = 0; j < aln_core_n_cigar; j++){
+        int opLen = bam_cigar_oplen(cigar[j]);
+        int op    = bam_cigar_op(cigar[j]);
+        char opChar = (op == 7 || op == 8) ? 'M' : CIGAR_OPS[op];
+        bool consumesRef = (op == 0 || op == 2 || op == 3 || op == 7 || op == 8);
+
+        if(consumesRef){
+            int opStart = currentRefPos;             // inclusive
+            int opEnd   = currentRefPos + opLen;     // exclusive
+            int effStart = std::max(opStart, regionStart);
+            int effEnd   = std::min(opEnd, regionEnd + 1);
+            if(effStart < effEnd){
+                appendOp(opChar, effEnd - effStart);
+            }
+            currentRefPos += opLen;
+            if(currentRefPos > regionEnd) break;
+        } else if(op == 1){
+            // Insertion: keep it if its anchor sits inside the window.
+            // currentRefPos is the next reference base after the I; an I anchored
+            // at variantPos sits between variantPos and variantPos+1, i.e.
+            // currentRefPos == variantPos + 1, which we want to include.
+            if(currentRefPos >= regionStart && currentRefPos <= regionEnd + 1){
+                appendOp('I', opLen);
+            }
+        }
+        // Skip S(4)/H(5)/P(6)/N(3 already handled as ref-consuming) for output
+    }
+    flushLastOp();
+    return result;
+}
 
 bool CigarParser::IsAltIndel(
     int& ref_pos, 
@@ -661,10 +840,106 @@ bool CigarParser::IsAltIndel(
     bool isAlt = false;
     if(variantType == HaplotagVariantType::SNP){
         isAlt = base == (*currentVariantIter).second.Variant[sample].allele.Alt;
-    }else if(variantType == HaplotagVariantType::INSERTION && i+1 < aln_core_n_cigar){
-        isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 1;
+    }else if(variantType == HaplotagVariantType::INSERTION){
+        int variantPos = (*currentVariantIter).first;
+        bool tumorExists = (*currentVariantIter).second.isExists(TUMOR);
+
+        // ALT detection: M ends exactly at variant pos and next op is I (no length/seq check).
+        // Loose criterion is intentional: long-read aligners often emit slightly shifted/sized
+        // I ops in indel-rich regions; counting them as ALT keeps norVAF accurate so that
+        // germline INS get filtered out via the somatic norVAF threshold.
+        if(i+1 < aln_core_n_cigar){
+            isAlt = ref_pos + length - 1 == variantPos && bam_cigar_op(cigar[i+1]) == 1;
+        }
+        int observedInsLen = isAlt ? bam_cigar_oplen(cigar[i+1]) : 0;
+
+        // Record CIGAR flanking window for every read whose M op covers this INS variant pos,
+        // regardless of whether the read carries the expected I (ALT), a D, or just plain M.
+        // ALT count is not affected (controlled by isAlt above).
+        if(tumorExists){
+            const int FLANK_BP = 10;
+            int insLengthTumor = static_cast<int>((*currentVariantIter).second.Variant[TUMOR].allele.Alt.length()) - 1;
+            int lengthDiff = abs(insLengthTumor - observedInsLen);
+
+            std::string insRegionCigar = buildFlankingCigarString(
+                cigar, aln_core_n_cigar, ctx.aln.core.pos, variantPos, FLANK_BP, FLANK_BP);
+
+            if(ctx.genomeSample == TUMOR){
+                ctx.tumorInsInfo[variantPos].push_back(
+                    TumorInsInfo(bam_get_qname(&ctx.aln), insRegionCigar,
+                                 insLengthTumor, observedInsLen, lengthDiff));
+            } else if(ctx.genomeSample == NORMAL){
+                int normalInsPos = query_pos + (variantPos - ref_pos) + 1;
+                ctx.normalInsInfo[variantPos].push_back(
+                    NormalInsInfo(bam_get_qname(&ctx.aln), insRegionCigar,
+                                  observedInsLen, normalInsPos));
+            }
+        }
     }else if(variantType == HaplotagVariantType::DELETION && i+1 < aln_core_n_cigar){
-        isAlt = ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2;
+        if(ref_pos + length - 1 == (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2){
+            // Get deletion length from sample variant
+            int delLengthSample = static_cast<int>((*currentVariantIter).second.Variant[sample].allele.Ref.length()) - 1;
+            int currentDelLength = bam_cigar_oplen(cigar[i+1]);
+            int shiftLength = abs(currentDelLength - delLengthSample);
+            // Check if TUMOR variant exists
+            bool tumorExists = (*currentVariantIter).second.isExists(TUMOR);
+            int delLengthTumor = 0;
+            if(tumorExists){
+                delLengthTumor = static_cast<int>((*currentVariantIter).second.Variant[TUMOR].allele.Ref.length()) - 1;
+            }
+            
+            int lengthDiff = shiftLength ;
+            
+            // Only store when processing tumor BAM and tumor variant exists and difference is small
+            if(ctx.genomeSample == TUMOR && tumorExists && lengthDiff < 100){
+                int firstMInRegion = ref_pos + length - (*currentVariantIter).first;
+                std::string delRegionCigar = buildSimplifiedCigarString(cigar, i + 1 , aln_core_n_cigar, delLengthTumor , firstMInRegion);
+                ctx.tumorDelShiftInfo[(*currentVariantIter).first].push_back(TumorDelShiftInfo(bam_get_qname(&ctx.aln), delRegionCigar, shiftLength, delLengthTumor, currentDelLength, lengthDiff));
+                isAlt = true;
+            }else if(ctx.genomeSample == NORMAL && tumorExists && lengthDiff < 100){
+                int variantPos = (*currentVariantIter).first;
+                int normalDelPos = ref_pos - 1;  // Position where D starts in read
+                // Calculate how much of current M is in deletion region
+                int firstMInRegion = ref_pos + length - variantPos;
+                std::string delRegionCigar = buildSimplifiedCigarString(cigar, i + 1 , aln_core_n_cigar, delLengthTumor, firstMInRegion);
+                ctx.normalDelInfo[variantPos].push_back(NormalDelInfo(bam_get_qname(&ctx.aln), delRegionCigar, currentDelLength, normalDelPos));
+            }
+            // Read has deletion at variant position - mark as ALT if length is similar
+            // This ensures correct germline haplotype voting for normal reads
+            // Right-shift case handles TUMOR-only restriction separately
+            if(lengthDiff < 100){
+                isAlt = true;
+            }
+        }else if(ref_pos + length - 1 > (*currentVariantIter).first && bam_cigar_op(cigar[i+1]) == 2 &&
+        ref_pos + length - 1 <= (*currentVariantIter).first + static_cast<int>((*currentVariantIter).second.Variant[sample].allele.Ref.length()) - 1 ){//&& ctx.genomeSample == TUMOR
+            // Get deletion length from sample variant
+            // int delLengthSample = static_cast<int>((*currentVariantIter).second.Variant[sample].allele.Ref.length()) - 1;
+            int currentDelLength = bam_cigar_oplen(cigar[i+1]);
+            int shiftLength = ref_pos + length - 1 - (*currentVariantIter).first;
+            // Check if TUMOR variant exists
+            bool tumorExists = (*currentVariantIter).second.isExists(TUMOR);
+            int delLengthTumor = 0;
+            if(tumorExists){
+                delLengthTumor = static_cast<int>((*currentVariantIter).second.Variant[TUMOR].allele.Ref.length()) - 1;
+            }
+            
+            int lengthDiff = abs(delLengthTumor - currentDelLength);
+            
+            // Only store when processing tumor BAM and tumor variant exists and difference is small
+            if(ctx.genomeSample == TUMOR && tumorExists && lengthDiff < 100){
+                int firstMInRegion = ref_pos + length - (*currentVariantIter).first;
+                std::string delRegionCigar = buildSimplifiedCigarString(cigar, i , aln_core_n_cigar, delLengthTumor , firstMInRegion);
+                ctx.tumorDelShiftInfo[(*currentVariantIter).first].push_back(TumorDelShiftInfo(bam_get_qname(&ctx.aln), delRegionCigar, shiftLength, delLengthTumor, currentDelLength, lengthDiff));
+                isAlt = true;
+            }else if(ctx.genomeSample == NORMAL && tumorExists && lengthDiff < 100){
+                int variantPos = (*currentVariantIter).first;
+                int normalDelPos = ref_pos - 1;  // Position where D starts in read
+                // Calculate how much of current M is in deletion region
+                int firstMInRegion = ref_pos + length - variantPos;
+                std::string delRegionCigar = buildSimplifiedCigarString(cigar, i, aln_core_n_cigar, delLengthTumor, firstMInRegion);
+                ctx.normalDelInfo[variantPos].push_back(NormalDelInfo(bam_get_qname(&ctx.aln), delRegionCigar, currentDelLength, normalDelPos));
+            }
+        }
     }
     return isAlt;
 }

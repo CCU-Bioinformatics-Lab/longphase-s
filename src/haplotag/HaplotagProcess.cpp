@@ -392,7 +392,7 @@ int GermlineHaplotagChrProcessor::judgeHaplotype(
     
     /// Create a CIGAR parser using polymorphism design
     // Use GermlineHaplotagCigarParser to process CIGAR strings for normal samples 
-    CigarParserContext cigarCtx(aln, bamHdr, chrName, params, firstVariantIter, currentChrVariants, ref_string);   
+    CigarParserContext cigarCtx(aln, bamHdr, chrName, params, firstVariantIter, currentChrVariants, ref_string, static_cast<Genome>(tagSample), tumorDelShiftInfo, normalDelInfo, tumorInsInfo, normalInsInfo);   
     CigarParser* cigarParser = new GermlineHaplotagCigarParser(cigarCtx, ref_pos, query_pos);
     cigarParser->parsingCigar(hpCount, variantsHP, countPS);
     delete cigarParser;

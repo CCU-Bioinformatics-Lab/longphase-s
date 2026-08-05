@@ -467,7 +467,7 @@ void VcfParser::parserProcess(std::string &input, VCF_Info &Info, std::map<std::
             }
         }
         // record unphased tumor SNPs (only when parsing tumor VCF)
-        else if(Info.sample == Genome::TUMOR){
+        else{
             //homozygous SNPs
             if( fields[9][modifu_start] == '1' && fields[9][modifu_start+1] == '/' && fields[9][modifu_start+2] == '1' ){
                 if(parseSnpFile){

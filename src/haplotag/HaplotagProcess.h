@@ -102,6 +102,11 @@ class GermlineHaplotagChrProcessor: public ChromosomeProcessor{
 
         GermlineHaplotagStrategy judger;
         
+        std::map<int, std::vector<TumorDelShiftInfo>> tumorDelShiftInfo;
+        std::map<int, std::vector<NormalDelInfo>> normalDelInfo;
+        std::map<int, std::vector<TumorInsInfo>> tumorInsInfo;
+        std::map<int, std::vector<NormalInsInfo>> normalInsInfo;
+        
         virtual void processLowMappingQuality() override;
         virtual void processUnmappedRead() override;
         virtual void processSecondaryAlignment() override;

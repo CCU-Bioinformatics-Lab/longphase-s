@@ -345,7 +345,7 @@ int SomaticHaplotagChrProcessor::judgeHaplotype(
 
     // Create a CIGAR parser using polymorphism design
     // Use GermlineHaplotagCigarParser to process CIGAR strings for normal samples
-    CigarParserContext cigarCtx(aln, bamHdr, chrName, params, firstVariantIter, currentChrVariants, ref_string);   
+    CigarParserContext cigarCtx(aln, bamHdr, chrName, params, firstVariantIter, currentChrVariants, ref_string, static_cast<Genome>(tagSample), tumorDelShiftInfo, normalDelInfo, tumorInsInfo, normalInsInfo);   
     CigarParser* cigarParser = new SomaticHaplotagCigarParser(cigarCtx, ref_pos, query_pos, tumCountPS, somaticVarDeriveHP, *somaticReadCounter);
     cigarParser->parsingCigar(hpCount, variantsHP, norCountPS);
     delete cigarParser;
@@ -576,6 +576,39 @@ void SomaticHaplotagCigarParser::processMatchOperation(int& length, uint32_t* ci
 
 void SomaticHaplotagCigarParser::processDeletionOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, bool& alreadyJudgeDel){
     somaticReadCounter.recordDelReadCount(ctx.chrName, currentVariantIter);
+
+    // Vote for left-shifted deletions: when a read's D operation covers a deletion variant,
+    // the read supports the ALT allele but wasn't caught by IsAltIndel (which only runs in M ops)
+    if(!alreadyJudgeDel){
+        auto& curVar = currentVariantIter->second;
+        HaplotagVariantType::VariantType variantType = HaplotagVariantType::NONE_VAR;
+        if(curVar.isExists(NORMAL)){
+            variantType = curVar.Variant[NORMAL].variantType;
+        }else if(curVar.isExists(TUMOR)){
+            variantType = curVar.Variant[TUMOR].variantType;
+        }
+
+        if(variantType == HaplotagVariantType::DELETION){
+            bool isAlt = true;
+            std::string base = "";  // overridden by judgeSomaticSnpHap for deletion types
+            somaticJudger.judgeSomaticSnpHap(
+                currentVariantIter, ctx.chrName, base,
+                *hpCount, *norCountPS, tumCountPS, variantsHP, nullptr, isAlt);
+
+            // record somatic derive HP (same as processMatchOperation)
+            if(currentVariantIter->second.isSomaticVariant){
+                int& deriveByHp = currentVariantIter->second.somaticReadDeriveByHP;
+                int BaseHp = SnpHP::NONE_SNP;
+                if(variantsHP->find((*currentVariantIter).first) != variantsHP->end()){
+                    if(variantsHP->at((*currentVariantIter).first) == SnpHP::SOMATIC_H3){
+                        BaseHp = SnpHP::SOMATIC_H3;
+                    }
+                }
+                somaticVarDeriveHP[(*currentVariantIter).first] = std::make_pair(BaseHp, deriveByHp);
+            }
+            alreadyJudgeDel = true;
+        }
+    }
 }
 
 void SomaticTagLog::addParamsMessage(){

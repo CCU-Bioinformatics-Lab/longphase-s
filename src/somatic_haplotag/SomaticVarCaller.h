@@ -7,6 +7,9 @@
 #include "../haplotag/HaplotagStrategy.h"
 #include "../haplotag/HaplotagLogging.h"
 #include "TumorPurityEstimator.h"
+#include "SomaticIndelModel.h"
+
+class FullAlignmentEncoder;
 
 /**
  * @brief Context information for somatic variant calling
@@ -36,7 +39,14 @@ struct CallerConfig
     bool estimateTumorPurity = true;    /** Whether to estimate tumor purity automatically */
     double tumorPurity = 0.0;          /** Manual tumor purity value (0.0-1.0) */
     bool writeCallingLog = false;       /** Whether to write detailed calling logs */
-    
+
+    /** Keep a called indel when the built-in CNN gives it at least this
+     *  probability of being a true positive. Each value is the operating point
+     *  its model was selected at during training; the filter is skipped
+     *  entirely when enableFilter is false (--disableFilter). */
+    static constexpr double DEL_MODEL_THRESHOLD = 0.5;
+    static constexpr double INS_MODEL_THRESHOLD = 0.5;
+
     CallerConfig() = default;
     
     /**
@@ -238,6 +248,12 @@ class ExtractNorDataChrProcessor : public ChromosomeProcessor{
         // store base information
         std::map<int, PosBase> *variantBase;
         GermlineHaplotagStrategy judger;
+        std::map<int, std::vector<TumorDelShiftInfo>> tumorDelShiftInfo;
+        // pointer to external normal deletion info container
+        std::map<int, std::vector<NormalDelInfo>> *normalDelInfo;
+        // dummy tumor INS container (not used in normal processor) and pointer to external normal INS info
+        std::map<int, std::vector<TumorInsInfo>> tumorInsInfo;
+        std::map<int, std::vector<NormalInsInfo>> *normalInsInfo;
     protected:
         //override processRead
         void processRead(
@@ -256,7 +272,12 @@ class ExtractNorDataChrProcessor : public ChromosomeProcessor{
         ) override;
 
     public:
-        ExtractNorDataChrProcessor(std::map<std::string, std::map<int, PosBase>> &chrPosNorBase, const std::string &chr);
+        ExtractNorDataChrProcessor(
+            std::map<std::string, std::map<int, PosBase>> &chrPosNorBase,
+            std::map<std::string, std::map<int, std::vector<NormalDelInfo>>> &chrNormalDelInfo,
+            std::map<std::string, std::map<int, std::vector<NormalInsInfo>>> &chrNormalInsInfo,
+            const std::string &chr
+        );
         virtual ~ExtractNorDataChrProcessor() override;
 };
 
@@ -300,6 +321,10 @@ class ExtractNorDataBamParser : public HaplotagBamParser{
     private:
         // chr, variant position (0-base), base count & depth
         std::map<std::string, std::map<int, PosBase>>& chrPosNorBase;
+        // chr, position, normal deletion info
+        std::map<std::string, std::map<int, std::vector<NormalDelInfo>>>& chrNormalDelInfo;
+        // chr, position, normal insertion info
+        std::map<std::string, std::map<int, std::vector<NormalInsInfo>>>& chrNormalInsInfo;
 
         // Test if the logic of judgeHaplotype is consistent (only single chromosome)
         std::ofstream *tagResult;
@@ -311,14 +336,16 @@ class ExtractNorDataBamParser : public HaplotagBamParser{
          * @return Unique pointer to chromosome processor
          */
         std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) override{
-            return std::unique_ptr<ChromosomeProcessor>(new ExtractNorDataChrProcessor(chrPosNorBase, chr));
+            return std::unique_ptr<ChromosomeProcessor>(new ExtractNorDataChrProcessor(chrPosNorBase, chrNormalDelInfo, chrNormalInsInfo, chr));
         };
 
     public:
         ExtractNorDataBamParser(
             const ParsingBamConfig& config,
             const ParsingBamControl& control,
-            std::map<std::string, std::map<int, PosBase>>& chrPosNorBase
+            std::map<std::string, std::map<int, PosBase>>& chrPosNorBase,
+            std::map<std::string, std::map<int, std::vector<NormalDelInfo>>>& chrNormalDelInfo,
+            std::map<std::string, std::map<int, std::vector<NormalInsInfo>>>& chrNormalInsInfo
         );
         ~ExtractNorDataBamParser();
         void displayPosInfo(std::string chr, int pos);
@@ -341,6 +368,14 @@ class ExtractTumDataChrProcessor : public ChromosomeProcessor{
         std::map<std::string, ReadVarHpCount> *readHpResultSet;
         // position, read ID, baseHP 
         std::map<int, std::map<std::string, int>> *tumorPosReadCorrBaseHP;
+        // deletion shift info collected during CIGAR parsing (owned by SomaticVarCaller)
+        std::map<int, std::vector<TumorDelShiftInfo>> *tumorDelShiftInfo;
+        // dummy normal del info (not used in tumor processing)
+        std::map<int, std::vector<NormalDelInfo>> normalDelInfo;
+        // insertion CIGAR context info collected during CIGAR parsing (owned by SomaticVarCaller)
+        std::map<int, std::vector<TumorInsInfo>> *tumorInsInfo;
+        // dummy normal ins info (not used in tumor processing)
+        std::map<int, std::vector<NormalInsInfo>> normalInsInfo;
 
     protected:
 
@@ -364,6 +399,8 @@ class ExtractTumDataChrProcessor : public ChromosomeProcessor{
             std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo,
             std::map<std::string, std::map<std::string, ReadVarHpCount>>& chrReadHpResultSet,
             std::map<std::string, std::map<int, std::map<std::string, int>>>& chrTumorPosReadCorrBaseHP,
+            std::map<std::string, std::map<int, std::vector<TumorDelShiftInfo>>>& chrTumorDelShiftInfo,
+            std::map<std::string, std::map<int, std::vector<TumorInsInfo>>>& chrTumorInsInfo,
             const std::string &chr
         );
         virtual ~ExtractTumDataChrProcessor() override;
@@ -426,6 +463,8 @@ class ExtractTumDataBamParser : public HaplotagBamParser{
         std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo;
         std::map<std::string, std::map<std::string, ReadVarHpCount>>& chrReadHpResultSet;
         std::map<std::string, std::map<int, std::map<std::string, int>>>& chrTumorPosReadCorrBaseHP;
+        std::map<std::string, std::map<int, std::vector<TumorDelShiftInfo>>>& chrTumorDelShiftInfo;
+        std::map<std::string, std::map<int, std::vector<TumorInsInfo>>>& chrTumorInsInfo;
     protected:
         /**
          * @brief Factory method to create chromosome processor
@@ -433,7 +472,16 @@ class ExtractTumDataBamParser : public HaplotagBamParser{
          * @return Unique pointer to chromosome processor
          */
         std::unique_ptr<ChromosomeProcessor> createProcessor(const std::string &chr) override{
-            return std::unique_ptr<ChromosomeProcessor>(new ExtractTumDataChrProcessor(chrPosSomaticInfo, chrReadHpResultSet, chrTumorPosReadCorrBaseHP, chr));
+            return std::unique_ptr<ChromosomeProcessor>(
+                new ExtractTumDataChrProcessor(
+                    chrPosSomaticInfo,
+                    chrReadHpResultSet,
+                    chrTumorPosReadCorrBaseHP,
+                    chrTumorDelShiftInfo,
+                    chrTumorInsInfo,
+                    chr
+                )
+            );
         };
         
     public:
@@ -442,7 +490,9 @@ class ExtractTumDataBamParser : public HaplotagBamParser{
             const ParsingBamControl& control,
             std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo,
             std::map<std::string, std::map<std::string, ReadVarHpCount>>& chrReadHpResultSet,
-            std::map<std::string, std::map<int, std::map<std::string, int>>>& chrTumorPosReadCorrBaseHP
+            std::map<std::string, std::map<int, std::map<std::string, int>>>& chrTumorPosReadCorrBaseHP,
+            std::map<std::string, std::map<int, std::vector<TumorDelShiftInfo>>>& chrTumorDelShiftInfo,
+            std::map<std::string, std::map<int, std::vector<TumorInsInfo>>>& chrTumorInsInfo
         );
         ~ExtractTumDataBamParser();
 };
@@ -484,6 +534,14 @@ class SomaticVarCaller{
         std::map<std::string, std::map<std::string, ReadVarHpCount>> *chrReadHpResultSet;
         // chr, position, read ID, baseHP 
         std::map<std::string, std::map<int, std::map<std::string, int>>> *chrTumorPosReadCorrBaseHP;
+        // chr, position, deletion shift details (collected during tumor BAM parsing)
+        std::map<std::string, std::map<int, std::vector<TumorDelShiftInfo>>> *chrTumorDelShiftInfo;
+        // chr, position, normal deletion info (collected during normal BAM parsing)
+        std::map<std::string, std::map<int, std::vector<NormalDelInfo>>> *chrNormalDelInfo;
+        // chr, position, tumor insertion CIGAR context (collected during tumor BAM parsing)
+        std::map<std::string, std::map<int, std::vector<TumorInsInfo>>> *chrTumorInsInfo;
+        // chr, position, normal insertion CIGAR context (collected during normal BAM parsing)
+        std::map<std::string, std::map<int, std::vector<NormalInsInfo>>> *chrNormalInsInfo;
 
         /**
          * @brief Set filter parameters based on tumor purity
@@ -593,10 +651,66 @@ class SomaticVarCaller{
         // 其他詳細過濾記錄輸出（已存在於 cpp，補宣告）
         void writeReadCountFilterLog(const std::string logFileName, const std::vector<std::string> &chrVec, const SomaticVarFilterParams &somaticParams);
         void writeMessyReadFilterLog(const std::string logFileName, const std::vector<std::string> &chrVec, const SomaticVarFilterParams &somaticParams);
+        void writeTumorDelShiftInfoLog(
+            const std::string logFileName,
+            const std::vector<std::string> &chrVec,
+            const SomaticVarFilterParams &somaticParams,
+            std::map<std::string, std::map<int, std::vector<TumorDelShiftInfo>>> &chrTumorDelShiftInfo
+        );
+        void writeNormnalDelInfoLog(
+            const std::string logFileName, 
+            const std::vector<std::string> &chrVec, 
+            const SomaticVarFilterParams &somaticParams, 
+            std::map<std::string, std::map<int, std::vector<NormalDelInfo>>> &chrNormalDelInfo
+        );
+        void writeTumorInsInfoLog(
+            const std::string logFileName,
+            const std::vector<std::string> &chrVec,
+            const SomaticVarFilterParams &somaticParams,
+            std::map<std::string, std::map<int, std::vector<TumorInsInfo>>> &chrTumorInsInfo
+        );
+        void writeNormalInsInfoLog(
+            const std::string logFileName,
+            const std::vector<std::string> &chrVec,
+            const SomaticVarFilterParams &somaticParams,
+            std::map<std::string, std::map<int, std::vector<NormalInsInfo>>> &chrNormalInsInfo
+        );
+        /**
+         * @brief Score every candidate insertion and deletion with the built-in CNNs.
+         *
+         * Runs before the per-chromosome calling loop and stores the result in
+         * SomaticData::indelModelProb, which somaticFeatureFilter then reads.
+         * Insertions and deletions have separate models and separate encoding
+         * rules: only deletions use the per-read del-map for the cigar channel,
+         * and the two use different scalar counting rules.
+         *
+         * Scoring is the expensive part (dominated by fetching each candidate's
+         * read window from the BAM pair), so it is parallelised over a flat list
+         * of indel sites rather than over chromosomes: chromosomes differ in
+         * indel count by more than an order of magnitude, which would leave
+         * most threads idle waiting for the largest one.
+         *
+         * @param ctx Caller context (supplies the tumor / normal BAM paths)
+         * @param chrVec Chromosomes to process
+         * @param chrMultiVariants Variants, for the candidate REF/ALT alleles
+         * @param tumorPurity Tumor purity, fed to the model as a scalar feature
+         */
+        void scoreIndels(
+            const CallerContext &ctx,
+            const std::vector<std::string> &chrVec,
+            std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants,
+            double tumorPurity
+        );
+
+        void writeIndelModelFilterLog(const std::string logFileName, const std::vector<std::string> &chrVec);
+
+        /** Indel CNN post-filters; both weight sets are compiled into the binary. */
+        SomaticIndelModel delModel;
+        SomaticIndelModel insModel;
 
         /**
          * @brief Release allocated memory
-         * 
+         *
          * Deletes all dynamically allocated data structures
          */
         void releaseMemory();
