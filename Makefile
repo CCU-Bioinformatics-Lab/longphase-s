@@ -19,6 +19,9 @@ OBJ = Haplotag.o \
 	  ModCallProcess.o \
 	  TumorPurityEstimator.o \
 	  SomaticVarCaller.o \
+	  FullAlignmentEncoder.o \
+	  SomaticIndelModel.o \
+	  SomaticIndelModelWeights.o \
 	  SomaticBenchmark.o \
 	  SomaticHaplotagProcess.o \
 	  SomaticHaplotag.o \
@@ -40,6 +43,9 @@ all: subprojects
 	$(MAKE)	-C	./htslib
 	$(MAKE)	$(PROGRAMS)
 
+# NOTE: there is no header dependency tracking here, so editing a .h does NOT
+# rebuild the objects that include it. Run `make clean` after any header change,
+# otherwise stale objects are linked in silently.
 ALL_CPPFLAGS = -I. -Isrc $(CPPFLAGS) -Ihtslib -Ijemalloc
 ALL_LDFLAGS  = $(LDFLAGS) -Lhtslib/htslib -Ljemalloc/lib
 
@@ -87,6 +93,10 @@ $(PROGRAMS): $(OBJ)
 
 %.o: src/somatic_haplotag/%.cpp
 	$(CXX) $(ALL_CPPFLAGS) -o $@ -c $<
+
+# the indel model weights are .incbin'd, so the pattern rule above cannot
+# see that this object depends on the blob
+SomaticIndelModelWeights.o: src/somatic_haplotag/del_model.bin src/somatic_haplotag/ins_model.bin
 
 %.o: src/%.cpp
 	$(CXX) $(ALL_CPPFLAGS) -o $@ -c $<

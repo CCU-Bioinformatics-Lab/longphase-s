@@ -274,7 +274,11 @@ struct SomaticData{
     bool filteredByHapConsistency;
     bool filteredByVariantCluster;
     bool filteredByDenseAlt;
-    
+
+    // CNN post-filter for indels (only set when the model scored this site)
+    bool filteredByIndelModel;
+    float indelModelProb;
+
     // filter out by somatic feature filter
     bool isFilterOut;
   
@@ -290,6 +294,7 @@ struct SomaticData{
              , meanAltCountPerVarRead(0.0), zScore(0.0), intervalSnpCount(0), minDistance(0), inDenseTumorInterval(false)
              , denseAltSameCount(0)
              , filteredByTINC(false), filteredByMessyRead(false), filteredByReadCount(false), filteredByHapConsistency(false), filteredByVariantCluster(false), filteredByDenseAlt(false)
+             , filteredByIndelModel(false), indelModelProb(-1.0f)
              , isFilterOut(false), somaticReadHpCount(std::map<int, int>()), PosSomaticOffsetBase({std::vector<std::pair<int, char>>(), std::vector<std::pair<int, char>>()}){}
 };
 

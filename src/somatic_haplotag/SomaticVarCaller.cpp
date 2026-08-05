@@ -1,4 +1,6 @@
 #include "SomaticVarCaller.h"
+#include "FullAlignmentEncoder.h"
+#include "SomaticIndelModel.h"
 
 /**
  * @brief Calculate common base information for tumor SNPs
@@ -75,9 +77,11 @@ void statisticsUtils::calculateZScores(const std::map<int, double>& data, double
 ExtractNorDataBamParser::ExtractNorDataBamParser(
     const ParsingBamConfig &config, 
     const ParsingBamControl &control,
-    std::map<std::string, std::map<int, PosBase>>& chrPosNorBase
+    std::map<std::string, std::map<int, PosBase>>& chrPosNorBase,
+    std::map<std::string, std::map<int, std::vector<NormalDelInfo>>>& chrNormalDelInfo,
+    std::map<std::string, std::map<int, std::vector<NormalInsInfo>>>& chrNormalInsInfo
 )
-: HaplotagBamParser(config, control), chrPosNorBase(chrPosNorBase){}
+: HaplotagBamParser(config, control), chrPosNorBase(chrPosNorBase), chrNormalDelInfo(chrNormalDelInfo), chrNormalInsInfo(chrNormalInsInfo){}
 
 ExtractNorDataBamParser::~ExtractNorDataBamParser(){
 
@@ -109,15 +113,24 @@ void ExtractNorDataBamParser::displayPosInfo(std::string chr, int pos){
     }
 }
 
-ExtractNorDataChrProcessor::ExtractNorDataChrProcessor(std::map<std::string, std::map<int, PosBase>> &chrPosNorBase, const std::string &chr){
+ExtractNorDataChrProcessor::ExtractNorDataChrProcessor(
+    std::map<std::string, std::map<int, PosBase>> &chrPosNorBase,
+    std::map<std::string, std::map<int, std::vector<NormalDelInfo>>> &chrNormalDelInfo,
+    std::map<std::string, std::map<int, std::vector<NormalInsInfo>>> &chrNormalInsInfo,
+    const std::string &chr
+){
     #pragma omp critical
     {
         variantBase = &((chrPosNorBase)[chr]);
+        normalDelInfo = &((chrNormalDelInfo)[chr]);
+        normalInsInfo = &((chrNormalInsInfo)[chr]);
     }
 }
 
 ExtractNorDataChrProcessor::~ExtractNorDataChrProcessor(){
     variantBase = nullptr;
+    normalDelInfo = nullptr;
+    normalInsInfo = nullptr;
 }
 
 void ExtractNorDataChrProcessor::processRead(
@@ -148,7 +161,7 @@ void ExtractNorDataChrProcessor::processRead(
     int query_pos = 0;
     /// Create a CIGAR parser using polymorphism design
     // Use extractNorDataCigarParser to process CIGAR strings for normal samples    
-    CigarParserContext cigarCtx(aln, bamHdr, ctx.chrName, ctx.params, firstVariantIter, currentVariants, ref_string);
+    CigarParserContext cigarCtx(aln, bamHdr, ctx.chrName, ctx.params, firstVariantIter, currentVariants, ref_string, ctx.genomeSample, tumorDelShiftInfo, *normalDelInfo, tumorInsInfo, *normalInsInfo);
     CigarParser* cigarParser = new ExtractNorDataCigarParser(cigarCtx, *variantBase, tumVarPosVec, ref_pos, query_pos, ctx.params.qualityThreshold);
     cigarParser->parsingCigar(hpCount, variantsHP, norCountPS);
     delete cigarParser;
@@ -279,6 +292,20 @@ void ExtractNorDataCigarParser::processDeletionOperation(int& length, uint32_t* 
         else if(curVar.variantType == HaplotagVariantType::DELETION){
             variantBase[curPos].altCount++;
             countDeletionBase(variantBase[curPos]);
+            
+            // Record normal deletion info
+            int firstMInRegion = ref_pos + length - curPos;
+            int delLengthTumor = static_cast<int>(curVar.allele.Ref.length());
+            int currentDelLength = length;
+            int normalDelPos = ref_pos - 1;
+            // Build simplified CIGAR string (start from D operation)
+            std::string delRegionCigar = buildSimplifiedCigarString(cigar, i, aln_core_n_cigar, delLengthTumor , firstMInRegion);
+            ctx.normalDelInfo[curPos].push_back(NormalDelInfo(bam_get_qname(&ctx.aln), delRegionCigar, currentDelLength,normalDelPos));
+            // std::cerr << "[NORMAL_DEL_INFO] Read"  <<  ctx.normalDelInfo[curPos].back().readid 
+            //           << " tumor Pos: " << curPos 
+            //           << " CIGAR_string: " << ctx.normalDelInfo[curPos].back().cigarstring 
+            //           << " CIGAR_Del_Length: " << ctx.normalDelInfo[curPos].back().CIGAR_Del_Length 
+            //           << " Normal_Del_Pos: " << ctx.normalDelInfo[curPos].back().normalDelPos << std::endl;
         }
     }
 
@@ -298,12 +325,16 @@ ExtractTumDataBamParser::ExtractTumDataBamParser(
     const ParsingBamControl &control,
     std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo,
     std::map<std::string, std::map<std::string, ReadVarHpCount>>& chrReadHpResultSet,
-    std::map<std::string, std::map<int, std::map<std::string, int>>>& chrTumorPosReadCorrBaseHP
+    std::map<std::string, std::map<int, std::map<std::string, int>>>& chrTumorPosReadCorrBaseHP,
+    std::map<std::string, std::map<int, std::vector<TumorDelShiftInfo>>>& chrTumorDelShiftInfo,
+    std::map<std::string, std::map<int, std::vector<TumorInsInfo>>>& chrTumorInsInfo
 ):
   HaplotagBamParser(config, control),
   chrPosSomaticInfo(chrPosSomaticInfo),
   chrReadHpResultSet(chrReadHpResultSet),
-  chrTumorPosReadCorrBaseHP(chrTumorPosReadCorrBaseHP){
+  chrTumorPosReadCorrBaseHP(chrTumorPosReadCorrBaseHP),
+  chrTumorDelShiftInfo(chrTumorDelShiftInfo),
+  chrTumorInsInfo(chrTumorInsInfo){
 
 }
 
@@ -317,6 +348,8 @@ ExtractTumDataChrProcessor::ExtractTumDataChrProcessor(
     std::map<std::string, std::map<int, SomaticData>>& chrPosSomaticInfo,
     std::map<std::string, std::map<std::string, ReadVarHpCount>>& chrReadHpResultSet,
     std::map<std::string, std::map<int, std::map<std::string, int>>>& chrTumorPosReadCorrBaseHP,
+    std::map<std::string, std::map<int, std::vector<TumorDelShiftInfo>>>& chrTumorDelShiftInfo,
+    std::map<std::string, std::map<int, std::vector<TumorInsInfo>>>& chrTumorInsInfo,
     const std::string &chr
 ){
     #pragma omp critical
@@ -324,6 +357,8 @@ ExtractTumDataChrProcessor::ExtractTumDataChrProcessor(
         somaticPosInfo = &((chrPosSomaticInfo)[chr]);
         readHpResultSet = &((chrReadHpResultSet)[chr]);
         tumorPosReadCorrBaseHP = &((chrTumorPosReadCorrBaseHP)[chr]);
+        tumorDelShiftInfo = &((chrTumorDelShiftInfo)[chr]);
+        tumorInsInfo = &((chrTumorInsInfo)[chr]);
     }
 }
 
@@ -364,7 +399,7 @@ void ExtractTumDataChrProcessor::processRead(
     int query_pos = 0;
 
     // Create CIGAR parser for tumor data extraction
-    CigarParserContext cigarCtx(aln, bamHdr, ctx.chrName, ctx.params, firstVariantIter, currentVariants, ref_string);
+    CigarParserContext cigarCtx(aln, bamHdr, ctx.chrName, ctx.params, firstVariantIter, currentVariants, ref_string, ctx.genomeSample, *tumorDelShiftInfo, normalDelInfo, *tumorInsInfo, normalInsInfo);
     ExtractTumDataCigarParser cigarParser(cigarCtx, *somaticPosInfo, tumorAllelePosVec, tumorSnpPosVec, tumCountPS, ref_pos, query_pos, ctx.params.qualityThreshold);
     cigarParser.parsingCigar(hpCount, variantsHP, norCountPS);
 
@@ -754,6 +789,16 @@ void ExtractTumDataCigarParser::processDeletionOperation(int& length, uint32_t* 
         else if(curVar.variantType == HaplotagVariantType::DELETION){
             somaticPosInfo[curPos].base.altCount++;
             countDeletionBase(somaticPosInfo[curPos].base);
+
+            // Vote hp3 and register in tumorAllelePosVec for clean/messy classification
+            if(!alreadyJudgeDel && ctx.aln.core.qual >= mappingQualityThr){
+                bool isAlt = true;
+                std::string base = "";
+                somaticJudger.judgeSomaticSnpHap(
+                    currentVariantIter, ctx.chrName, base,
+                    *hpCount, *norCountPS, tumCountPS, variantsHP, &tumorAllelePosVec, isAlt);
+                alreadyJudgeDel = true;
+            }
         }
     }
 }
@@ -769,6 +814,10 @@ SomaticVarCaller::SomaticVarCaller(const CallerConfig &callerCfg, const ParsingB
     denseTumorSnpInterval = new std::map<std::string, std::map<int, std::pair<int, DenseSnpInterval>>>();
     chrReadHpResultSet = new std::map<std::string, std::map<std::string, ReadVarHpCount>>();
     chrTumorPosReadCorrBaseHP = new std::map<std::string, std::map<int, std::map<std::string, int>>>();
+    chrTumorDelShiftInfo = new std::map<std::string, std::map<int, std::vector<TumorDelShiftInfo>>>();
+    chrNormalDelInfo = new std::map<std::string, std::map<int, std::vector<NormalDelInfo>>>();
+    chrTumorInsInfo = new std::map<std::string, std::map<int, std::vector<TumorInsInfo>>>();
+    chrNormalInsInfo = new std::map<std::string, std::map<int, std::vector<NormalInsInfo>>>();
 
     for(auto chr : chrVec){
         (*chrPosSomaticInfo)[chr] = std::map<int, SomaticData>();
@@ -777,6 +826,10 @@ SomaticVarCaller::SomaticVarCaller(const CallerConfig &callerCfg, const ParsingB
         (*denseTumorSnpInterval)[chr] = std::map<int, std::pair<int, DenseSnpInterval>>();
         (*chrReadHpResultSet)[chr] = std::map<std::string, ReadVarHpCount>();
         (*chrTumorPosReadCorrBaseHP)[chr] = std::map<int, std::map<std::string, int>>();
+        (*chrTumorDelShiftInfo)[chr] = std::map<int, std::vector<TumorDelShiftInfo>>();
+        (*chrNormalDelInfo)[chr] = std::map<int, std::vector<NormalDelInfo>>();
+        (*chrTumorInsInfo)[chr] = std::map<int, std::vector<TumorInsInfo>>();
+        (*chrNormalInsInfo)[chr] = std::map<int, std::vector<NormalInsInfo>>();
     }
 }
 
@@ -791,6 +844,10 @@ void SomaticVarCaller::releaseMemory(){
     delete denseTumorSnpInterval;
     delete chrReadHpResultSet;
     delete chrTumorPosReadCorrBaseHP;
+    delete chrTumorDelShiftInfo;
+    delete chrNormalDelInfo;
+    delete chrTumorInsInfo;
+    delete chrNormalInsInfo;
 }
 
 void SomaticVarCaller::variantCalling(
@@ -815,7 +872,19 @@ void SomaticVarCaller::variantCalling(
 
     // set filter params with tumor purity
     setFilterParamsWithPurity(somaticParams, tumorPurity);
-    
+
+    // indel CNN post-filter; weights are compiled into the binary. Scoring runs
+    // as its own parallel pass so somaticFeatureFilter only reads the stored
+    // probability.
+    if(callerCfg.enableFilter){
+        if(!delModel.loadEmbedded(SomaticIndelModel::DELETION_MODEL) ||
+           !insModel.loadEmbedded(SomaticIndelModel::INSERTION_MODEL)){
+            std::cerr << "[ERROR](variantCalling) => cannot load the built-in indel models\n";
+            exit(1);
+        }
+        scoreIndels(ctx, chrVec, chrMultiVariants, tumorPurity);
+    }
+
     std::cerr<< "calling somatic variants ... ";
     std::time_t begin = time(NULL);
     // loop all chromosome
@@ -873,7 +942,7 @@ void SomaticVarCaller::variantCalling(
 
     // [debug] calling somatic SNPs count
     // displayCallingSnpCount();
-    
+
     if(callerCfg.writeCallingLog){
         //write the log file for variants with positions tagged as HP3
         writeSomaticVarCallingLog(ctx ,somaticParams, chrVec, chrMultiVariants);
@@ -896,8 +965,25 @@ void SomaticVarCaller::variantCalling(
         // write detailed messy read filter log
         writeMessyReadFilterLog(bamCfg.resultPrefix + "_messy_read_filter.log", chrVec, somaticParams);
 
-        // 寫出每條read之HP與所有變異的baseHP
+        // write read HP detail log
         writeReadHpLog(bamCfg.resultPrefix + "_read_hp_detail.log", chrVec);
+
+        // write tumor deletion shift info log
+        writeTumorDelShiftInfoLog(bamCfg.resultPrefix + "_tumor_deletion_shift_info.log", chrVec, somaticParams, *chrTumorDelShiftInfo);
+
+        // write normal deletion info log
+        writeNormnalDelInfoLog(bamCfg.resultPrefix + "_normal_deletion_info.log", chrVec, somaticParams, *chrNormalDelInfo);
+
+        // write tumor insertion info log (CIGAR around +/- 10bp of variant position)
+        writeTumorInsInfoLog(bamCfg.resultPrefix + "_tumor_insertion_info.log", chrVec, somaticParams, *chrTumorInsInfo);
+
+        // write normal insertion info log
+        writeNormalInsInfoLog(bamCfg.resultPrefix + "_normal_insertion_info.log", chrVec, somaticParams, *chrNormalInsInfo);
+
+        // write indel CNN filter log
+        if(callerCfg.enableFilter){
+            writeIndelModelFilterLog(bamCfg.resultPrefix + "_indel_model_filter.log", chrVec);
+        }
 
         // writeOtherSomaticHpLog(bamCfg.resultPrefix + "_other_allele_somatic_var.log", chrVec, chrMultiVariants);
     }
@@ -922,14 +1008,14 @@ void SomaticVarCaller::extractSomaticData(
     ParsingBamControl control; // default mode is single thread
 
     BamParserContext norBamCtx(normalBamFile, fastaFile, chrVec, chrLength, chrMultiVariants, vcfSet, Genome::NORMAL);
-    ExtractNorDataBamParser normalBamParser(config, control, *chrPosNorBase);
+    ExtractNorDataBamParser normalBamParser(config, control, *chrPosNorBase, *chrNormalDelInfo, *chrNormalInsInfo);
     normalBamParser.parsingBam(norBamCtx);
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 
     std::cerr << "extracting data from tumor BAM ... ";
     begin = time(NULL);
     BamParserContext tumBamCtx(tumorBamFile, fastaFile, chrVec, chrLength, chrMultiVariants, vcfSet, Genome::TUMOR);
-    ExtractTumDataBamParser tumorBamParser(config, control, *chrPosSomaticInfo, *chrReadHpResultSet, *chrTumorPosReadCorrBaseHP);
+    ExtractTumDataBamParser tumorBamParser(config, control, *chrPosSomaticInfo, *chrReadHpResultSet, *chrTumorPosReadCorrBaseHP, *chrTumorDelShiftInfo, *chrTumorInsInfo);
     tumorBamParser.parsingBam(tumBamCtx);
     std::cerr<< difftime(time(NULL), begin) << "s\n";
 }
@@ -1203,20 +1289,26 @@ void SomaticVarCaller::somaticFeatureFilter(const SomaticVarFilterParams &somati
             }
             (*somaticVarIter).second.filteredByDenseAlt = densealt_filtered;
 
+            // indel CNN filter; the probability was computed by scoreIndels
+            // before this loop, and stays at -1 for anything it could not score
+            bool indel_model_filtered = false;
+            if ((*somaticVarIter).second.indelModelProb >= 0.0f) {
+                if (curVar.variantType == HaplotagVariantType::DELETION) {
+                    indel_model_filtered = ((*somaticVarIter).second.indelModelProb <
+                                            (float)CallerConfig::DEL_MODEL_THRESHOLD);
+                } else if (curVar.variantType == HaplotagVariantType::INSERTION) {
+                    indel_model_filtered = ((*somaticVarIter).second.indelModelProb <
+                                            (float)CallerConfig::INS_MODEL_THRESHOLD);
+                }
+            }
+            (*somaticVarIter).second.filteredByIndelModel = indel_model_filtered;
+
             // Whether the tag is filtered by any filter
-            if (stage1_filtered || messy_read_filtered || read_count_filtered || 
-                haplotype_filtered || zscore_filtered || densealt_filtered) {
+            if (stage1_filtered || messy_read_filtered || read_count_filtered ||
+                haplotype_filtered || zscore_filtered || densealt_filtered ||
+                indel_model_filtered) {
                 (*somaticVarIter).second.isFilterOut = true;
             }
-            // std::cerr <<"somaticVarIter->first: " << (*somaticVarIter).first << std::endl;
-            // std::cerr <<"HapConsistency_ReadCount_maxThr: " << HapConsistency_ReadCount_maxThr << std::endl;
-            // std::cerr <<"CaseReadCount: " << (*somaticVarIter).second.CaseReadCount << std::endl;
-            // std::cerr <<"base.VAF: " << (*somaticVarIter).second.base.VAF << std::endl;
-            // std::cerr <<"HapConsistency_VAF_maxThr: " << HapConsistency_VAF_maxThr << std::endl;
-            // std::cerr <<"IntervalSnpCount_ReadCount_maxThr: " << IntervalSnpCount_ReadCount_maxThr << std::endl;
-            // std::cerr <<"intervalSnpCount: " << (*somaticVarIter).second.intervalSnpCount << std::endl;
-            // std::cerr <<"zScore: " << (*somaticVarIter).second.zScore << std::endl;
-            // std::cerr <<"zScore_maxThr: " << zScore_maxThr << std::endl;
             // If a filter needs to be applied, skip the filtered variant
             if (callerCfg.enableFilter && (*somaticVarIter).second.isFilterOut) {
                 somaticVarIter++;
@@ -2038,6 +2130,237 @@ void SomaticVarCaller::writeDenseTumorSnpIntervalLog(const std::string logFileNa
     
     closeSomaticSnpIntervalLog = nullptr;
 }
+void SomaticVarCaller::writeNormnalDelInfoLog(const std::string logFileName, const std::vector<std::string> &chrVec, const SomaticVarFilterParams &somaticParams, std::map<std::string, std::map<int, std::vector<NormalDelInfo>>> &chrNormalDelInfo){
+    std::ofstream *normalDelInfoLog = NULL;
+    normalDelInfoLog = new std::ofstream(logFileName);
+
+    if(!normalDelInfoLog->is_open()){
+        std::cerr<< "Fail to open write file: " << logFileName << "\n";
+        exit(1);
+    }
+    else{
+        (*normalDelInfoLog) << "################################\n";
+        (*normalDelInfoLog) << "# Normal Deletion Info Log #\n";
+        (*normalDelInfoLog) << "################################\n";
+        (*normalDelInfoLog) << "#CHROM\t"
+                            << "POS\t"
+                            << "ReadID\t"
+                            << "CIGARString\t"
+                            << "NormalReadCount\t"
+                            << "NormalDelPos\t"
+                            << "deletionRate\t"
+                            << "CIGARDelLength\n";
+    }
+    for(auto chr: chrVec){
+        auto &somaticInfo = (*chrPosSomaticInfo)[chr];
+        auto &normalDelInfo = chrNormalDelInfo[chr];
+        for(const auto &kv : somaticInfo){
+            int pos = kv.first;
+                                for(auto normalDelInfoIter: normalDelInfo[pos]){
+                (*normalDelInfoLog) << chr << "\t"
+                                    << pos + 1 << "\t"
+                                    << normalDelInfoIter.readid << "\t"
+                                    << normalDelInfoIter.cigarstring << "\t"
+                                    << (*chrPosNorBase)[chr][pos].depth << "\t"
+                                    << normalDelInfoIter.normalDelPos << "\t"
+                                    << static_cast<double>(normalDelInfo[pos].size())/(*chrPosNorBase)[chr][pos].depth << "\t"
+                                    << normalDelInfoIter.CIGAR_Del_Length << "\n";
+                                }
+        }
+    }
+    (*normalDelInfoLog).close();
+    delete normalDelInfoLog;
+    normalDelInfoLog = nullptr;
+}
+void SomaticVarCaller::writeTumorDelShiftInfoLog(
+    const std::string logFileName,
+    const std::vector<std::string> &chrVec,
+    const SomaticVarFilterParams &somaticParams,
+    std::map<std::string, std::map<int, std::vector<TumorDelShiftInfo>>> &chrTumorDelShiftInfo
+){
+        std::ofstream *tumorDelShiftInfoLog = NULL;
+        tumorDelShiftInfoLog = new std::ofstream(logFileName);
+
+        if(!tumorDelShiftInfoLog->is_open()){
+            std::cerr<< "Fail to open write file: " << logFileName << "\n";
+            exit(1);
+        }else{
+            (*tumorDelShiftInfoLog) << "################################\n";
+            (*tumorDelShiftInfoLog) << "# Tumor Deletion Shift Info Log #\n";
+            (*tumorDelShiftInfoLog) << "################################\n";
+            (*tumorDelShiftInfoLog) << "#CHROM\t"
+                                    << "POS\t"
+                                    << "ReadID\t"
+                                    << "ReadHP\t"
+                                    << "CIGARString\t"
+                                    << "TumorDelLength\t"
+                                    << "CIGARDelLength\t"
+                                    << "LengthDiff\t"
+                                    << "shiftLength\t"
+                                    << "altcount\t"
+                                    << "readcount\n";
+
+        }
+        for(auto chr: chrVec){
+            auto &somaticInfo = (*chrPosSomaticInfo)[chr];
+            auto &tumorDelShiftInfo = chrTumorDelShiftInfo[chr];
+            auto &readHpResultSet = (*chrReadHpResultSet)[chr];
+            for(const auto &kv : somaticInfo){
+                int pos = kv.first;
+                const SomaticData &sd = kv.second;
+
+                for(auto tumorDelShiftInfoIter: tumorDelShiftInfo[pos]){
+                    // Look up read HP from chrReadHpResultSet
+                    std::string readHpStr = ".";
+                    const std::string &rid = tumorDelShiftInfoIter.readid;
+                    auto readIt = readHpResultSet.find(rid);
+                    if(readIt != readHpResultSet.end()){
+                        readHpStr = ReadHapUtil::readHapIntToString(readIt->second.hpResult);
+                    } else {
+                        // Try with supplementary suffixes (-1, -2, ...)
+                        for(int suffix = 1; suffix <= 10; suffix++){
+                            auto readIt2 = readHpResultSet.find(rid + "-" + std::to_string(suffix));
+                            if(readIt2 != readHpResultSet.end()){
+                                readHpStr = ReadHapUtil::readHapIntToString(readIt2->second.hpResult);
+                                break;
+                            }
+                        }
+                    }
+                    (*tumorDelShiftInfoLog) << chr << "\t"
+                                            << pos + 1 << "\t"
+                                            << tumorDelShiftInfoIter.readid << "\t"
+                                            << readHpStr << "\t"
+                                            << tumorDelShiftInfoIter.cigarstring << "\t"
+                                                                << tumorDelShiftInfoIter.delLengthTumor << "\t"
+                                            << tumorDelShiftInfoIter.CIGAR_Del_Length  << "\t"
+                                                                << tumorDelShiftInfoIter.lengthDiff << "\t" 
+                                                                << tumorDelShiftInfoIter.shiftLength << "\t"
+                                                                << sd.base.altCount << "\t" 
+                                                                << sd.base.depth << "\n";
+                                    }
+            }
+        }
+        (*tumorDelShiftInfoLog).close();
+        delete tumorDelShiftInfoLog;
+        tumorDelShiftInfoLog = nullptr;
+}
+
+void SomaticVarCaller::writeTumorInsInfoLog(
+    const std::string logFileName,
+    const std::vector<std::string> &chrVec,
+    const SomaticVarFilterParams &somaticParams,
+    std::map<std::string, std::map<int, std::vector<TumorInsInfo>>> &chrTumorInsInfo
+){
+    std::ofstream *tumorInsInfoLog = new std::ofstream(logFileName);
+    if(!tumorInsInfoLog->is_open()){
+        std::cerr<< "Fail to open write file: " << logFileName << "\n";
+        exit(1);
+    }
+    (*tumorInsInfoLog) << "################################\n";
+    (*tumorInsInfoLog) << "# Tumor Insertion Info Log     #\n";
+    (*tumorInsInfoLog) << "# CIGAR window: +/- 10bp ref   #\n";
+    (*tumorInsInfoLog) << "################################\n";
+    (*tumorInsInfoLog) << "#CHROM\t"
+                       << "POS\t"
+                       << "ReadID\t"
+                       << "ReadHP\t"
+                       << "CIGARString\t"
+                       << "TumorInsLength\t"
+                       << "CIGARInsLength\t"
+                       << "LengthDiff\t"
+                       << "altcount\t"
+                       << "readcount\n";
+
+    for(auto chr: chrVec){
+        auto &somaticInfo = (*chrPosSomaticInfo)[chr];
+        auto &tumorInsInfo = chrTumorInsInfo[chr];
+        auto &readHpResultSet = (*chrReadHpResultSet)[chr];
+        for(const auto &kv : somaticInfo){
+            int pos = kv.first;
+            const SomaticData &sd = kv.second;
+            for(auto &item : tumorInsInfo[pos]){
+                std::string readHpStr = ".";
+                const std::string &rid = item.readid;
+                auto readIt = readHpResultSet.find(rid);
+                if(readIt != readHpResultSet.end()){
+                    readHpStr = ReadHapUtil::readHapIntToString(readIt->second.hpResult);
+                } else {
+                    for(int suffix = 1; suffix <= 10; suffix++){
+                        auto readIt2 = readHpResultSet.find(rid + "-" + std::to_string(suffix));
+                        if(readIt2 != readHpResultSet.end()){
+                            readHpStr = ReadHapUtil::readHapIntToString(readIt2->second.hpResult);
+                            break;
+                        }
+                    }
+                }
+                (*tumorInsInfoLog) << chr << "\t"
+                                   << pos + 1 << "\t"
+                                   << item.readid << "\t"
+                                   << readHpStr << "\t"
+                                   << item.cigarstring << "\t"
+                                   << item.insLengthTumor << "\t"
+                                   << item.CIGAR_Ins_Length << "\t"
+                                   << item.lengthDiff << "\t"
+                                   << sd.base.altCount << "\t"
+                                   << sd.base.depth << "\n";
+            }
+        }
+    }
+    (*tumorInsInfoLog).close();
+    delete tumorInsInfoLog;
+    tumorInsInfoLog = nullptr;
+}
+
+void SomaticVarCaller::writeNormalInsInfoLog(
+    const std::string logFileName,
+    const std::vector<std::string> &chrVec,
+    const SomaticVarFilterParams &somaticParams,
+    std::map<std::string, std::map<int, std::vector<NormalInsInfo>>> &chrNormalInsInfo
+){
+    std::ofstream *normalInsInfoLog = new std::ofstream(logFileName);
+    if(!normalInsInfoLog->is_open()){
+        std::cerr<< "Fail to open write file: " << logFileName << "\n";
+        exit(1);
+    }
+    (*normalInsInfoLog) << "################################\n";
+    (*normalInsInfoLog) << "# Normal Insertion Info Log    #\n";
+    (*normalInsInfoLog) << "# CIGAR window: +/- 10bp ref   #\n";
+    (*normalInsInfoLog) << "################################\n";
+    (*normalInsInfoLog) << "#CHROM\t"
+                        << "POS\t"
+                        << "ReadID\t"
+                        << "CIGARString\t"
+                        << "NormalReadCount\t"
+                        << "NormalInsPos\t"
+                        << "insertionRate\t"
+                        << "CIGARInsLength\n";
+
+    for(auto chr: chrVec){
+        auto &somaticInfo = (*chrPosSomaticInfo)[chr];
+        auto &normalInsInfo = chrNormalInsInfo[chr];
+        for(const auto &kv : somaticInfo){
+            int pos = kv.first;
+            int normalDepth = (*chrPosNorBase)[chr][pos].depth;
+            double insRate = normalDepth > 0
+                ? static_cast<double>(normalInsInfo[pos].size()) / normalDepth
+                : 0.0;
+            for(auto &item : normalInsInfo[pos]){
+                (*normalInsInfoLog) << chr << "\t"
+                                    << pos + 1 << "\t"
+                                    << item.readid << "\t"
+                                    << item.cigarstring << "\t"
+                                    << normalDepth << "\t"
+                                    << item.normalInsPos << "\t"
+                                    << insRate << "\t"
+                                    << item.CIGAR_Ins_Length << "\n";
+            }
+        }
+    }
+    (*normalInsInfoLog).close();
+    delete normalInsInfoLog;
+    normalInsInfoLog = nullptr;
+}
+
 
 void SomaticVarCaller::writeSomaticFilterLog(const std::string logFileName, const std::vector<std::string> &chrVec){
     std::ofstream *filterLog = NULL;
@@ -2386,11 +2709,215 @@ void SomaticVarCaller::writeReadHpLog(const std::string logFileName, const std::
 }
 
 /**
+ * @brief Score every candidate insertion and deletion with the built-in CNNs
+ *
+ * Rebuilds, for each candidate, the full-alignment tensor the model was trained
+ * on: read pileup channels straight from the BAM pair, plus - for deletions only
+ * - a focused deletion map taken from the per-read geometry collected during
+ * data extraction. The result is stored in SomaticData::indelModelProb and left
+ * at -1.0 when the tensor cannot be built, so somaticFeatureFilter keeps that
+ * variant.
+ *
+ * Everything the parallel loop needs is resolved up front into a flat site list,
+ * so the loop itself touches no shared map and threads share the work evenly
+ * regardless of how the indels are spread across chromosomes.
+ */
+void SomaticVarCaller::scoreIndels(
+    const CallerContext &ctx,
+    const std::vector<std::string> &chrVec,
+    std::map<std::string, std::map<int, MultiGenomeVar>> &chrMultiVariants,
+    double tumorPurity
+){
+    if(!delModel.isLoaded() || !insModel.isLoaded()){
+        return;
+    }
+
+    struct IndelSite{
+        const std::string *chr;
+        int pos;                                            // 0-based
+        int eventLength;
+        FullAlignmentEncoder::VariantKind kind;
+        SomaticData *somaticData;
+        // per-read deletion geometry, deletions only; NULL for insertions
+        const std::vector<TumorDelShiftInfo> *tumorDelRows;
+        const std::vector<NormalDelInfo> *normalDelRows;
+        int tumorDepth;
+        int normalDepth;
+    };
+
+    std::vector<IndelSite> sites;
+    for(const auto &chr : chrVec){
+        auto &somaticInfo = (*chrPosSomaticInfo)[chr];
+        auto &variants = chrMultiVariants[chr];
+        auto &tumorDelShift = (*chrTumorDelShiftInfo)[chr];
+        auto &normalDel = (*chrNormalDelInfo)[chr];
+        auto &tumorIns = (*chrTumorInsInfo)[chr];
+        auto &normalIns = (*chrNormalInsInfo)[chr];
+        auto &norBase = (*chrPosNorBase)[chr];
+
+        for(auto &somaticIter : somaticInfo){
+            const int pos = somaticIter.first;
+            auto varIter = variants.find(pos);
+            if(varIter == variants.end() || !varIter->second.isExists(TUMOR)){
+                continue;
+            }
+            VarData &curVar = varIter->second.Variant[TUMOR];
+            const bool isDel = (curVar.variantType == HaplotagVariantType::DELETION);
+            const bool isIns = (curVar.variantType == HaplotagVariantType::INSERTION);
+            if(!isDel && !isIns){
+                continue;
+            }
+            const int eventLength = std::abs((int)curVar.allele.Ref.length() -
+                                             (int)curVar.allele.Alt.length());
+            if(eventLength <= 0){
+                continue;
+            }
+
+            IndelSite site;
+            site.chr = &chr;
+            site.pos = pos;
+            site.eventLength = eventLength;
+            site.kind = isDel ? FullAlignmentEncoder::DELETION_CANDIDATE
+                              : FullAlignmentEncoder::INSERTION_CANDIDATE;
+            site.somaticData = &somaticIter.second;
+            site.tumorDelRows = NULL;
+            site.normalDelRows = NULL;
+
+            // Depths mirror the training pipeline: they were read from the
+            // per-read indel logs, so a site with no rows of the matching event
+            // type contributed a depth of 0.
+            bool hasTumorRows = false;
+            bool hasNormalRows = false;
+            if(isDel){
+                auto tumorDelIter = tumorDelShift.find(pos);
+                if(tumorDelIter != tumorDelShift.end() && !tumorDelIter->second.empty()){
+                    site.tumorDelRows = &tumorDelIter->second;
+                    hasTumorRows = true;
+                }
+                auto normalDelIter = normalDel.find(pos);
+                if(normalDelIter != normalDel.end() && !normalDelIter->second.empty()){
+                    site.normalDelRows = &normalDelIter->second;
+                    hasNormalRows = true;
+                }
+            }else{
+                auto tumorInsIter = tumorIns.find(pos);
+                hasTumorRows = (tumorInsIter != tumorIns.end() && !tumorInsIter->second.empty());
+                auto normalInsIter = normalIns.find(pos);
+                hasNormalRows = (normalInsIter != normalIns.end() && !normalInsIter->second.empty());
+            }
+
+            site.tumorDepth = hasTumorRows ? somaticIter.second.base.depth : 0;
+            site.normalDepth = 0;
+            if(hasNormalRows){
+                auto norBaseIter = norBase.find(pos);
+                if(norBaseIter != norBase.end()){
+                    site.normalDepth = norBaseIter->second.depth;
+                }
+            }
+            sites.push_back(site);
+        }
+    }
+
+    if(sites.empty()){
+        return;
+    }
+
+    std::cerr << "scoring somatic indels with CNN models (" << sites.size()
+              << " candidates) ... ";
+    std::time_t begin = time(NULL);
+
+    #pragma omp parallel num_threads(bamCfg.numThreads)
+    {
+        // one BAM handle pair per thread, reused across every site it takes
+        FullAlignmentEncoder encoder;
+        if(!encoder.open(ctx.tumorBamFile, ctx.normalBamFile, ctx.fastaFile)){
+            std::cerr << "[ERROR](scoreIndels) => cannot open BAM pair\n";
+            exit(1);
+        }
+
+        std::vector<float> image;
+        FaReadDelMap tumorMap;
+        FaReadDelMap normalMap;
+
+        #pragma omp for schedule(dynamic, 8)
+        for(long long i = 0; i < (long long)sites.size(); i++){
+            const IndelSite &site = sites[i];
+            const int pos1 = site.pos + 1;              // VCF coordinate
+
+            // Only deletions replace the cigar channel with the focused del-map;
+            // insertions keep the plain BAM CIGAR, as in training.
+            tumorMap.clear();
+            if(site.tumorDelRows != NULL){
+                for(const auto &row : *site.tumorDelRows){
+                    tumorMap[row.readid] = FaReadDel(row.CIGAR_Del_Length, row.shiftLength);
+                }
+            }
+            normalMap.clear();
+            if(site.normalDelRows != NULL){
+                for(const auto &row : *site.normalDelRows){
+                    normalMap[row.readid] = FaReadDel(row.CIGAR_Del_Length, pos1 - row.normalDelPos);
+                }
+            }
+
+            if(!encoder.buildImage(*site.chr, pos1,
+                                   tumorMap.empty() ? NULL : &tumorMap,
+                                   normalMap.empty() ? NULL : &normalMap,
+                                   image)){
+                continue;                               // leave indelModelProb at -1
+            }
+            float scalars[SomaticIndelModel::N_SCALAR];
+            FullAlignmentEncoder::buildScalars(image, site.kind, tumorPurity,
+                                               site.tumorDepth, site.normalDepth,
+                                               site.eventLength, scalars);
+            const SomaticIndelModel &model =
+                (site.kind == FullAlignmentEncoder::INSERTION_CANDIDATE) ? insModel : delModel;
+            site.somaticData->indelModelProb = model.predict(&image[0], scalars);
+        }
+    }
+
+    std::cerr << difftime(time(NULL), begin) << "s\n";
+}
+
+/**
+ * @brief Write the per-indel CNN filter decisions
+ */
+void SomaticVarCaller::writeIndelModelFilterLog(const std::string logFileName, const std::vector<std::string> &chrVec){
+    std::ofstream delModelLog(logFileName);
+    if(!delModelLog.is_open()){
+        std::cerr<< "Fail to open write file: " << logFileName << "\n";
+        exit(1);
+    }
+    delModelLog << "################################\n";
+    delModelLog << "# Indel CNN Filter Log         #\n";
+    delModelLog << "################################\n";
+    delModelLog << "#del model: built-in (output_multi_FA_event_thr_0.5_del_only), threshold "
+                << CallerConfig::DEL_MODEL_THRESHOLD << "\n";
+    delModelLog << "#ins model: built-in (output_multi_FA_event_thr_0.5_ins_only_0.12budget), threshold "
+                << CallerConfig::INS_MODEL_THRESHOLD << "\n";
+    delModelLog << "#CHROM\tPOS\tprob_TP\tfiltered\n";
+    delModelLog << std::setprecision(8);
+
+    for(auto chr: chrVec){
+        for(const auto &somaticIter : (*chrPosSomaticInfo)[chr]){
+            const SomaticData &somaticData = somaticIter.second;
+            if(somaticData.indelModelProb < 0.0f){
+                continue;                            // not scored by the models
+            }
+            delModelLog << chr << "\t"
+                        << somaticIter.first + 1 << "\t"
+                        << somaticData.indelModelProb << "\t"
+                        << (somaticData.filteredByIndelModel ? "1" : "0") << "\n";
+        }
+    }
+    delModelLog.close();
+}
+
+/**
  * @brief Get somatic variant flags
- * 
+ *
  * Marks variants as somatic based on calling results and sets appropriate flags
  * for downstream analysis and reporting.
- * 
+ *
  * @param chrVec Vector of chromosome names to process
  * @param chrMultiVariants Multi-genome chromosome variants to update
  */
