@@ -57,6 +57,7 @@ struct ParsingBamControl{
     ParsingBamMode mode = ParsingBamMode::MULTI_THREAD;  /** Processing mode (single/multi-thread) */
     bool writeOutputBam = false;                         /** Whether to write output BAM file */
     bool mappingQualityFilter = false;                   /** Whether to apply mapping quality filtering */
+    bool skipQualAndAux = false;                         /** Skip CRAM decoding of base qualities and aux tags (only for passes that read neither) */
 };
 
 /**

@@ -1007,6 +1007,8 @@ void SomaticVarCaller::extractSomaticData(
 
 
     ParsingBamControl control; // default mode is single thread
+    // extraction reads only name, flag, position, mapq, cigar and sequence
+    control.skipQualAndAux = true;
 
     BamParserContext norBamCtx(normalBamFile, fastaFile, chrVec, chrLength, chrMultiVariants, vcfSet, Genome::NORMAL);
     ExtractNorDataBamParser normalBamParser(config, control, *chrPosNorBase, *chrNormalDelInfo, *chrNormalInsInfo);

@@ -287,6 +287,12 @@ void HaplotagBamParser::processBamParallel(
     for(auto chr : ctx.chrVec ){
         // Allocate BAM file resources for each thread
         BamFileRAII bamRAII(ctx.BamFile, ctx.fastaFile, threadPool, config.version, config.command, config.resultPrefix, config.outputFormat, control.writeOutputBam);
+        // CRAM only decodes the listed fields; QUAL and aux are left empty (no effect on BAM input)
+        if (control.skipQualAndAux &&
+            hts_set_opt(bamRAII.in, CRAM_OPT_REQUIRED_FIELDS, SAM_QNAME | SAM_FLAG | SAM_RNAME | SAM_POS | SAM_MAPQ | SAM_CIGAR | SAM_SEQ) != 0) {
+            std::cerr << "[ERROR](HaplotagBamParser): Cannot set required fields for " << ctx.BamFile << std::endl;
+            exit(1);
+        }
 
         // Create chromosome processing context
         ChrProcContext commonCtx(chr, ctx.chrLength.at(chr), config, ctx.genomeSample, ctx.vcfSet);
