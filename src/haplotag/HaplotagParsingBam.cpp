@@ -569,7 +569,6 @@ void CigarParser::parsingCigar(
         uint32_t* cigar = bam_get_cigar(&ctx.aln);
         int cigar_op = bam_cigar_op(cigar[i]);
         int length = bam_cigar_oplen(cigar[i]);
-        std::string readid = bam_get_qname(&ctx.aln);
         // iterator next variant
         while (currentVariantIter != ctx.currentVariants.end() && (*currentVariantIter).first < ref_pos) {
             currentVariantIter++;
