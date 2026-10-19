@@ -443,7 +443,7 @@ void ChromosomeProcessor::processSingleChrom(
     std::map<int, MultiGenomeVar>::reverse_iterator last = currentVariants.rbegin();
 
     // fetch chromosome string
-    std::string ref_string = fastaParser.chrString.at(chr);
+    const std::string& ref_string = fastaParser.chrString.at(chr);
 
     // Set up region for chromosome-specific read iteration
     std::string region = !params.region.empty() ? params.region : std::string(chr + ":1-" + std::to_string(chrLength));
