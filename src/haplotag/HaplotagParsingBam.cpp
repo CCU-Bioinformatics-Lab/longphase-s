@@ -6,6 +6,8 @@
 
 // bgzf jobs (128 KiB each) queued for the output bam; htslib defaults to 2 x threads
 static const int OUTPUT_BGZF_QUEUE_SIZE = 512;
+// decoded slices queued per input file when every chromosome is read at once; htslib defaults to 2 x threads
+static const int PARALLEL_INPUT_QUEUE_SIZE = 4;
 
 /**
  * @brief Reads the alignments of one region on a separate thread
@@ -378,11 +380,15 @@ void HaplotagBamParser::processBamParallel(
     const FastaParser &fastaParser,
     htsThreadPool &threadPool
 ){
+    // each open file holds its own queue of decoded slices, so a short queue keeps memory bounded
+    htsThreadPool inThreadPool = threadPool;
+    inThreadPool.qsize = PARALLEL_INPUT_QUEUE_SIZE;
+
     // loop all chromosome
     #pragma omp parallel for schedule(dynamic) num_threads(config.numThreads) 
     for(auto chr : ctx.chrVec ){
         // Allocate BAM file resources for each thread
-        BamFileRAII bamRAII(ctx.BamFile, ctx.fastaFile, threadPool, config.version, config.command, config.resultPrefix, config.outputFormat, control.writeOutputBam);
+        BamFileRAII bamRAII(ctx.BamFile, ctx.fastaFile, inThreadPool, config.version, config.command, config.resultPrefix, config.outputFormat, control.writeOutputBam);
         // CRAM only decodes the listed fields; QUAL and aux are left empty (no effect on BAM input)
         if (control.skipQualAndAux &&
             hts_set_opt(bamRAII.in, CRAM_OPT_REQUIRED_FIELDS, SAM_QNAME | SAM_FLAG | SAM_RNAME | SAM_POS | SAM_MAPQ | SAM_CIGAR | SAM_SEQ) != 0) {
