@@ -1,5 +1,8 @@
 #include "HaplotagParsingBam.h"
 
+// bgzf jobs (128 KiB each) queued for the output bam; htslib defaults to 2 x threads
+static const int OUTPUT_BGZF_QUEUE_SIZE = 512;
+
 /**
  * @brief Constructor for BamFileRAII class
  * @param BamFile Path to the input BAM file
@@ -66,7 +69,13 @@ writeOutputBam(writeOutputBam), isReleased(false), in(nullptr), out(nullptr), ba
                 throw std::runtime_error("Cannot write header to output bam file " + writeBamFile);
             }
             // set thread pool for output bam file
-            if (hts_set_opt(out, HTS_OPT_THREAD_POOL, &threadPool) != 0) {
+            // for bam, a deeper output queue lets compressed blocks pile up while the writer thread
+            // waits on its periodic fdatasync, instead of blocking the main thread
+            htsThreadPool outThreadPool = threadPool;
+            if (outputFormat == "bam") {
+                outThreadPool.qsize = OUTPUT_BGZF_QUEUE_SIZE;
+            }
+            if (hts_set_opt(out, HTS_OPT_THREAD_POOL, &outThreadPool) != 0) {
                 throw std::runtime_error("Cannot set thread pool for output bam file " + BamFile);
             }
         }
