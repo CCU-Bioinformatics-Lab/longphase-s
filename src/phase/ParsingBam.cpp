@@ -23,39 +23,54 @@ FastaParser::FastaParser(std::string fastaFile,  std::vector<std::string> chrNam
     for(std::vector<std::string>::iterator iter = chrName.begin() ; iter != chrName.end() ; iter++)
         chrString.insert(std::make_pair( (*iter) , ""));
     
-        // load reference index
-    faidx_t *fai = NULL;
-    fai = fai_load(fastaFile.c_str());
-    
-    // iterating all chr
-    //#pragma omp parallel for schedule(dynamic) num_threads(numThreads)
-    for(std::vector<std::string>::iterator iter = chrName.begin() ; iter != chrName.end() ; iter++){
-        
-        int index = iter - chrName.begin();
-        
-        // Do not extract references without SNP coverage.
-        if( last_pos.at(index) == -1){
-            chrString[(*iter)]="";
-            continue;
+    // resolve every destination string before the parallel loop, so threads never touch the map itself
+    std::vector<std::string*> chrDest;
+    for(std::vector<std::string>::iterator iter = chrName.begin() ; iter != chrName.end() ; iter++)
+        chrDest.push_back(&chrString[(*iter)]);
+
+    std::vector<char> emptyRef(chrName.size(), 0);
+
+    // iterating all chr; a faidx handle is not thread-safe, so each thread loads its own index.
+    // every chromosome in flight briefly holds two copies (fetch buffer + string), so the
+    // number of loader threads is capped to keep that transient memory small
+    const int loaderThreads = std::max(1, std::min(numThreads, 4));
+    #pragma omp parallel num_threads(loaderThreads)
+    {
+        faidx_t *fai = fai_load(fastaFile.c_str());
+
+        #pragma omp for schedule(dynamic)
+        for(int index = 0 ; index < (int)chrName.size() ; index++){
+
+            // Do not extract references without SNP coverage.
+            if( last_pos.at(index) == -1){
+                *chrDest[index]="";
+                continue;
+            }
+
+            // ref_len is a return value that is length of retrun string
+            int ref_len = 0;
+
+            // read file
+            char* chr_info = faidx_fetch_seq(fai , chrName[index].c_str() , 0 , last_pos.at(index)+5 , &ref_len);
+
+            if(ref_len == 0){
+                emptyRef[index] = 1;
+            }
+
+            // update map
+            *chrDest[index] = std::string(chr_info);
+
+            free(chr_info);
         }
-        
-        // ref_len is a return value that is length of retrun string
-        int ref_len = 0;
+        fai_destroy(fai);
+    }
 
-        // read file
-        //std::string chr_info(faidx_fetch_seq(fai , (*iter).c_str() , 0 , last_pos.at(index)+5 , &ref_len));
-        char* chr_info = faidx_fetch_seq(fai , (*iter).c_str() , 0 , last_pos.at(index)+5 , &ref_len);
-
-        if(ref_len == 0){
+    // report in chromosome order, as the sequential loop did
+    for(size_t index = 0 ; index < emptyRef.size() ; index++){
+        if(emptyRef[index]){
             std::cout<<"nothing in reference file \n";
         }
-
-        // update map
-        chrString[(*iter)] = std::string(chr_info);
-
-        free(chr_info);
     }
-    fai_destroy(fai);
 }
 
 FastaParser::~FastaParser(){
