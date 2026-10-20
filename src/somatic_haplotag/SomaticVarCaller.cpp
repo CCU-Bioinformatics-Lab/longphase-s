@@ -745,8 +745,7 @@ std::vector<std::pair<int, char>> getWindowsDiffRef(const uint32_t *cigar, int c
 }
 
 void ExtractTumDataCigarParser::processMatchOperation(int& length, uint32_t* cigar, int& i, int& aln_core_n_cigar, std::string& base, bool& isAlt, int& offset){
-    //waring : using ref length to split SNP and indel that will be effect case ratio result 
-    std::vector<std::pair<int, char>> offsetBase = getWindowsDiffRef(cigar, i, ctx.aln, ctx.ref_string, query_pos, offset, (*currentVariantIter).first);
+    //waring : using ref length to split SNP and indel that will be effect case ratio result
     if ( ctx.aln.core.qual >= mappingQualityThr ){
         somaticJudger.judgeSomaticSnpHap(currentVariantIter, ctx.chrName, base, *hpCount, *norCountPS, tumCountPS, variantsHP, &tumorAllelePosVec, isAlt);
         if((*currentVariantIter).second.isExists(TUMOR)){
@@ -762,6 +761,8 @@ void ExtractTumDataCigarParser::processMatchOperation(int& length, uint32_t* cig
         if(curVar.variantType == HaplotagVariantType::SNP || curVar.variantType == HaplotagVariantType::INSERTION || curVar.variantType == HaplotagVariantType::DELETION){
             if(curVar.variantType != HaplotagVariantType::SNP || ((curVar.allele.Ref == base || curVar.allele.Alt == base)) ){
                 somaticPosInfo[(*currentVariantIter).first].alleleCount[isAlt] ++;
+                // the diff-ref window is only consumed here, so it is computed only for these variants
+                std::vector<std::pair<int, char>> offsetBase = getWindowsDiffRef(cigar, i, ctx.aln, ctx.ref_string, query_pos, offset, (*currentVariantIter).first);
                 somaticPosInfo[(*currentVariantIter).first].PosSomaticOffsetBase[isAlt].insert(
                     somaticPosInfo[(*currentVariantIter).first].PosSomaticOffsetBase[isAlt].end(),
                     offsetBase.begin(),
@@ -1006,6 +1007,8 @@ void SomaticVarCaller::extractSomaticData(
 
 
     ParsingBamControl control; // default mode is single thread
+    // extraction reads only name, flag, position, mapq, cigar and sequence
+    control.skipQualAndAux = true;
 
     BamParserContext norBamCtx(normalBamFile, fastaFile, chrVec, chrLength, chrMultiVariants, vcfSet, Genome::NORMAL);
     ExtractNorDataBamParser normalBamParser(config, control, *chrPosNorBase, *chrNormalDelInfo, *chrNormalInsInfo);

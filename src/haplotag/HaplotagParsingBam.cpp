@@ -1,4 +1,105 @@
 #include "HaplotagParsingBam.h"
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <thread>
+
+// bgzf jobs (128 KiB each) queued for the output bam; htslib defaults to 2 x threads
+static const int OUTPUT_BGZF_QUEUE_SIZE = 512;
+// decoded slices queued per input file when every chromosome is read at once; htslib defaults to 2 x threads
+static const int PARALLEL_INPUT_QUEUE_SIZE = 4;
+
+/**
+ * @brief Reads the alignments of one region on a separate thread
+ *
+ * Alignments are handed over in file order, in batches, so reading and decoding
+ * run ahead of the caller's processing. Records stay owned by the prefetcher.
+ */
+class AlignmentPrefetcher {
+    private:
+        static const size_t BATCH_SIZE = 256;   /** alignments per batch */
+        static const size_t BATCH_COUNT = 8;    /** batches in flight */
+
+        struct Batch {
+            std::vector<bam1_t*> records;
+            size_t size = 0;
+        };
+
+        samFile* in;
+        hts_itr_t* iter;
+        std::vector<Batch> batches;
+        std::deque<Batch*> freeBatches;
+        std::deque<Batch*> fullBatches;
+        bool finished = false;
+        std::mutex mtx;
+        std::condition_variable freeReady;
+        std::condition_variable fullReady;
+        Batch* current = nullptr;
+        size_t currentIndex = 0;
+        std::thread reader;
+
+        void run(){
+            while (true) {
+                Batch* batch;
+                {
+                    std::unique_lock<std::mutex> lock(mtx);
+                    freeReady.wait(lock, [&]{ return !freeBatches.empty(); });
+                    batch = freeBatches.front();
+                    freeBatches.pop_front();
+                }
+                batch->size = 0;
+                bool end = false;
+                while (batch->size < BATCH_SIZE) {
+                    if (sam_itr_multi_next(in, iter, batch->records[batch->size]) < 0) {
+                        end = true;
+                        break;
+                    }
+                    batch->size++;
+                }
+                {
+                    std::lock_guard<std::mutex> lock(mtx);
+                    fullBatches.push_back(batch);
+                    finished = end;
+                }
+                fullReady.notify_one();
+                if (end) return;
+            }
+        }
+
+    public:
+        AlignmentPrefetcher(samFile* in, hts_itr_t* iter) : in(in), iter(iter), batches(BATCH_COUNT) {
+            for (auto& batch : batches) {
+                for (size_t i = 0; i < BATCH_SIZE; i++) batch.records.push_back(bam_init1());
+                freeBatches.push_back(&batch);
+            }
+            reader = std::thread(&AlignmentPrefetcher::run, this);
+        }
+
+        ~AlignmentPrefetcher(){
+            reader.join();
+            for (auto& batch : batches) {
+                for (bam1_t* record : batch.records) bam_destroy1(record);
+            }
+        }
+
+        /** @return the next alignment, or nullptr once the region is exhausted */
+        bam1_t* next(){
+            while (current == nullptr || currentIndex == current->size) {
+                std::unique_lock<std::mutex> lock(mtx);
+                if (current != nullptr) {
+                    freeBatches.push_back(current);
+                    current = nullptr;
+                    freeReady.notify_one();
+                }
+                fullReady.wait(lock, [&]{ return !fullBatches.empty() || finished; });
+                if (fullBatches.empty()) return nullptr;
+                current = fullBatches.front();
+                fullBatches.pop_front();
+                currentIndex = 0;
+            }
+            return current->records[currentIndex++];
+        }
+};
 
 /**
  * @brief Constructor for BamFileRAII class
@@ -66,7 +167,13 @@ writeOutputBam(writeOutputBam), isReleased(false), in(nullptr), out(nullptr), ba
                 throw std::runtime_error("Cannot write header to output bam file " + writeBamFile);
             }
             // set thread pool for output bam file
-            if (hts_set_opt(out, HTS_OPT_THREAD_POOL, &threadPool) != 0) {
+            // for bam, a deeper output queue lets compressed blocks pile up while the writer thread
+            // waits on its periodic fdatasync, instead of blocking the main thread
+            htsThreadPool outThreadPool = threadPool;
+            if (outputFormat == "bam") {
+                outThreadPool.qsize = OUTPUT_BGZF_QUEUE_SIZE;
+            }
+            if (hts_set_opt(out, HTS_OPT_THREAD_POOL, &outThreadPool) != 0) {
                 throw std::runtime_error("Cannot set thread pool for output bam file " + BamFile);
             }
         }
@@ -273,11 +380,21 @@ void HaplotagBamParser::processBamParallel(
     const FastaParser &fastaParser,
     htsThreadPool &threadPool
 ){
+    // each open file holds its own queue of decoded slices, so a short queue keeps memory bounded
+    htsThreadPool inThreadPool = threadPool;
+    inThreadPool.qsize = PARALLEL_INPUT_QUEUE_SIZE;
+
     // loop all chromosome
     #pragma omp parallel for schedule(dynamic) num_threads(config.numThreads) 
     for(auto chr : ctx.chrVec ){
         // Allocate BAM file resources for each thread
-        BamFileRAII bamRAII(ctx.BamFile, ctx.fastaFile, threadPool, config.version, config.command, config.resultPrefix, config.outputFormat, control.writeOutputBam);
+        BamFileRAII bamRAII(ctx.BamFile, ctx.fastaFile, inThreadPool, config.version, config.command, config.resultPrefix, config.outputFormat, control.writeOutputBam);
+        // CRAM only decodes the listed fields; QUAL and aux are left empty (no effect on BAM input)
+        if (control.skipQualAndAux &&
+            hts_set_opt(bamRAII.in, CRAM_OPT_REQUIRED_FIELDS, SAM_QNAME | SAM_FLAG | SAM_RNAME | SAM_POS | SAM_MAPQ | SAM_CIGAR | SAM_SEQ) != 0) {
+            std::cerr << "[ERROR](HaplotagBamParser): Cannot set required fields for " << ctx.BamFile << std::endl;
+            exit(1);
+        }
 
         // Create chromosome processing context
         ChrProcContext commonCtx(chr, ctx.chrLength.at(chr), config, ctx.genomeSample, ctx.vcfSet);
@@ -443,15 +560,14 @@ void ChromosomeProcessor::processSingleChrom(
     std::map<int, MultiGenomeVar>::reverse_iterator last = currentVariants.rbegin();
 
     // fetch chromosome string
-    std::string ref_string = fastaParser.chrString.at(chr);
+    const std::string& ref_string = fastaParser.chrString.at(chr);
 
     // Set up region for chromosome-specific read iteration
     std::string region = !params.region.empty() ? params.region : std::string(chr + ":1-" + std::to_string(chrLength));
     hts_itr_t* iter = sam_itr_querys(bamRAII.idx, bamRAII.bamHdr, region.c_str());
 
     // Process each read in the chromosome
-    while (sam_itr_multi_next(bamRAII.in, iter, bamRAII.aln) >= 0) {
-        
+    auto processAlignment = [&](){
         int flag = bamRAII.aln->core.flag;
 
         if ( bamRAII.aln->core.qual < params.qualityThreshold && mappingQualityFilter){
@@ -488,6 +604,23 @@ void ChromosomeProcessor::processSingleChrom(
         // Write all reads to output BAM file if enabled
         if(writeOutputBam){
             bamRAII.samWriteBam();
+        }
+    };
+
+    if(writeOutputBam){
+        // tagging runs one chromosome at a time, so reading and decoding get their own thread
+        bam1_t* ownAlignment = bamRAII.aln;
+        {
+            AlignmentPrefetcher prefetcher(bamRAII.in, iter);
+            while ((bamRAII.aln = prefetcher.next()) != nullptr) {
+                processAlignment();
+            }
+        }
+        bamRAII.aln = ownAlignment;
+    }
+    else{
+        while (sam_itr_multi_next(bamRAII.in, iter, bamRAII.aln) >= 0) {
+            processAlignment();
         }
     }
 
@@ -569,7 +702,6 @@ void CigarParser::parsingCigar(
         uint32_t* cigar = bam_get_cigar(&ctx.aln);
         int cigar_op = bam_cigar_op(cigar[i]);
         int length = bam_cigar_oplen(cigar[i]);
-        std::string readid = bam_get_qname(&ctx.aln);
         // iterator next variant
         while (currentVariantIter != ctx.currentVariants.end() && (*currentVariantIter).first < ref_pos) {
             currentVariantIter++;
