@@ -182,6 +182,15 @@ bool FullAlignmentEncoder::open(const std::string &tumorBam, const std::string &
             return false;
         }
     }
+    // CRAM decodes every field except base qualities, which the encoder never reads (no effect on BAM input)
+    const int requiredFields = SAM_QNAME | SAM_FLAG | SAM_RNAME | SAM_POS | SAM_MAPQ | SAM_CIGAR |
+                               SAM_RNEXT | SAM_PNEXT | SAM_TLEN | SAM_SEQ | SAM_AUX | SAM_RGAUX;
+    if(hts_set_opt(tumorFp, CRAM_OPT_REQUIRED_FIELDS, requiredFields) != 0 ||
+       hts_set_opt(normalFp, CRAM_OPT_REQUIRED_FIELDS, requiredFields) != 0){
+        std::cerr << "[FullAlignmentEncoder] cannot set required fields\n";
+        close();
+        return false;
+    }
     tumorIdx = sam_index_load(tumorFp, tumorBam.c_str());
     normalIdx = sam_index_load(normalFp, normalBam.c_str());
     if(tumorIdx == NULL || normalIdx == NULL){

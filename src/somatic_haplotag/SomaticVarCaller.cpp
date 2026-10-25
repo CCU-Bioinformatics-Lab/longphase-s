@@ -2842,7 +2842,7 @@ void SomaticVarCaller::scoreIndels(
         FaReadDelMap tumorMap;
         FaReadDelMap normalMap;
 
-        #pragma omp for schedule(dynamic, 8)
+        #pragma omp for schedule(guided, 8)
         for(long long i = 0; i < (long long)sites.size(); i++){
             const IndelSite &site = sites[i];
             const int pos1 = site.pos + 1;              // VCF coordinate
